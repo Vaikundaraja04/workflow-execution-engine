@@ -44,7 +44,7 @@ export interface WorkflowNode {
 export interface WorkflowEdge {
   source: string;
   target: string;
-  condition?: 'true' | 'false';
+  condition?: 'true' | 'false' | undefined;
 }
 
 export interface WorkflowDefinition {

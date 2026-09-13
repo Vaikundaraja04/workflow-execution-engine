@@ -1,0 +1,116 @@
+import mongoose, { Types } from 'mongoose';
+import { WorkflowModel } from '../models/WorkflowModel.js';
+import { WorkflowVersionModel } from '../models/WorkflowVersionModel.js';
+import type { WorkflowDefinition } from '../types/workflow.js';
+import { validateGraph } from '../engine/validateGraph.js';
+import { WorkflowDefinitionSchema } from '../schemas/workflowSchema.js';
+
+function assertValidWorkflowId(id: string): void {
+  if (!Types.ObjectId.isValid(id)) {
+    throw new Error('INVALID_WORKFLOW_ID');
+  }
+}
+
+export async function createWorkflow(name: string, definition: WorkflowDefinition) {
+  const doc = await WorkflowModel.create({
+    name: name.trim(),
+    draftDefinition: definition,
+    status: 'DRAFT',
+    latestVersionNumber: 0,
+  });
+  return doc.toObject();
+}
+
+export async function getWorkflow(id: string) {
+  assertValidWorkflowId(id);
+  const doc = await WorkflowModel.findById(id);
+  if (!doc) throw new Error('WORKFLOW_NOT_FOUND');
+  return doc.toObject();
+}
+
+export async function updateDraft(id: string, updates: { name?: string; definition?: WorkflowDefinition }) {
+  assertValidWorkflowId(id);
+  const doc = await WorkflowModel.findById(id);
+  if (!doc) throw new Error('WORKFLOW_NOT_FOUND');
+
+  if (updates.name !== undefined) doc.name = updates.name.trim();
+  if (updates.definition !== undefined) {
+    doc.draftDefinition = updates.definition;
+  }
+  if (doc.status === 'PUBLISHED') doc.status = 'DRAFT';
+  await doc.save();
+  return doc.toObject();
+}
+
+export async function validateDraft(id: string) {
+  const wf = await getWorkflow(id);
+  const draft: unknown = JSON.parse(JSON.stringify(wf.draftDefinition));
+  const schemaResult = WorkflowDefinitionSchema.safeParse(draft);
+
+  if (!schemaResult.success) {
+    return {
+      valid: false,
+      schemaErrors: schemaResult.error.issues,
+      graphErrors: [],
+    };
+  }
+
+  const graphErrors = validateGraph(schemaResult.data);
+  return {
+    valid: graphErrors.length === 0,
+    schemaErrors: [],
+    graphErrors,
+  };
+}
+
+export async function publishWorkflow(id: string) {
+  assertValidWorkflowId(id);
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const wf = await WorkflowModel.findById(id).session(session);
+    if (!wf) throw new Error('WORKFLOW_NOT_FOUND');
+
+    const parsedDraft = JSON.parse(JSON.stringify(wf.draftDefinition));
+    const schemaResult = WorkflowDefinitionSchema.safeParse(parsedDraft);
+    if (!schemaResult.success) {
+      throw new Error('INVALID_WORKFLOW_SCHEMA');
+    }
+
+    const graphErrors = validateGraph(schemaResult.data);
+    if (graphErrors.length > 0) {
+      throw new Error('INVALID_WORKFLOW_GRAPH');
+    }
+
+    const nextVersion = wf.latestVersionNumber + 1;
+    const [createdVersion] = await WorkflowVersionModel.create([{
+      workflowId: wf._id,
+      versionNumber: nextVersion,
+      definition: JSON.parse(JSON.stringify(schemaResult.data)),
+    }], { session });
+
+    if (!createdVersion) {
+      throw new Error('VERSION_CONFLICT');
+    }
+
+    wf.status = 'PUBLISHED';
+    wf.latestVersionNumber = nextVersion;
+    wf.publishedVersionId = createdVersion._id;
+    await wf.save({ session });
+
+    await session.commitTransaction();
+    return { versionNumber: nextVersion, definition: createdVersion.definition };
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
+}
+
+export async function getVersions(id: string) {
+  assertValidWorkflowId(id);
+  const wf = await WorkflowModel.findById(id);
+  if (!wf) throw new Error('WORKFLOW_NOT_FOUND');
+  return WorkflowVersionModel.find({ workflowId: id }).sort({ versionNumber: 1 }).lean();
+}

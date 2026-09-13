@@ -1,11 +1,13 @@
 {
   "name": "workflow-execution-engine",
   "version": "1.0.0",
-  "description": "In-memory headless workflow execution engine",
+  "description": "TypeScript workflow engine with runtime validation and a MongoDB-backed versioning API",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "dev": "tsx src/demo.ts",
+    "dev:api": "tsx watch src/api/server.ts",
+    "start:api": "tsx src/api/server.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -14,12 +16,18 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.20.2",
+    "@types/supertest": "^7.2.1",
+    "mongodb-memory-server": "^11.2.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   },
   "dependencies": {
+    "express": "^5.2.1",
+    "mongoose": "^9.10.0",
     "zod": "^4.6.4"
   }
 }
