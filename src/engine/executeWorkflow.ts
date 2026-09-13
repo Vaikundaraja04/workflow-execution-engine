@@ -2,6 +2,7 @@ import type { WorkflowDefinition, ExecutionResult, ExecutionHistoryEvent, StepSt
 import { validateGraph } from './validateGraph.js';
 import type { ReadyContext } from './getReadyNodes.js';
 import { getReadyNodes } from './getReadyNodes.js';
+import { safeParseWorkflowDefinition } from '../schemas/workflowSchema.js';
 
 function recordEvent(history: ExecutionHistoryEvent[], nodeId: string, from: StepStatus, to: StepStatus) {
   history.push({
@@ -45,7 +46,20 @@ export async function executeWorkflow(
   workflow: WorkflowDefinition,
   initialContext: Record<string, unknown> = {}
 ): Promise<ExecutionResult> {
-  const validationErrors = validateGraph(workflow);
+  const schemaResult = safeParseWorkflowDefinition(workflow);
+  if (!schemaResult.success) {
+    return {
+      status: 'FAILED',
+      stepStatuses: {},
+      outputs: {},
+      executionHistory: [],
+      errors: [{ code: 'INVALID_WORKFLOW_SCHEMA', message: schemaResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') }],
+    };
+  }
+
+  const validatedWorkflow = schemaResult.data as WorkflowDefinition;
+
+  const validationErrors = validateGraph(validatedWorkflow);
   if (validationErrors.length > 0) {
     return {
       status: 'FAILED',
@@ -56,20 +70,20 @@ export async function executeWorkflow(
     };
   }
 
-  const stepStatuses: Record<string, StepStatus> = {};
-  const outputs: Record<string, unknown> = {};
+  const stepStatuses: Record<string, StepStatus> = Object.create(null);
+  const outputs: Record<string, unknown> = Object.create(null);
   const executionHistory: ExecutionHistoryEvent[] = [];
   const completedNodes = new Set<string>();
-  const conditionResults: Record<string, boolean> = {};
+  const conditionResults: Record<string, boolean> = Object.create(null);
   const context = { ...initialContext };
   const errors: ExecutionError[] = [];
 
-  for (const node of workflow.nodes) {
+  for (const node of validatedWorkflow.nodes) {
     stepStatuses[node.id] = 'PENDING';
   }
 
   // Set initial roots to READY
-  const initialReady = getReadyNodes(workflow, stepStatuses, completedNodes, { conditionResults });
+  const initialReady = getReadyNodes(validatedWorkflow, stepStatuses, completedNodes, { conditionResults });
   for (const node of initialReady) {
     stepStatuses[node.id] = 'READY';
     recordEvent(executionHistory, node.id, 'PENDING', 'READY');
@@ -123,10 +137,10 @@ export async function executeWorkflow(
     }
 
     // After processing ready set, mark non-selected branches as SKIPPED
-    for (const node of workflow.nodes) {
-      if (conditionResults.hasOwnProperty(node.id)) {
+    for (const node of validatedWorkflow.nodes) {
+      if (Object.hasOwn(conditionResults, node.id)) {
         const res = conditionResults[node.id];
-        const outgoing = workflow.edges.filter(e => e.source === node.id && e.condition);
+        const outgoing = validatedWorkflow.edges.filter(e => e.source === node.id && e.condition);
         for (const edge of outgoing) {
           if ((edge.condition === 'true' && !res) || (edge.condition === 'false' && res)) {
             const targetStatus = stepStatuses[edge.target];
@@ -140,7 +154,7 @@ export async function executeWorkflow(
       }
     }
 
-    currentReady = getReadyNodes(workflow, stepStatuses, completedNodes, { conditionResults });
+    currentReady = getReadyNodes(validatedWorkflow, stepStatuses, completedNodes, { conditionResults });
     for (const node of currentReady) {
       if (stepStatuses[node.id] === 'PENDING') {
         stepStatuses[node.id] = 'READY';
@@ -150,7 +164,7 @@ export async function executeWorkflow(
   }
 
   // Mark any remaining PENDING as SKIPPED (unreached due to branches)
-  for (const node of workflow.nodes) {
+  for (const node of validatedWorkflow.nodes) {
     if (stepStatuses[node.id] === 'PENDING') {
       stepStatuses[node.id] = 'SKIPPED';
       recordEvent(executionHistory, node.id, 'PENDING', 'SKIPPED');

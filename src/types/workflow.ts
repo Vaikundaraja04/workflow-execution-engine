@@ -9,7 +9,10 @@ export type ValidationErrorType =
   | 'SELF_CONNECTION'
   | 'CYCLE'
   | 'WEBHOOK_COUNT'
-  | 'UNREACHABLE';
+  | 'UNREACHABLE'
+  | 'INVALID_WORKFLOW_SCHEMA'
+  | 'DUPLICATE_EDGE'
+  | 'INVALID_EDGE_CONDITION';
 
 export interface ValidationError {
   type: ValidationErrorType;
