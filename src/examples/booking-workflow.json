@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    { "id": "trigger", "type": "webhook", "config": {} },
+    { "id": "checkCost", "type": "condition", "config": { "field": "estimatedCost", "operator": "greaterThan", "value": 10000 } },
+    { "id": "managerLog", "type": "log", "config": { "message": "Manager approval required" } },
+    { "id": "autoLog", "type": "log", "config": { "message": "Booking can be confirmed automatically" } }
+  ],
+  "edges": [
+    { "source": "trigger", "target": "checkCost" },
+    { "source": "checkCost", "target": "managerLog", "condition": "true" },
+    { "source": "checkCost", "target": "autoLog", "condition": "false" }
+  ]
+}
