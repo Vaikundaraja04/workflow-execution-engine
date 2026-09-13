@@ -1,1 +1,14 @@
-"export * from './types/workflow.js';\nexport * from './engine/validateGraph.js';\nexport * from './engine/getReadyNodes.js';\nexport * from './engine/executeWorkflow.js';\n"
+export { executeWorkflow } from './engine/executeWorkflow.js';
+export { getReadyNodes } from './engine/getReadyNodes.js';
+export { validateGraph } from './engine/validateGraph.js';
+
+export type {
+  WorkflowDefinition,
+  WorkflowNode,
+  WorkflowEdge,
+  ExecutionResult,
+  ExecutionHistoryEvent,
+  StepStatus,
+  ValidationError,
+  ValidationErrorType
+} from './types/workflow.js';

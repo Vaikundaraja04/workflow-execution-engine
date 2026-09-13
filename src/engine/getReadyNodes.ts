@@ -1,12 +1,17 @@
 import type { WorkflowDefinition, WorkflowNode, StepStatus } from '../types/workflow.js';
 
+export interface ReadyContext {
+  conditionResults?: Record<string, boolean>;
+}
+
 export function getReadyNodes(
   workflow: WorkflowDefinition,
   stepStatuses: Record<string, StepStatus>,
-  completedNodes: Set<string>
+  completedNodes: Set<string>,
+  readyContext: ReadyContext = {}
 ): WorkflowNode[] {
   const ready: WorkflowNode[] = [];
-  const nodeMap = new Map(workflow.nodes.map(n => [n.id, n]));
+  const conditionResults = readyContext.conditionResults || {};
 
   for (const node of workflow.nodes) {
     const status = stepStatuses[node.id] || 'PENDING';
@@ -15,25 +20,30 @@ export function getReadyNodes(
 
     const incoming = workflow.edges.filter(e => e.target === node.id);
     if (incoming.length === 0) {
-      // root node
       ready.push(node);
       continue;
     }
 
-    // Check if all parents succeeded, considering conditions
-    let allParentsDone = true;
+    let canActivate = true;
     for (const edge of incoming) {
       const parentStatus = stepStatuses[edge.source];
       if (parentStatus !== 'SUCCEEDED') {
-        allParentsDone = false;
+        canActivate = false;
         break;
       }
-      // For condition edges, only consider if matching
       if (edge.condition) {
-        // assume outputs handled in execute, here simplified
+        const condResult = conditionResults[edge.source];
+        if (edge.condition === 'true' && condResult !== true) {
+          canActivate = false;
+          break;
+        }
+        if (edge.condition === 'false' && condResult !== false) {
+          canActivate = false;
+          break;
+        }
       }
     }
-    if (allParentsDone) {
+    if (canActivate) {
       ready.push(node);
     }
   }

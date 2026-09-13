@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { validateGraph } from '../src/engine/validateGraph.js';
-import type { WorkflowDefinition } from '../src/types/workflow.js';
+import type { WorkflowDefinition, ValidationError } from '../src/types/workflow.js';
 
 describe('validateGraph', () => {
   it('valid workflow', () => {
@@ -20,7 +20,7 @@ describe('validateGraph', () => {
       edges: [],
     };
     const errs = validateGraph(wf);
-    expect(errs.some((e: any) => e.type === 'DUPLICATE_NODE')).toBe(true);
+    expect(errs.some((e: ValidationError) => e.type === 'DUPLICATE_NODE')).toBe(true);
   });
 
   it('detects missing edge target', () => {
@@ -29,7 +29,25 @@ describe('validateGraph', () => {
       edges: [{ source: 'w', target: 'missing' }],
     };
     const errs = validateGraph(wf);
-    expect(errs.some((e: any) => e.type === 'MISSING_TARGET')).toBe(true);
+    expect(errs.some((e: ValidationError) => e.type === 'MISSING_TARGET')).toBe(true);
+  });
+
+  it('detects missing source node', () => {
+    const wf: WorkflowDefinition = {
+      nodes: [{ id: 'w', type: 'webhook', config: {} }],
+      edges: [{ source: 'missing', target: 'w' }],
+    };
+    const errs = validateGraph(wf);
+    expect(errs.some((e: ValidationError) => e.type === 'MISSING_SOURCE')).toBe(true);
+  });
+
+  it('detects self-connection', () => {
+    const wf: WorkflowDefinition = {
+      nodes: [{ id: 'w', type: 'webhook', config: {} }],
+      edges: [{ source: 'w', target: 'w' }],
+    };
+    const errs = validateGraph(wf);
+    expect(errs.some((e: ValidationError) => e.type === 'SELF_CONNECTION')).toBe(true);
   });
 
   it('detects circular graph', () => {
@@ -44,7 +62,7 @@ describe('validateGraph', () => {
       ],
     };
     const errs = validateGraph(wf);
-    expect(errs.some((e: any) => e.type === 'CYCLE')).toBe(true);
+    expect(errs.some((e: ValidationError) => e.type === 'CYCLE')).toBe(true);
   });
 
   it('detects unreachable node', () => {
@@ -56,6 +74,27 @@ describe('validateGraph', () => {
       edges: [],
     };
     const errs = validateGraph(wf);
-    expect(errs.some((e: any) => e.type === 'UNREACHABLE')).toBe(true);
+    expect(errs.some((e: ValidationError) => e.type === 'UNREACHABLE')).toBe(true);
+  });
+
+  it('detects zero webhooks', () => {
+    const wf: WorkflowDefinition = {
+      nodes: [{ id: 'l', type: 'log', config: {} }],
+      edges: [],
+    };
+    const errs = validateGraph(wf);
+    expect(errs.some((e: ValidationError) => e.type === 'WEBHOOK_COUNT')).toBe(true);
+  });
+
+  it('detects multiple webhooks', () => {
+    const wf: WorkflowDefinition = {
+      nodes: [
+        { id: 'w1', type: 'webhook', config: {} },
+        { id: 'w2', type: 'webhook', config: {} },
+      ],
+      edges: [],
+    };
+    const errs = validateGraph(wf);
+    expect(errs.some((e: ValidationError) => e.type === 'WEBHOOK_COUNT')).toBe(true);
   });
 });

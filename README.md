@@ -1,7 +1,7 @@
 # Workflow Execution Engine
 
 ## Purpose
-Production-quality in-memory headless workflow execution engine for TypeScript.
+In-memory headless workflow execution engine for TypeScript (Phase 1).
 
 ## Phase 1 Scope
 In-memory only. Supports webhook, condition, log nodes. Graph validation, topological execution, history tracking.
@@ -33,6 +33,12 @@ npm install
 
 ## Example Workflow
 See src/examples/booking-workflow.json
+
+## Branch Selection and SKIPPED Behavior
+Condition nodes evaluate and activate only the matching true/false edge. The other branch nodes transition PENDING -> SKIPPED and produce no output. History records all transitions including PENDING -> READY -> RUNNING -> SUCCEEDED and PENDING -> SKIPPED.
+
+## npm run dev
+Executes demo with booking-workflow.json for estimatedCost 15000 and 5000, printing selected/skipped branches.
 
 ## Limitations (Phase 1)
 No persistence, no external services, no parallelism beyond sequential ready sets.

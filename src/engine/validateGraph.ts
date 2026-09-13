@@ -1,44 +1,28 @@
-import type { WorkflowDefinition } from '../types/workflow.js';
-
-export interface ValidationError {
-  type: string;
-  message: string;
-  nodeId?: string;
-  edge?: { source: string; target: string };
-}
+import type { WorkflowDefinition, ValidationError, ValidationErrorType } from '../types/workflow.js';
 
 export function validateGraph(workflow: WorkflowDefinition): ValidationError[] {
   const errors: ValidationError[] = [];
   const nodeIds = new Set<string>();
-  const nodeMap = new Map<string, boolean>();
 
   // Check for duplicate node IDs
   for (const node of workflow.nodes) {
     if (nodeIds.has(node.id)) {
-      errors.push({ type: 'DUPLICATE_NODE', message: `Duplicate node ID: ${node.id}`, nodeId: node.id });
+      errors.push({ type: 'DUPLICATE_NODE' as ValidationErrorType, message: `Duplicate node ID: ${node.id}`, nodeId: node.id });
     } else {
       nodeIds.add(node.id);
-      nodeMap.set(node.id, true);
     }
   }
 
   // Check edges for missing nodes and self-connections
-  const edgeSet = new Set<string>();
   for (const edge of workflow.edges) {
     if (!nodeIds.has(edge.source)) {
-      errors.push({ type: 'MISSING_SOURCE', message: `Missing source node: ${edge.source}`, edge: { source: edge.source, target: edge.target } });
+      errors.push({ type: 'MISSING_SOURCE' as ValidationErrorType, message: `Missing source node: ${edge.source}`, edge: { source: edge.source, target: edge.target } });
     }
     if (!nodeIds.has(edge.target)) {
-      errors.push({ type: 'MISSING_TARGET', message: `Missing target node: ${edge.target}`, edge: { source: edge.source, target: edge.target } });
+      errors.push({ type: 'MISSING_TARGET' as ValidationErrorType, message: `Missing target node: ${edge.target}`, edge: { source: edge.source, target: edge.target } });
     }
     if (edge.source === edge.target) {
-      errors.push({ type: 'SELF_CONNECTION', message: `Self-connection on node: ${edge.source}`, edge: { source: edge.source, target: edge.target } });
-    }
-    const edgeKey = `${edge.source}->${edge.target}${edge.condition ? ':' + edge.condition : ''}`;
-    if (edgeSet.has(edgeKey)) {
-      // allow for now, or could detect duplicate edges but not required
-    } else {
-      edgeSet.add(edgeKey);
+      errors.push({ type: 'SELF_CONNECTION' as ValidationErrorType, message: `Self-connection on node: ${edge.source}`, edge: { source: edge.source, target: edge.target } });
     }
   }
 
@@ -53,7 +37,7 @@ export function validateGraph(workflow: WorkflowDefinition): ValidationError[] {
       if (!visited.has(edge.target)) {
         if (hasCycle(edge.target)) return true;
       } else if (recStack.has(edge.target)) {
-        errors.push({ type: 'CYCLE', message: `Cycle detected involving node: ${edge.target}`, nodeId: edge.target });
+        errors.push({ type: 'CYCLE' as ValidationErrorType, message: `Cycle detected involving node: ${edge.target}`, nodeId: edge.target });
         return true;
       }
     }
@@ -69,7 +53,7 @@ export function validateGraph(workflow: WorkflowDefinition): ValidationError[] {
   // Check for exactly one webhook
   const webhooks = workflow.nodes.filter(n => n.type === 'webhook');
   if (webhooks.length !== 1) {
-    errors.push({ type: 'WEBHOOK_COUNT', message: `Expected exactly one webhook trigger, found ${webhooks.length}` });
+    errors.push({ type: 'WEBHOOK_COUNT' as ValidationErrorType, message: `Expected exactly one webhook trigger, found ${webhooks.length}` });
   }
 
   // Detect unreachable nodes (simple reachability from webhook)
@@ -86,7 +70,7 @@ export function validateGraph(workflow: WorkflowDefinition): ValidationError[] {
     dfs(start);
     for (const node of workflow.nodes) {
       if (!reachable.has(node.id)) {
-        errors.push({ type: 'UNREACHABLE', message: `Unreachable node: ${node.id}`, nodeId: node.id });
+        errors.push({ type: 'UNREACHABLE' as ValidationErrorType, message: `Unreachable node: ${node.id}`, nodeId: node.id });
       }
     }
   }
