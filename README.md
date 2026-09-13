@@ -45,3 +45,19 @@ No persistence, no external services, no parallelism beyond sequential ready set
 
 ## Planned Phase 2
 Persistence, BullMQ queues, API server, auth, React UI, Docker.
+
+## Phase 2A: Runtime Validation
+Workflow JSON is untrusted. Zod schemas enforce strict structure at runtime.
+
+Use:
+```ts
+import { safeParseWorkflowDefinition } from 'workflow-execution-engine';
+const result = safeParseWorkflowDefinition(jsonInput);
+if (!result.success) { /* handle error */ }
+```
+
+Rules: non-empty ids, exact node types, strict condition/log/webhook configs, true/false edge conditions only from condition nodes, duplicate edge detection.
+
+Validation failure returns INVALID_WORKFLOW_SCHEMA with details.
+
+MongoDB, Express, BullMQ, auth, UI not part of Phase 2A.

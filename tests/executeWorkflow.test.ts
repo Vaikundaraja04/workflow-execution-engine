@@ -88,7 +88,7 @@ describe('executeWorkflow', () => {
     };
     const result = await executeWorkflow(wf, { x: 1 });
     expect(result.status).toBe('FAILED');
-    expect(result.errors?.[0]?.code).toBe('UNKNOWN_OPERATOR');
+    expect(result.errors?.[0]?.code).toBe('INVALID_WORKFLOW_SCHEMA');
   });
 
   it('missing condition field fails', async () => {
@@ -101,7 +101,7 @@ describe('executeWorkflow', () => {
     };
     const result = await executeWorkflow(wf);
     expect(result.status).toBe('FAILED');
-    expect(result.errors?.[0]?.code).toBe('MISSING_FIELD');
+    expect(result.errors?.[0]?.code).toBe('INVALID_WORKFLOW_SCHEMA');
   });
 
   it('missing condition operator fails', async () => {
@@ -114,7 +114,7 @@ describe('executeWorkflow', () => {
     };
     const result = await executeWorkflow(wf, { x: 1 });
     expect(result.status).toBe('FAILED');
-    expect(result.errors?.[0]?.code).toBe('MISSING_OPERATOR');
+    expect(result.errors?.[0]?.code).toBe('INVALID_WORKFLOW_SCHEMA');
   });
 
   it('true condition branch', async () => {

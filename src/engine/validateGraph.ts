@@ -14,6 +14,7 @@ export function validateGraph(workflow: WorkflowDefinition): ValidationError[] {
   }
 
   // Check edges for missing nodes and self-connections
+  const edgeSet = new Set<string>();
   for (const edge of workflow.edges) {
     if (!nodeIds.has(edge.source)) {
       errors.push({ type: 'MISSING_SOURCE' as ValidationErrorType, message: `Missing source node: ${edge.source}`, edge: { source: edge.source, target: edge.target } });
@@ -23,6 +24,15 @@ export function validateGraph(workflow: WorkflowDefinition): ValidationError[] {
     }
     if (edge.source === edge.target) {
       errors.push({ type: 'SELF_CONNECTION' as ValidationErrorType, message: `Self-connection on node: ${edge.source}`, edge: { source: edge.source, target: edge.target } });
+    }
+    const key = JSON.stringify([edge.source, edge.target, edge.condition ?? null]);
+    if (edgeSet.has(key)) {
+      errors.push({ type: 'DUPLICATE_EDGE' as ValidationErrorType, message: `Duplicate edge: ${edge.source} -> ${edge.target}${edge.condition ? ' ' + edge.condition : ''}` });
+    } else {
+      edgeSet.add(key);
+    }
+    if (edge.condition && !workflow.nodes.find(n => n.id === edge.source && n.type === 'condition')) {
+      errors.push({ type: 'INVALID_EDGE_CONDITION' as ValidationErrorType, message: `Conditional edge from non-condition node: ${edge.source}`, edge: { source: edge.source, target: edge.target } });
     }
   }
 
