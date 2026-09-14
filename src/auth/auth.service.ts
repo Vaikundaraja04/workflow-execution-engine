@@ -1,0 +1,126 @@
+import { randomUUID } from 'node:crypto';
+import { Types } from 'mongoose';
+import { UserModel } from '../models/UserModel.js';
+import type { IUser } from '../models/UserModel.js';
+import { RefreshTokenModel } from '../models/RefreshTokenModel.js';
+import { hashPassword, verifyPassword } from './password.service.js';
+import {
+  createRefreshToken,
+  hashRefreshToken,
+  parseDurationMs,
+  signAccessToken,
+} from './jwt.service.js';
+import type { AuthConfig } from './jwt.service.js';
+
+export interface UserView {
+  id: string;
+  email: string;
+}
+
+export interface IssuedTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export function toUserView(user: IUser): UserView {
+  return { id: user._id.toString(), email: user.email };
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && error.code === 11000;
+}
+
+let dummyPasswordHash: Promise<string> | undefined;
+
+function getDummyPasswordHash(): Promise<string> {
+  dummyPasswordHash ??= hashPassword('timing-equalization-placeholder');
+  return dummyPasswordHash;
+}
+
+export async function registerUser(email: string, password: string): Promise<IUser> {
+  const passwordHash = await hashPassword(password);
+  try {
+    return await UserModel.create({ email, passwordHash });
+  } catch (error) {
+    if (isDuplicateKeyError(error)) throw new Error('EMAIL_TAKEN');
+    throw error;
+  }
+}
+
+export async function loginUser(email: string, password: string): Promise<IUser> {
+  const user = await UserModel.findOne({ email }).select('+passwordHash');
+  if (!user) {
+    await verifyPassword(await getDummyPasswordHash(), password);
+    throw new Error('INVALID_CREDENTIALS');
+  }
+  const valid = await verifyPassword(user.passwordHash, password);
+  if (!valid) throw new Error('INVALID_CREDENTIALS');
+  return user;
+}
+
+async function storeRefreshToken(
+  config: AuthConfig,
+  userId: Types.ObjectId,
+  familyId: string,
+): Promise<string> {
+  const refreshToken = createRefreshToken();
+  await RefreshTokenModel.create({
+    userId,
+    tokenHash: hashRefreshToken(refreshToken),
+    familyId,
+    expiresAt: new Date(Date.now() + parseDurationMs(config.refreshTtl)),
+    revoked: false,
+  });
+  return refreshToken;
+}
+
+export async function issueTokens(
+  config: AuthConfig,
+  userId: Types.ObjectId,
+  email: string,
+): Promise<IssuedTokens> {
+  const familyId = randomUUID();
+  const accessToken = signAccessToken(config, { userId: userId.toString(), email });
+  const refreshToken = await storeRefreshToken(config, userId, familyId);
+  return { accessToken, refreshToken };
+}
+
+export async function rotateRefreshToken(
+  config: AuthConfig,
+  presentedToken: string,
+): Promise<IssuedTokens> {
+  const stored = await RefreshTokenModel.findOne({ tokenHash: hashRefreshToken(presentedToken) });
+  if (!stored) throw new Error('INVALID_REFRESH_TOKEN');
+
+  if (stored.revoked) {
+    await RefreshTokenModel.updateMany(
+      { familyId: stored.familyId, revoked: false },
+      { $set: { revoked: true } },
+    );
+    throw new Error('INVALID_REFRESH_TOKEN');
+  }
+
+  if (stored.expiresAt.getTime() <= Date.now()) throw new Error('INVALID_REFRESH_TOKEN');
+
+  stored.revoked = true;
+  await stored.save();
+
+  const user = await UserModel.findById(stored.userId);
+  if (!user) throw new Error('INVALID_REFRESH_TOKEN');
+
+  const accessToken = signAccessToken(config, { userId: user._id.toString(), email: user.email });
+  const refreshToken = await storeRefreshToken(config, stored.userId, stored.familyId);
+  return { accessToken, refreshToken };
+}
+
+export async function revokeRefreshTokenFamily(presentedToken: string): Promise<void> {
+  const stored = await RefreshTokenModel.findOne({ tokenHash: hashRefreshToken(presentedToken) });
+  if (!stored) return;
+  await RefreshTokenModel.updateMany(
+    { familyId: stored.familyId, revoked: false },
+    { $set: { revoked: true } },
+  );
+}
