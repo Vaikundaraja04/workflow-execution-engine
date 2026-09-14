@@ -104,7 +104,7 @@ export async function issueTokens(
   context: SessionContext = {},
 ): Promise<IssuedTokens> {
   const familyId = randomUUID();
-  const accessToken = signAccessToken(config, { userId: userId.toString(), email });
+  const accessToken = signAccessToken(config, { userId: userId.toString(), email, sessionId: familyId });
   const refreshToken = await storeRefreshToken(config, userId, familyId, context);
   return { accessToken, refreshToken };
 }
@@ -140,7 +140,7 @@ export async function rotateRefreshToken(
   const user = await UserModel.findById(stored.userId);
   if (!user) throw new Error('INVALID_REFRESH_TOKEN');
 
-  const accessToken = signAccessToken(config, { userId: user._id.toString(), email: user.email });
+  const accessToken = signAccessToken(config, { userId: user._id.toString(), email: user.email, sessionId: stored.familyId });
   const refreshToken = await storeRefreshToken(config, stored.userId, stored.familyId, context);
   await createAuditLog({
     action: 'AUTH_REFRESH',
@@ -161,4 +161,69 @@ export async function revokeRefreshTokenFamily(
     { $set: { revoked: true } },
   );
   return { userId: stored.userId, familyId: stored.familyId };
+}
+
+export interface UserSessionView {
+  id: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
+export async function listUserSessions(
+  userId: string,
+  currentSessionId?: string,
+): Promise<UserSessionView[]> {
+  const tokens = await RefreshTokenModel.find({
+    userId: new Types.ObjectId(userId),
+    revoked: false,
+    expiresAt: { $gt: new Date() },
+  }).sort({ createdAt: 1 });
+
+  const sessions = new Map<string, { id: string; createdAt: Date; lastUsedAt: Date; expiresAt: Date }>();
+  for (const token of tokens) {
+    const lastUsedAt = token.lastUsedAt ?? token.createdAt;
+    const existing = sessions.get(token.familyId);
+    if (!existing) {
+      sessions.set(token.familyId, {
+        id: token.familyId,
+        createdAt: token.createdAt,
+        lastUsedAt,
+        expiresAt: token.expiresAt,
+      });
+      continue;
+    }
+    if (lastUsedAt > existing.lastUsedAt) existing.lastUsedAt = lastUsedAt;
+    if (token.expiresAt > existing.expiresAt) existing.expiresAt = token.expiresAt;
+  }
+
+  return [...sessions.values()]
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+    .map(session => ({
+      id: session.id,
+      createdAt: session.createdAt.toISOString(),
+      lastUsedAt: session.lastUsedAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
+      current: session.id === currentSessionId,
+    }));
+}
+
+export async function revokeSessionFamily(userId: string, familyId: string): Promise<boolean> {
+  const userObjectId = new Types.ObjectId(userId);
+  const existing = await RefreshTokenModel.exists({ userId: userObjectId, familyId });
+  if (!existing) return false;
+  await RefreshTokenModel.updateMany(
+    { userId: userObjectId, familyId, revoked: false },
+    { $set: { revoked: true } },
+  );
+  return true;
+}
+
+export async function revokeAllUserSessions(userId: string): Promise<number> {
+  const result = await RefreshTokenModel.updateMany(
+    { userId: new Types.ObjectId(userId), revoked: false },
+    { $set: { revoked: true } },
+  );
+  return result.modifiedCount;
 }

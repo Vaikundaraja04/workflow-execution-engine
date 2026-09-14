@@ -32,9 +32,9 @@ export function createApp(options: AppOptions) {
     refreshLimit: options.authRateLimit?.refreshLimit ?? DEFAULT_AUTH_RATE_LIMIT.refreshLimit,
   };
   const authRateLimiters = createAuthRateLimiters(rateLimitOptions);
-  app.use('/api/auth', createAuthRouter(options.auth, authRateLimiters));
-
   const requireAuth = createRequireAuth(options.auth);
+  app.use('/api/auth', createAuthRouter(options.auth, authRateLimiters, requireAuth));
+
   app.use('/api/workflows', requireAuth, workflowRouter);
   app.use(
     '/api',
