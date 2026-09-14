@@ -1,8 +1,17 @@
 import express from 'express';
 import workflowRouter from './routes/workflowRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { createExecutionRouter } from './routes/executionRoutes.js';
+import type { ExecutionQueue } from '../queues/executionQueue.js';
+import { UnavailableExecutionQueue } from '../queues/executionQueue.js';
+import type { ExecutionCreationOptions } from '../services/executionService.js';
 
-export function createApp() {
+export interface AppOptions {
+  executionQueue?: ExecutionQueue;
+  executionCreationOptions?: ExecutionCreationOptions;
+}
+
+export function createApp(options: AppOptions = {}) {
   const app = express();
   app.use(express.json({ limit: '1mb' }));
 
@@ -11,6 +20,13 @@ export function createApp() {
   });
 
   app.use('/api/workflows', workflowRouter);
+  app.use(
+    '/api',
+    createExecutionRouter(
+      options.executionQueue ?? new UnavailableExecutionQueue(),
+      options.executionCreationOptions,
+    ),
+  );
 
   // Unknown routes
   app.use((_req, res) => {

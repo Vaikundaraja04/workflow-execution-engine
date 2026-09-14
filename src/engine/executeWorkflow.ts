@@ -163,7 +163,7 @@ export async function executeWorkflow(
     }
   }
 
-  // Mark any remaining PENDING as SKIPPED (unreached due to branches)
+  // Mark all remaining PENDING steps as SKIPPED (unreached due to branches)
   for (const node of validatedWorkflow.nodes) {
     if (stepStatuses[node.id] === 'PENDING') {
       stepStatuses[node.id] = 'SKIPPED';

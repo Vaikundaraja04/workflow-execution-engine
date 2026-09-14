@@ -1,13 +1,15 @@
 {
   "name": "workflow-execution-engine",
   "version": "1.0.0",
-  "description": "TypeScript workflow engine with runtime validation and a MongoDB-backed versioning API",
+  "description": "TypeScript workflow engine with durable MongoDB executions and BullMQ workers",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "dev": "tsx src/demo.ts",
     "dev:api": "tsx watch src/api/server.ts",
+    "dev:worker": "tsx watch src/workers/startWorker.ts",
     "start:api": "tsx src/api/server.ts",
+    "start:worker": "tsx src/workers/startWorker.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -20,13 +22,16 @@
     "@types/node": "^22.20.2",
     "@types/supertest": "^7.2.1",
     "mongodb-memory-server": "^11.2.0",
+    "redis-memory-server": "^0.17.1",
     "supertest": "^7.2.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   },
   "dependencies": {
+    "bullmq": "^6.3.5",
     "express": "^5.2.1",
+    "ioredis": "^6.0.0",
     "mongoose": "^9.10.0",
     "zod": "^4.6.4"
   }
