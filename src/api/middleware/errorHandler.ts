@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 
 const ERROR_MAP: Record<string, { status: number; code: string; message: string }> = {
   INVALID_REQUEST: { status: 400, code: 'INVALID_REQUEST', message: 'Invalid request' },
+  RATE_LIMITED: { status: 429, code: 'RATE_LIMITED', message: 'Too many requests' },
   UNAUTHENTICATED: { status: 401, code: 'UNAUTHENTICATED', message: 'Authentication required' },
   INVALID_TOKEN: { status: 401, code: 'INVALID_TOKEN', message: 'Access token is invalid' },
   TOKEN_EXPIRED: { status: 401, code: 'TOKEN_EXPIRED', message: 'Access token has expired' },
