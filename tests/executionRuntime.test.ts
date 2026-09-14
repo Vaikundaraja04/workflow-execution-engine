@@ -41,6 +41,12 @@ class RecordingQueue implements ExecutionQueue {
   async close(): Promise<void> {}
 }
 
+const authConfig = {
+  jwtSecret: 'test-jwt-secret-0123456789abcdef',
+  accessTtl: '15m',
+  refreshTtl: '30d',
+};
+
 let replSet: MongoMemoryReplSet;
 let redisServer: RedisMemoryServer;
 let redisUrl: string;
@@ -115,6 +121,7 @@ beforeAll(async () => {
   request = supertest(createApp({
     executionQueue: queue,
     executionCreationOptions: { attempts: 3, backoffMs: 10 },
+    auth: authConfig,
   }));
 }, 180_000);
 
@@ -455,6 +462,7 @@ describe('Phase 2C execution API and runtime', () => {
     const liveRequest = supertest(createApp({
       executionQueue: liveQueue,
       executionCreationOptions: { attempts: 3, backoffMs: 10 },
+      auth: authConfig,
     }));
 
     const queued = await liveRequest
@@ -491,6 +499,7 @@ describe('Phase 2C execution API and runtime', () => {
     const liveRequest = supertest(createApp({
       executionQueue: liveQueue,
       executionCreationOptions: { attempts: 3, backoffMs: 10 },
+      auth: authConfig,
     }));
 
     const queued = await liveRequest
