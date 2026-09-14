@@ -2,6 +2,12 @@ import type { Request, Response, NextFunction } from 'express';
 
 const ERROR_MAP: Record<string, { status: number; code: string; message: string }> = {
   INVALID_REQUEST: { status: 400, code: 'INVALID_REQUEST', message: 'Invalid request' },
+  UNAUTHENTICATED: { status: 401, code: 'UNAUTHENTICATED', message: 'Authentication required' },
+  INVALID_TOKEN: { status: 401, code: 'INVALID_TOKEN', message: 'Access token is invalid' },
+  TOKEN_EXPIRED: { status: 401, code: 'TOKEN_EXPIRED', message: 'Access token has expired' },
+  INVALID_CREDENTIALS: { status: 401, code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect' },
+  INVALID_REFRESH_TOKEN: { status: 401, code: 'INVALID_REFRESH_TOKEN', message: 'Refresh token is invalid or expired' },
+  EMAIL_TAKEN: { status: 409, code: 'EMAIL_TAKEN', message: 'Email is already registered' },
   INVALID_JSON: { status: 400, code: 'INVALID_JSON', message: 'Request body contains invalid JSON' },
   INVALID_WORKFLOW_ID: { status: 400, code: 'INVALID_WORKFLOW_ID', message: 'Invalid workflow ID' },
   INVALID_EXECUTION_ID: { status: 400, code: 'INVALID_EXECUTION_ID', message: 'Invalid execution ID' },

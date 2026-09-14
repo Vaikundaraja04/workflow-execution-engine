@@ -27,6 +27,11 @@ async function startServer() {
         attempts: env.EXECUTION_ATTEMPTS,
         backoffMs: env.EXECUTION_BACKOFF_MS,
       },
+      auth: {
+        jwtSecret: env.AUTH_JWT_SECRET,
+        accessTtl: env.AUTH_ACCESS_TTL,
+        refreshTtl: env.AUTH_REFRESH_TTL,
+      },
     });
     const server = app.listen(env.PORT, () => {
       console.log(`Server running on port ${env.PORT}`);

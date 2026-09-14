@@ -6,6 +6,12 @@ import { createApp } from '../src/api/app.js';
 import { WorkflowModel } from '../src/models/WorkflowModel.js';
 import { WorkflowVersionModel } from '../src/models/WorkflowVersionModel.js';
 
+const authConfig = {
+  jwtSecret: 'test-jwt-secret-0123456789abcdef',
+  accessTtl: '15m',
+  refreshTtl: '30d',
+};
+
 let replSet: MongoMemoryReplSet;
 let request: ReturnType<typeof supertest>;
 
@@ -32,7 +38,7 @@ beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   const uri = replSet.getUri();
   await mongoose.connect(uri);
-  const app = createApp();
+  const app = createApp({ auth: authConfig });
   request = supertest(app);
 }, 180000);
 
