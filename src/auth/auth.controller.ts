@@ -1,6 +1,8 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { z } from 'zod';
 import type { AuthConfig } from './jwt.service.js';
+import type { IUser } from '../models/UserModel.js';
+import { createAuditLog } from '../services/auditService.js';
 import {
   issueTokens,
   loginUser,
@@ -9,6 +11,7 @@ import {
   rotateRefreshToken,
   toUserView,
 } from './auth.service.js';
+import type { SessionContext } from './auth.service.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 
@@ -25,6 +28,10 @@ const loginSchema = z.object({
 const refreshSchema = z.object({
   refreshToken: z.string().trim().min(1).max(512),
 }).strict();
+
+function requestContext(req: Request): SessionContext {
+  return { ipAddress: req.ip, userAgent: req.get('user-agent') };
+}
 
 export interface AuthController {
   register: RequestHandler;
@@ -43,6 +50,11 @@ export function createAuthController(config: AuthConfig): AuthController {
           return;
         }
         const user = await registerUser(parsed.data.email, parsed.data.password);
+        await createAuditLog({
+          action: 'AUTH_REGISTERED',
+          userId: user._id,
+          ...requestContext(req),
+        });
         res.status(201).json(toUserView(user));
       } catch (error) {
         next(error);
@@ -55,7 +67,22 @@ export function createAuthController(config: AuthConfig): AuthController {
           res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
           return;
         }
-        const user = await loginUser(parsed.data.email, parsed.data.password);
+
+        let user: IUser;
+        try {
+          user = await loginUser(parsed.data.email, parsed.data.password);
+        } catch (error) {
+          if (error instanceof Error && error.message === 'INVALID_CREDENTIALS') {
+            await createAuditLog({ action: 'AUTH_LOGIN_FAILED', ...requestContext(req) });
+          }
+          throw error;
+        }
+
+        await createAuditLog({
+          action: 'AUTH_LOGIN_SUCCESS',
+          userId: user._id,
+          ...requestContext(req),
+        });
         const tokens = await issueTokens(config, user._id, user.email);
         res.json(tokens);
       } catch (error) {
@@ -69,7 +96,7 @@ export function createAuthController(config: AuthConfig): AuthController {
           res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
           return;
         }
-        const tokens = await rotateRefreshToken(config, parsed.data.refreshToken);
+        const tokens = await rotateRefreshToken(config, parsed.data.refreshToken, requestContext(req));
         res.json(tokens);
       } catch (error) {
         next(error);
@@ -82,7 +109,16 @@ export function createAuthController(config: AuthConfig): AuthController {
           res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
           return;
         }
-        await revokeRefreshTokenFamily(parsed.data.refreshToken);
+        const revoked = await revokeRefreshTokenFamily(parsed.data.refreshToken);
+        if (revoked) {
+          await createAuditLog({
+            action: 'AUTH_LOGOUT',
+            userId: revoked.userId,
+            resource: 'session',
+            resourceId: revoked.familyId,
+            ...requestContext(req),
+          });
+        }
         res.status(204).end();
       } catch (error) {
         next(error);
