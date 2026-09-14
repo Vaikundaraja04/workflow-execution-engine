@@ -48,7 +48,7 @@ function validDefinition(message = 'ready') {
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(replSet.getUri());
-  request = supertest(createApp({ executionQueue: queue, auth: authConfig }));
+  request = supertest(createApp({ executionQueue: queue, auth: authConfig, authRateLimit: { loginLimit: 1000, refreshLimit: 1000 } }));
 }, 180000);
 
 afterAll(async () => {

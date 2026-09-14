@@ -20,7 +20,7 @@ let request: ReturnType<typeof supertest>;
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(replSet.getUri());
-  request = supertest(createApp({ auth: authConfig }));
+  request = supertest(createApp({ auth: authConfig, authRateLimit: { loginLimit: 1000, refreshLimit: 1000 } }));
 }, 180000);
 
 afterAll(async () => {

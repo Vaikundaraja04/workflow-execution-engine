@@ -8,11 +8,14 @@ import type { ExecutionCreationOptions } from '../services/executionService.js';
 import { createAuthRouter } from '../auth/auth.routes.js';
 import { createRequireAuth } from '../auth/auth.middleware.js';
 import type { AuthConfig } from '../auth/jwt.service.js';
+import { createAuthRateLimiters, DEFAULT_AUTH_RATE_LIMIT } from './middleware/rateLimiter.js';
+import type { AuthRateLimitOptions } from './middleware/rateLimiter.js';
 
 export interface AppOptions {
   executionQueue?: ExecutionQueue;
   executionCreationOptions?: ExecutionCreationOptions;
   auth: AuthConfig;
+  authRateLimit?: Partial<AuthRateLimitOptions>;
 }
 
 export function createApp(options: AppOptions) {
@@ -23,7 +26,13 @@ export function createApp(options: AppOptions) {
     res.json({ status: 'ok' });
   });
 
-  app.use('/api/auth', createAuthRouter(options.auth));
+  const rateLimitOptions: AuthRateLimitOptions = {
+    windowMs: options.authRateLimit?.windowMs ?? DEFAULT_AUTH_RATE_LIMIT.windowMs,
+    loginLimit: options.authRateLimit?.loginLimit ?? DEFAULT_AUTH_RATE_LIMIT.loginLimit,
+    refreshLimit: options.authRateLimit?.refreshLimit ?? DEFAULT_AUTH_RATE_LIMIT.refreshLimit,
+  };
+  const authRateLimiters = createAuthRateLimiters(rateLimitOptions);
+  app.use('/api/auth', createAuthRouter(options.auth, authRateLimiters));
 
   const requireAuth = createRequireAuth(options.auth);
   app.use('/api/workflows', requireAuth, workflowRouter);
