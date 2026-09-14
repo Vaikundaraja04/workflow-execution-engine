@@ -71,15 +71,29 @@ async function storeRefreshToken(
   config: AuthConfig,
   userId: Types.ObjectId,
   familyId: string,
+  context: SessionContext = {},
 ): Promise<string> {
   const refreshToken = createRefreshToken();
-  await RefreshTokenModel.create({
+  const doc: {
+    userId: Types.ObjectId;
+    tokenHash: string;
+    familyId: string;
+    expiresAt: Date;
+    revoked: boolean;
+    lastUsedAt: Date;
+    userAgent?: string;
+    ipAddress?: string;
+  } = {
     userId,
     tokenHash: hashRefreshToken(refreshToken),
     familyId,
     expiresAt: new Date(Date.now() + parseDurationMs(config.refreshTtl)),
     revoked: false,
-  });
+    lastUsedAt: new Date(),
+  };
+  if (context.userAgent) doc.userAgent = context.userAgent;
+  if (context.ipAddress) doc.ipAddress = context.ipAddress;
+  await RefreshTokenModel.create(doc);
   return refreshToken;
 }
 
@@ -87,10 +101,11 @@ export async function issueTokens(
   config: AuthConfig,
   userId: Types.ObjectId,
   email: string,
+  context: SessionContext = {},
 ): Promise<IssuedTokens> {
   const familyId = randomUUID();
   const accessToken = signAccessToken(config, { userId: userId.toString(), email });
-  const refreshToken = await storeRefreshToken(config, userId, familyId);
+  const refreshToken = await storeRefreshToken(config, userId, familyId, context);
   return { accessToken, refreshToken };
 }
 
@@ -119,13 +134,14 @@ export async function rotateRefreshToken(
   if (stored.expiresAt.getTime() <= Date.now()) throw new Error('INVALID_REFRESH_TOKEN');
 
   stored.revoked = true;
+  stored.lastUsedAt = new Date();
   await stored.save();
 
   const user = await UserModel.findById(stored.userId);
   if (!user) throw new Error('INVALID_REFRESH_TOKEN');
 
   const accessToken = signAccessToken(config, { userId: user._id.toString(), email: user.email });
-  const refreshToken = await storeRefreshToken(config, stored.userId, stored.familyId);
+  const refreshToken = await storeRefreshToken(config, stored.userId, stored.familyId, context);
   await createAuditLog({
     action: 'AUTH_REFRESH',
     userId: stored.userId,

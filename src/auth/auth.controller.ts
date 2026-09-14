@@ -83,7 +83,7 @@ export function createAuthController(config: AuthConfig): AuthController {
           userId: user._id,
           ...requestContext(req),
         });
-        const tokens = await issueTokens(config, user._id, user.email);
+        const tokens = await issueTokens(config, user._id, user.email, requestContext(req));
         res.json(tokens);
       } catch (error) {
         next(error);

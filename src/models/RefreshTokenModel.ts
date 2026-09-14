@@ -6,6 +6,9 @@ export interface IRefreshToken extends Document<Types.ObjectId> {
   familyId: string;
   expiresAt: Date;
   revoked: boolean;
+  lastUsedAt?: Date;
+  userAgent?: string;
+  ipAddress?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -16,6 +19,9 @@ const RefreshTokenSchema = new Schema<IRefreshToken>({
   familyId: { type: String, required: true },
   expiresAt: { type: Date, required: true },
   revoked: { type: Boolean, required: true, default: false },
+  lastUsedAt: { type: Date },
+  userAgent: { type: String, maxlength: 512 },
+  ipAddress: { type: String, maxlength: 64 },
 }, { timestamps: true });
 
 RefreshTokenSchema.index({ userId: 1 });
