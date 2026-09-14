@@ -5,13 +5,17 @@ import type { IUser } from '../models/UserModel.js';
 import { createAuditLog } from '../services/auditService.js';
 import {
   issueTokens,
+  listUserSessions,
   loginUser,
   registerUser,
+  revokeAllUserSessions,
   revokeRefreshTokenFamily,
+  revokeSessionFamily,
   rotateRefreshToken,
   toUserView,
 } from './auth.service.js';
 import type { SessionContext } from './auth.service.js';
+import { getAuthUser } from './auth.middleware.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 
@@ -38,6 +42,9 @@ export interface AuthController {
   login: RequestHandler;
   refresh: RequestHandler;
   logout: RequestHandler;
+  listSessions: RequestHandler;
+  revokeSession: RequestHandler;
+  revokeAllSessions: RequestHandler;
 }
 
 export function createAuthController(config: AuthConfig): AuthController {
@@ -119,6 +126,52 @@ export function createAuthController(config: AuthConfig): AuthController {
             ...requestContext(req),
           });
         }
+        res.status(204).end();
+      } catch (error) {
+        next(error);
+      }
+    },
+    listSessions: async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const user = getAuthUser(req);
+        const sessions = await listUserSessions(user.userId, user.sessionId);
+        res.json(sessions);
+      } catch (error) {
+        next(error);
+      }
+    },
+    revokeSession: async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const user = getAuthUser(req);
+        const sessionId = req.params.id;
+        if (typeof sessionId !== 'string' || sessionId.length === 0) {
+          throw new Error('SESSION_NOT_FOUND');
+        }
+        const revoked = await revokeSessionFamily(user.userId, sessionId);
+        if (!revoked) throw new Error('SESSION_NOT_FOUND');
+        await createAuditLog({
+          action: 'AUTH_LOGOUT',
+          userId: user.userId,
+          resource: 'session',
+          resourceId: sessionId,
+          metadata: { scope: 'session' },
+          ...requestContext(req),
+        });
+        res.status(204).end();
+      } catch (error) {
+        next(error);
+      }
+    },
+    revokeAllSessions: async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const user = getAuthUser(req);
+        await revokeAllUserSessions(user.userId);
+        await createAuditLog({
+          action: 'AUTH_LOGOUT',
+          userId: user.userId,
+          metadata: { scope: 'all' },
+          ...requestContext(req),
+        });
         res.status(204).end();
       } catch (error) {
         next(error);

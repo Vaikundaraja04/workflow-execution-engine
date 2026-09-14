@@ -10,6 +10,7 @@ export interface AuthConfig {
 export interface AccessTokenPayload {
   userId: string;
   email: string;
+  sessionId?: string | undefined;
 }
 
 const DURATION_UNITS: Record<string, number> = {
@@ -28,8 +29,10 @@ export function parseDurationMs(value: string): number {
 }
 
 export function signAccessToken(config: AuthConfig, payload: AccessTokenPayload): string {
+  const claims: Record<string, string> = { userId: payload.userId, email: payload.email };
+  if (payload.sessionId !== undefined) claims.sessionId = payload.sessionId;
   return jwt.sign(
-    { userId: payload.userId, email: payload.email },
+    claims,
     config.jwtSecret,
     { algorithm: 'HS256', expiresIn: Math.floor(parseDurationMs(config.accessTtl) / 1000) },
   );
@@ -46,11 +49,15 @@ export function verifyAccessToken(config: AuthConfig, token: string): AccessToke
     throw new Error('INVALID_TOKEN');
   }
   if (typeof decoded !== 'object' || decoded === null) throw new Error('INVALID_TOKEN');
-  const payload = decoded as { userId?: unknown; email?: unknown };
+  const payload = decoded as { userId?: unknown; email?: unknown; sessionId?: unknown };
   if (typeof payload.userId !== 'string' || typeof payload.email !== 'string') {
     throw new Error('INVALID_TOKEN');
   }
-  return { userId: payload.userId, email: payload.email };
+  return {
+    userId: payload.userId,
+    email: payload.email,
+    sessionId: typeof payload.sessionId === 'string' ? payload.sessionId : undefined,
+  };
 }
 
 export function createRefreshToken(): string {
