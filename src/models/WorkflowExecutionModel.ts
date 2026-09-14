@@ -9,6 +9,7 @@ import { EXECUTION_STATUSES } from '../types/execution.js';
 
 export interface IWorkflowExecution extends Document<Types.ObjectId> {
   workflowId: Types.ObjectId;
+  ownerId: Types.ObjectId;
   workflowVersionId: Types.ObjectId;
   versionNumber: number;
   jobId: string;
@@ -35,6 +36,7 @@ const ExecutionStatusEventSchema = new Schema<ExecutionStatusEvent>({
 
 const WorkflowExecutionSchema = new Schema<IWorkflowExecution>({
   workflowId: { type: Schema.Types.ObjectId, ref: 'Workflow', required: true },
+  ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   workflowVersionId: { type: Schema.Types.ObjectId, ref: 'WorkflowVersion', required: true },
   versionNumber: { type: Number, required: true, min: 1 },
   jobId: { type: String, required: true, unique: true },

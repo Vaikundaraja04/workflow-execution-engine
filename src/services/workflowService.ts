@@ -11,26 +11,27 @@ function assertValidWorkflowId(id: string): void {
   }
 }
 
-export async function createWorkflow(name: string, definition: WorkflowDefinition) {
+export async function createWorkflow(name: string, definition: WorkflowDefinition, ownerId: string) {
   const doc = await WorkflowModel.create({
     name: name.trim(),
     draftDefinition: definition,
     status: 'DRAFT',
     latestVersionNumber: 0,
+    ownerId: new Types.ObjectId(ownerId),
   });
   return doc.toObject();
 }
 
-export async function getWorkflow(id: string) {
+export async function getWorkflow(id: string, ownerId: string) {
   assertValidWorkflowId(id);
-  const doc = await WorkflowModel.findById(id);
+  const doc = await WorkflowModel.findOne({ _id: id, ownerId: new Types.ObjectId(ownerId) });
   if (!doc) throw new Error('WORKFLOW_NOT_FOUND');
   return doc.toObject();
 }
 
-export async function updateDraft(id: string, updates: { name?: string; definition?: WorkflowDefinition }) {
+export async function updateDraft(id: string, updates: { name?: string; definition?: WorkflowDefinition }, ownerId: string) {
   assertValidWorkflowId(id);
-  const doc = await WorkflowModel.findById(id);
+  const doc = await WorkflowModel.findOne({ _id: id, ownerId: new Types.ObjectId(ownerId) });
   if (!doc) throw new Error('WORKFLOW_NOT_FOUND');
 
   if (updates.name !== undefined) doc.name = updates.name.trim();
@@ -42,8 +43,8 @@ export async function updateDraft(id: string, updates: { name?: string; definiti
   return doc.toObject();
 }
 
-export async function validateDraft(id: string) {
-  const wf = await getWorkflow(id);
+export async function validateDraft(id: string, ownerId: string) {
+  const wf = await getWorkflow(id, ownerId);
   const draft: unknown = JSON.parse(JSON.stringify(wf.draftDefinition));
   const schemaResult = WorkflowDefinitionSchema.safeParse(draft);
 
@@ -63,12 +64,12 @@ export async function validateDraft(id: string) {
   };
 }
 
-export async function publishWorkflow(id: string) {
+export async function publishWorkflow(id: string, ownerId: string) {
   assertValidWorkflowId(id);
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const wf = await WorkflowModel.findById(id).session(session);
+    const wf = await WorkflowModel.findOne({ _id: id, ownerId: new Types.ObjectId(ownerId) }).session(session);
     if (!wf) throw new Error('WORKFLOW_NOT_FOUND');
 
     const parsedDraft = JSON.parse(JSON.stringify(wf.draftDefinition));
@@ -108,9 +109,9 @@ export async function publishWorkflow(id: string) {
   }
 }
 
-export async function getVersions(id: string) {
+export async function getVersions(id: string, ownerId: string) {
   assertValidWorkflowId(id);
-  const wf = await WorkflowModel.findById(id);
+  const wf = await WorkflowModel.findOne({ _id: id, ownerId: new Types.ObjectId(ownerId) });
   if (!wf) throw new Error('WORKFLOW_NOT_FOUND');
   return WorkflowVersionModel.find({ workflowId: id }).sort({ versionNumber: 1 }).lean();
 }

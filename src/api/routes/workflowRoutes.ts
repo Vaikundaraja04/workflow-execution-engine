@@ -11,6 +11,7 @@ import {
   getVersions,
 } from '../../services/workflowService.js';
 import { WorkflowDefinitionSchema } from '../../schemas/workflowSchema.js';
+import { getAuthUser } from '../../auth/auth.middleware.js';
 
 const createWorkflowSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -40,7 +41,7 @@ workflowRouter.post('/', async (req: Request, res: Response, next: NextFunction)
     if (!parsed.success) {
       return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
     }
-    const wf = await createWorkflow(parsed.data.name, parsed.data.definition);
+    const wf = await createWorkflow(parsed.data.name, parsed.data.definition, getAuthUser(req).userId);
     res.status(201).json(wf);
   } catch (err) {
     next(err);
@@ -50,7 +51,7 @@ workflowRouter.post('/', async (req: Request, res: Response, next: NextFunction)
 workflowRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = getRouteId(req);
-    const wf = await getWorkflow(id);
+    const wf = await getWorkflow(id, getAuthUser(req).userId);
     res.json(wf);
   } catch (err) {
     next(err);
@@ -67,7 +68,7 @@ workflowRouter.put('/:id/draft', async (req: Request, res: Response, next: NextF
     const updates: { name?: string; definition?: WorkflowDefinition } = {};
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
     if (parsed.data.definition !== undefined) updates.definition = parsed.data.definition;
-    const wf = await updateDraft(id, updates);
+    const wf = await updateDraft(id, updates, getAuthUser(req).userId);
     res.json(wf);
   } catch (err) {
     next(err);
@@ -77,7 +78,7 @@ workflowRouter.put('/:id/draft', async (req: Request, res: Response, next: NextF
 workflowRouter.post('/:id/validate', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = getRouteId(req);
-    const result = await validateDraft(id);
+    const result = await validateDraft(id, getAuthUser(req).userId);
     res.json(result);
   } catch (err) {
     next(err);
@@ -87,7 +88,7 @@ workflowRouter.post('/:id/validate', async (req: Request, res: Response, next: N
 workflowRouter.post('/:id/publish', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = getRouteId(req);
-    const result = await publishWorkflow(id);
+    const result = await publishWorkflow(id, getAuthUser(req).userId);
     res.status(201).json(result);
   } catch (err) {
     next(err);
@@ -97,7 +98,7 @@ workflowRouter.post('/:id/publish', async (req: Request, res: Response, next: Ne
 workflowRouter.get('/:id/versions', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = getRouteId(req);
-    const versions = await getVersions(id);
+    const versions = await getVersions(id, getAuthUser(req).userId);
     res.json(versions);
   } catch (err) {
     next(err);

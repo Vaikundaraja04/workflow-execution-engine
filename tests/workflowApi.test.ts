@@ -1,16 +1,22 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import supertest from 'supertest';
+import express from 'express';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { createApp } from '../src/api/app.js';
 import { WorkflowModel } from '../src/models/WorkflowModel.js';
 import { WorkflowVersionModel } from '../src/models/WorkflowVersionModel.js';
+import { UserModel } from '../src/models/UserModel.js';
+import { hashPassword } from '../src/auth/password.service.js';
+import { signAccessToken } from '../src/auth/jwt.service.js';
 
 const authConfig = {
   jwtSecret: 'test-jwt-secret-0123456789abcdef',
   accessTtl: '15m',
   refreshTtl: '30d',
 };
+let accessToken: string;
+let testUserId: string;
 
 let replSet: MongoMemoryReplSet;
 let request: ReturnType<typeof supertest>;
@@ -38,8 +44,21 @@ beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   const uri = replSet.getUri();
   await mongoose.connect(uri);
+  const user = await UserModel.create({
+    email: 'workflow-api-tests@example.com',
+    passwordHash: await hashPassword('test-password-123'),
+  });
+  testUserId = user._id.toString();
+  accessToken = signAccessToken(authConfig, { userId: testUserId, email: user.email });
+
   const app = createApp({ auth: authConfig });
-  request = supertest(app);
+  const authedApp = express();
+  authedApp.use((req, _res, next) => {
+    if (!req.headers.authorization) req.headers.authorization = `Bearer ${accessToken}`;
+    next();
+  });
+  authedApp.use(app);
+  request = supertest(authedApp);
 }, 180000);
 
 afterAll(async () => {
@@ -317,6 +336,7 @@ describe('Phase 2B API', () => {
     const inserted = await WorkflowModel.collection.insertOne({
       name: 'Legacy invalid draft',
       draftDefinition: { nodes: 'not-an-array', edges: [] },
+      ownerId: new Types.ObjectId(testUserId),
       status: 'DRAFT',
       latestVersionNumber: 0,
       createdAt: new Date(),
@@ -334,6 +354,7 @@ describe('Phase 2B API', () => {
     const inserted = await WorkflowModel.collection.insertOne({
       name: 'Legacy invalid publish',
       draftDefinition: { nodes: 'not-an-array', edges: [] },
+      ownerId: new Types.ObjectId(testUserId),
       status: 'DRAFT',
       latestVersionNumber: 0,
       createdAt: new Date(),

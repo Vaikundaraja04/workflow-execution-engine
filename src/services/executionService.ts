@@ -190,11 +190,12 @@ export async function createWorkflowExecution(
   queue: ExecutionQueue,
   workflowId: string,
   request: CreateExecutionRequest,
+  ownerId: string,
   options: ExecutionCreationOptions = {},
 ): Promise<CreatedExecution> {
   assertValidId(workflowId, 'INVALID_WORKFLOW_ID');
 
-  const workflow = await WorkflowModel.findById(workflowId);
+  const workflow = await WorkflowModel.findOne({ _id: workflowId, ownerId: new Types.ObjectId(ownerId) });
   if (!workflow) throw new Error('WORKFLOW_NOT_FOUND');
 
   const inputHash = hashExecutionInput(request.input);
@@ -222,6 +223,7 @@ export async function createWorkflowExecution(
     execution = await WorkflowExecutionModel.create({
       _id: executionId,
       workflowId: workflow._id,
+      ownerId: workflow.ownerId,
       workflowVersionId: version._id,
       versionNumber: version.versionNumber,
       jobId,
@@ -243,16 +245,16 @@ export async function createWorkflowExecution(
   return { execution, replayed: false };
 }
 
-export async function getWorkflowExecution(executionId: string): Promise<IWorkflowExecution> {
+export async function getWorkflowExecution(executionId: string, ownerId: string): Promise<IWorkflowExecution> {
   assertValidId(executionId, 'INVALID_EXECUTION_ID');
-  const execution = await WorkflowExecutionModel.findById(executionId);
+  const execution = await WorkflowExecutionModel.findOne({ _id: executionId, ownerId: new Types.ObjectId(ownerId) });
   if (!execution) throw new Error('EXECUTION_NOT_FOUND');
   return execution;
 }
 
-export async function listWorkflowExecutions(workflowId: string): Promise<IWorkflowExecution[]> {
+export async function listWorkflowExecutions(workflowId: string, ownerId: string): Promise<IWorkflowExecution[]> {
   assertValidId(workflowId, 'INVALID_WORKFLOW_ID');
-  const workflowExists = await WorkflowModel.exists({ _id: workflowId });
+  const workflowExists = await WorkflowModel.exists({ _id: workflowId, ownerId: new Types.ObjectId(ownerId) });
   if (!workflowExists) throw new Error('WORKFLOW_NOT_FOUND');
   return WorkflowExecutionModel.find({ workflowId }).sort({ createdAt: -1 });
 }
