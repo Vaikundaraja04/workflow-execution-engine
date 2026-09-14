@@ -1,15 +1,15 @@
 import { Router } from 'express';
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { CreateExecutionRequestSchema } from '../../schemas/executionSchema.js';
 import type { ExecutionQueue } from '../../queues/executionQueue.js';
 import type { ExecutionCreationOptions } from '../../services/executionService.js';
+import { getAuthUser } from '../../auth/auth.middleware.js';
 import {
   createWorkflowExecution,
   getWorkflowExecution,
   listWorkflowExecutions,
   toWorkflowExecutionView,
 } from '../../services/executionService.js';
-
 function getRouteParameter(req: Request, name: string, errorCode: string): string {
   const value = req.params[name];
   if (typeof value !== 'string') throw new Error(errorCode);
@@ -18,12 +18,14 @@ function getRouteParameter(req: Request, name: string, errorCode: string): strin
 
 export function createExecutionRouter(
   queue: ExecutionQueue,
-  creationOptions: ExecutionCreationOptions = {},
+  creationOptions: ExecutionCreationOptions,
+  requireAuth: RequestHandler,
 ) {
   const router = Router();
 
   router.post(
     '/workflows/:workflowId/executions',
+    requireAuth,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const workflowId = getRouteParameter(req, 'workflowId', 'INVALID_WORKFLOW_ID');
@@ -38,6 +40,7 @@ export function createExecutionRouter(
           queue,
           workflowId,
           parsed.data,
+          getAuthUser(req).userId,
           creationOptions,
         );
         return res.status(202).json({
@@ -52,10 +55,11 @@ export function createExecutionRouter(
 
   router.get(
     '/executions/:executionId',
+    requireAuth,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const executionId = getRouteParameter(req, 'executionId', 'INVALID_EXECUTION_ID');
-        const execution = await getWorkflowExecution(executionId);
+        const execution = await getWorkflowExecution(executionId, getAuthUser(req).userId);
         return res.json(toWorkflowExecutionView(execution));
       } catch (error) {
         next(error);
@@ -65,10 +69,11 @@ export function createExecutionRouter(
 
   router.get(
     '/workflows/:workflowId/executions',
+    requireAuth,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const workflowId = getRouteParameter(req, 'workflowId', 'INVALID_WORKFLOW_ID');
-        const executions = await listWorkflowExecutions(workflowId);
+        const executions = await listWorkflowExecutions(workflowId, getAuthUser(req).userId);
         return res.json(executions.map(toWorkflowExecutionView));
       } catch (error) {
         next(error);

@@ -6,6 +6,7 @@ import type { ExecutionQueue } from '../queues/executionQueue.js';
 import { UnavailableExecutionQueue } from '../queues/executionQueue.js';
 import type { ExecutionCreationOptions } from '../services/executionService.js';
 import { createAuthRouter } from '../auth/auth.routes.js';
+import { createRequireAuth } from '../auth/auth.middleware.js';
 import type { AuthConfig } from '../auth/jwt.service.js';
 
 export interface AppOptions {
@@ -24,12 +25,14 @@ export function createApp(options: AppOptions) {
 
   app.use('/api/auth', createAuthRouter(options.auth));
 
-  app.use('/api/workflows', workflowRouter);
+  const requireAuth = createRequireAuth(options.auth);
+  app.use('/api/workflows', requireAuth, workflowRouter);
   app.use(
     '/api',
     createExecutionRouter(
       options.executionQueue ?? new UnavailableExecutionQueue(),
-      options.executionCreationOptions,
+      options.executionCreationOptions ?? {},
+      requireAuth,
     ),
   );
 

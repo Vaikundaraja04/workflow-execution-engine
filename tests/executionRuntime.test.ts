@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import supertest from 'supertest';
-import mongoose from 'mongoose';
+import express from 'express';
+import type { Express } from 'express';
+import mongoose, { Types } from 'mongoose';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { RedisMemoryServer } from 'redis-memory-server';
 import { createApp } from '../src/api/app.js';
@@ -15,6 +17,9 @@ import type {
 import { WorkflowModel } from '../src/models/WorkflowModel.js';
 import { WorkflowVersionModel } from '../src/models/WorkflowVersionModel.js';
 import { WorkflowExecutionModel } from '../src/models/WorkflowExecutionModel.js';
+import { UserModel } from '../src/models/UserModel.js';
+import { hashPassword } from '../src/auth/password.service.js';
+import { signAccessToken } from '../src/auth/jwt.service.js';
 import {
   createWorkflowExecution,
   recoverPendingExecutions,
@@ -46,6 +51,18 @@ const authConfig = {
   accessTtl: '15m',
   refreshTtl: '30d',
 };
+let accessToken: string;
+let ownerId: string;
+
+function withDefaultAuth(app: Express) {
+  const outer = express();
+  outer.use((req, _res, next) => {
+    if (!req.headers.authorization) req.headers.authorization = `Bearer ${accessToken}`;
+    next();
+  });
+  outer.use(app);
+  return outer;
+}
 
 let replSet: MongoMemoryReplSet;
 let redisServer: RedisMemoryServer;
@@ -71,6 +88,7 @@ async function createPublishedWorkflow(message = 'phase-2c'): Promise<string> {
     draftDefinition: validDefinition(message),
     status: 'DRAFT',
     latestVersionNumber: 0,
+    ownerId: new Types.ObjectId(ownerId),
   });
   const version = await WorkflowVersionModel.create({
     workflowId: workflow._id,
@@ -89,7 +107,7 @@ async function queueExecution(
   idempotencyKey = 'booking-1',
   input: CreateExecutionRequest['input'] = { estimatedCost: 15_000 },
 ) {
-  return createWorkflowExecution(queue, workflowId, { idempotencyKey, input }, {
+  return createWorkflowExecution(queue, workflowId, { idempotencyKey, input }, ownerId, {
     attempts: 3,
     backoffMs: 10,
   });
@@ -118,11 +136,18 @@ beforeAll(async () => {
   redisServer = await RedisMemoryServer.create();
   redisUrl = `redis://${await redisServer.getHost()}:${await redisServer.getPort()}`;
   await mongoose.connect(replSet.getUri());
-  request = supertest(createApp({
+  const user = await UserModel.create({
+    email: 'execution-runtime-tests@example.com',
+    passwordHash: await hashPassword('test-password-123'),
+  });
+  ownerId = user._id.toString();
+  accessToken = signAccessToken(authConfig, { userId: ownerId, email: user.email });
+
+  request = supertest(withDefaultAuth(createApp({
     executionQueue: queue,
     executionCreationOptions: { attempts: 3, backoffMs: 10 },
     auth: authConfig,
-  }));
+  })));
 }, 180_000);
 
 afterAll(async () => {
@@ -181,6 +206,7 @@ describe('Phase 2C execution API and runtime', () => {
       draftDefinition: validDefinition(),
       status: 'DRAFT',
       latestVersionNumber: 0,
+      ownerId: new Types.ObjectId(ownerId),
     });
     const response = await request
       .post(`/api/workflows/${workflow._id.toString()}/executions`)
@@ -459,11 +485,11 @@ describe('Phase 2C execution API and runtime', () => {
     const liveQueue = new BullMqExecutionQueue(redisUrl, queueName);
     liveQueues.push(liveQueue);
     await liveQueue.waitUntilReady();
-    const liveRequest = supertest(createApp({
+    const liveRequest = supertest(withDefaultAuth(createApp({
       executionQueue: liveQueue,
       executionCreationOptions: { attempts: 3, backoffMs: 10 },
       auth: authConfig,
-    }));
+    })));
 
     const queued = await liveRequest
       .post(`/api/workflows/${workflowId}/executions`)
@@ -496,11 +522,11 @@ describe('Phase 2C execution API and runtime', () => {
       if (calls === 1) throw new Error('temporary service outage');
       return executeWorkflow(definition, input);
     };
-    const liveRequest = supertest(createApp({
+    const liveRequest = supertest(withDefaultAuth(createApp({
       executionQueue: liveQueue,
       executionCreationOptions: { attempts: 3, backoffMs: 10 },
       auth: authConfig,
-    }));
+    })));
 
     const queued = await liveRequest
       .post(`/api/workflows/${workflowId}/executions`)
