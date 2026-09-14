@@ -11,6 +11,7 @@ import {
   signAccessToken,
 } from './jwt.service.js';
 import type { AuthConfig } from './jwt.service.js';
+import { createAuditLog } from '../services/auditService.js';
 
 export interface UserView {
   id: string;
@@ -20,6 +21,11 @@ export interface UserView {
 export interface IssuedTokens {
   accessToken: string;
   refreshToken: string;
+}
+
+export interface SessionContext {
+  userAgent?: string | undefined;
+  ipAddress?: string | undefined;
 }
 
 export function toUserView(user: IUser): UserView {
@@ -91,6 +97,7 @@ export async function issueTokens(
 export async function rotateRefreshToken(
   config: AuthConfig,
   presentedToken: string,
+  context: SessionContext = {},
 ): Promise<IssuedTokens> {
   const stored = await RefreshTokenModel.findOne({ tokenHash: hashRefreshToken(presentedToken) });
   if (!stored) throw new Error('INVALID_REFRESH_TOKEN');
@@ -100,6 +107,12 @@ export async function rotateRefreshToken(
       { familyId: stored.familyId, revoked: false },
       { $set: { revoked: true } },
     );
+    await createAuditLog({
+      action: 'AUTH_REFRESH_REPLAY',
+      userId: stored.userId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
     throw new Error('INVALID_REFRESH_TOKEN');
   }
 
@@ -113,14 +126,23 @@ export async function rotateRefreshToken(
 
   const accessToken = signAccessToken(config, { userId: user._id.toString(), email: user.email });
   const refreshToken = await storeRefreshToken(config, stored.userId, stored.familyId);
+  await createAuditLog({
+    action: 'AUTH_REFRESH',
+    userId: stored.userId,
+    ipAddress: context.ipAddress,
+    userAgent: context.userAgent,
+  });
   return { accessToken, refreshToken };
 }
 
-export async function revokeRefreshTokenFamily(presentedToken: string): Promise<void> {
+export async function revokeRefreshTokenFamily(
+  presentedToken: string,
+): Promise<{ userId: Types.ObjectId; familyId: string } | null> {
   const stored = await RefreshTokenModel.findOne({ tokenHash: hashRefreshToken(presentedToken) });
-  if (!stored) return;
+  if (!stored) return null;
   await RefreshTokenModel.updateMany(
     { familyId: stored.familyId, revoked: false },
     { $set: { revoked: true } },
   );
+  return { userId: stored.userId, familyId: stored.familyId };
 }

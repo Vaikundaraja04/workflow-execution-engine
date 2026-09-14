@@ -12,6 +12,7 @@ import {
 } from '../../services/workflowService.js';
 import { WorkflowDefinitionSchema } from '../../schemas/workflowSchema.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
+import { createAuditLog } from '../../services/auditService.js';
 
 const createWorkflowSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -42,6 +43,14 @@ workflowRouter.post('/', async (req: Request, res: Response, next: NextFunction)
       return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
     }
     const wf = await createWorkflow(parsed.data.name, parsed.data.definition, getAuthUser(req).userId);
+    await createAuditLog({
+      action: 'WORKFLOW_CREATED',
+      userId: getAuthUser(req).userId,
+      resource: 'workflow',
+      resourceId: wf._id.toString(),
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
     res.status(201).json(wf);
   } catch (err) {
     next(err);
@@ -69,6 +78,14 @@ workflowRouter.put('/:id/draft', async (req: Request, res: Response, next: NextF
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
     if (parsed.data.definition !== undefined) updates.definition = parsed.data.definition;
     const wf = await updateDraft(id, updates, getAuthUser(req).userId);
+    await createAuditLog({
+      action: 'WORKFLOW_UPDATED',
+      userId: getAuthUser(req).userId,
+      resource: 'workflow',
+      resourceId: wf._id.toString(),
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
     res.json(wf);
   } catch (err) {
     next(err);

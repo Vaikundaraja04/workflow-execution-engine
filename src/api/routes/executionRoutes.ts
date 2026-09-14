@@ -4,6 +4,7 @@ import { CreateExecutionRequestSchema } from '../../schemas/executionSchema.js';
 import type { ExecutionQueue } from '../../queues/executionQueue.js';
 import type { ExecutionCreationOptions } from '../../services/executionService.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
+import { createAuditLog } from '../../services/auditService.js';
 import {
   createWorkflowExecution,
   getWorkflowExecution,
@@ -44,6 +45,17 @@ export function createExecutionRouter(
           getAuthUser(req).userId,
           creationOptions,
         );
+        if (!created.replayed) {
+          await createAuditLog({
+            action: 'EXECUTION_STARTED',
+            userId: getAuthUser(req).userId,
+            resource: 'execution',
+            resourceId: created.execution._id.toString(),
+            metadata: { workflowId },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+          });
+        }
         return res.status(202).json({
           ...toWorkflowExecutionView(created.execution),
           replayed: created.replayed,
