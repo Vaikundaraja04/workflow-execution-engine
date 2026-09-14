@@ -5,6 +5,7 @@ import type { AuditAction } from '../models/AuditLogModel.js';
 export interface CreateAuditLogInput {
   action: AuditAction;
   userId?: Types.ObjectId | string | undefined;
+  workspaceId?: Types.ObjectId | string | undefined;
   resource?: string | undefined;
   resourceId?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
@@ -28,6 +29,7 @@ export async function createAuditLog(input: CreateAuditLogInput): Promise<void> 
     const doc: {
       action: AuditAction;
       userId?: Types.ObjectId;
+      workspaceId?: Types.ObjectId;
       resource?: string;
       resourceId?: string;
       metadata?: Record<string, unknown>;
@@ -35,6 +37,9 @@ export async function createAuditLog(input: CreateAuditLogInput): Promise<void> 
       userAgent?: string;
     } = { action: input.action };
 
+    if (input.workspaceId !== undefined) {
+      doc.workspaceId = typeof input.workspaceId === 'string' ? new Types.ObjectId(input.workspaceId) : input.workspaceId;
+    }
     if (input.userId !== undefined) {
       doc.userId = typeof input.userId === 'string' ? new Types.ObjectId(input.userId) : input.userId;
     }
