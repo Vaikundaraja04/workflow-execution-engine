@@ -19,6 +19,7 @@
   "license": "ISC",
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.20.2",
     "@types/supertest": "^7.2.1",
     "mongodb-memory-server": "^11.2.0",
@@ -29,9 +30,11 @@
     "vitest": "^5.0.0"
   },
   "dependencies": {
+    "argon2": "^0.45.1",
     "bullmq": "^6.3.5",
     "express": "^5.2.1",
     "ioredis": "^6.0.0",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.10.0",
     "zod": "^4.6.4"
   }
