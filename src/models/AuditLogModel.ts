@@ -1,0 +1,43 @@
+import mongoose, { Schema, Document, Types } from 'mongoose';
+
+export const AUDIT_ACTIONS = [
+  'AUTH_REGISTERED',
+  'AUTH_LOGIN_SUCCESS',
+  'AUTH_LOGIN_FAILED',
+  'AUTH_LOGOUT',
+  'AUTH_REFRESH',
+  'AUTH_REFRESH_REPLAY',
+  'WORKFLOW_CREATED',
+  'WORKFLOW_UPDATED',
+  'WORKFLOW_DELETED',
+  'EXECUTION_STARTED',
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+export interface IAuditLog extends Document<Types.ObjectId> {
+  userId?: Types.ObjectId;
+  action: AuditAction;
+  resource?: string;
+  resourceId?: string;
+  metadata?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: Date;
+}
+
+const AuditLogSchema = new Schema<IAuditLog>({
+  userId: { type: Schema.Types.ObjectId, ref: 'User' },
+  action: { type: String, enum: AUDIT_ACTIONS, required: true },
+  resource: { type: String, maxlength: 64 },
+  resourceId: { type: String, maxlength: 128 },
+  metadata: { type: Schema.Types.Mixed },
+  ipAddress: { type: String, maxlength: 64 },
+  userAgent: { type: String, maxlength: 512 },
+}, { timestamps: { createdAt: true, updatedAt: false }, minimize: false });
+
+AuditLogSchema.index({ userId: 1 });
+AuditLogSchema.index({ action: 1 });
+AuditLogSchema.index({ createdAt: -1 });
+
+export const AuditLogModel = mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
