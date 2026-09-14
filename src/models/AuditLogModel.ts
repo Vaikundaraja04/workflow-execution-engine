@@ -11,12 +11,15 @@ export const AUDIT_ACTIONS = [
   'WORKFLOW_UPDATED',
   'WORKFLOW_DELETED',
   'EXECUTION_STARTED',
+  'WORKSPACE_CREATED',
+  'WORKSPACE_UPDATED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 export interface IAuditLog extends Document<Types.ObjectId> {
   userId?: Types.ObjectId;
+  workspaceId?: Types.ObjectId;
   action: AuditAction;
   resource?: string;
   resourceId?: string;
@@ -28,6 +31,7 @@ export interface IAuditLog extends Document<Types.ObjectId> {
 
 const AuditLogSchema = new Schema<IAuditLog>({
   userId: { type: Schema.Types.ObjectId, ref: 'User' },
+  workspaceId: { type: Schema.Types.ObjectId, ref: 'Workspace' },
   action: { type: String, enum: AUDIT_ACTIONS, required: true },
   resource: { type: String, maxlength: 64 },
   resourceId: { type: String, maxlength: 128 },
@@ -39,5 +43,6 @@ const AuditLogSchema = new Schema<IAuditLog>({
 AuditLogSchema.index({ userId: 1 });
 AuditLogSchema.index({ action: 1 });
 AuditLogSchema.index({ createdAt: -1 });
+AuditLogSchema.index({ workspaceId: 1, createdAt: -1 });
 
 export const AuditLogModel = mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);

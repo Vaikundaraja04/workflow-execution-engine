@@ -10,6 +10,7 @@ import { EXECUTION_STATUSES } from '../types/execution.js';
 export interface IWorkflowExecution extends Document<Types.ObjectId> {
   workflowId: Types.ObjectId;
   ownerId: Types.ObjectId;
+  workspaceId?: Types.ObjectId;
   workflowVersionId: Types.ObjectId;
   versionNumber: number;
   jobId: string;
@@ -37,6 +38,7 @@ const ExecutionStatusEventSchema = new Schema<ExecutionStatusEvent>({
 const WorkflowExecutionSchema = new Schema<IWorkflowExecution>({
   workflowId: { type: Schema.Types.ObjectId, ref: 'Workflow', required: true },
   ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  workspaceId: { type: Schema.Types.ObjectId, ref: 'Workspace' },
   workflowVersionId: { type: Schema.Types.ObjectId, ref: 'WorkflowVersion', required: true },
   versionNumber: { type: Number, required: true, min: 1 },
   jobId: { type: String, required: true, unique: true },
@@ -56,6 +58,7 @@ const WorkflowExecutionSchema = new Schema<IWorkflowExecution>({
 WorkflowExecutionSchema.index({ workflowId: 1, idempotencyKey: 1 }, { unique: true });
 WorkflowExecutionSchema.index({ workflowId: 1, createdAt: -1 });
 WorkflowExecutionSchema.index({ status: 1, updatedAt: 1 });
+WorkflowExecutionSchema.index({ workspaceId: 1, createdAt: -1 });
 
 export const WorkflowExecutionModel = mongoose.model<IWorkflowExecution>(
   'WorkflowExecution',
