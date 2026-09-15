@@ -53,6 +53,10 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   INVALID_USER_ID: { status: 400, code: 'INVALID_USER_ID', message: 'Invalid user ID' },
   WORKSPACE_SUSPENDED: { status: 403, code: 'WORKSPACE_SUSPENDED', message: 'Workspace is suspended' },
   WORKSPACE_DELETED: { status: 404, code: 'WORKSPACE_DELETED', message: 'Workspace is deleted' },
+  CANNOT_CANCEL_COMPLETED_EXECUTION: { status: 409, code: 'CANNOT_CANCEL_COMPLETED_EXECUTION', message: 'Cannot cancel an execution that has already completed' },
+  CANNOT_RETRY_NON_FAILED_EXECUTION: { status: 409, code: 'CANNOT_RETRY_NON_FAILED_EXECUTION', message: 'Only failed executions can be retried' },
+  INVALID_QUEUE_NAME: { status: 400, code: 'INVALID_QUEUE_NAME', message: 'Invalid queue name' },
+  INVALID_RETENTION_DAYS: { status: 400, code: 'INVALID_RETENTION_DAYS', message: 'Retention days must be at least 1' },
 };
 
 type JsonSyntaxError = SyntaxError & {

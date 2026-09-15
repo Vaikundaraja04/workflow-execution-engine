@@ -23,6 +23,8 @@ import { queryAuditLogs } from './auditQueryService.js';
 import type { AuditQueryResult } from './auditQueryService.js';
 import type { HealthChecks } from '../api/routes/healthRoutes.js';
 import type { HealthCheckResult } from '../observability/health.js';
+import type { ExecutionQueue } from '../queues/executionQueue.js';
+import type { WebhookQueue } from '../queues/webhookQueue.js';
 
 export interface AdminWorkspaceDetailView {
   id: string;
@@ -1114,3 +1116,123 @@ export async function triggerRecalculateAnalytics(
 
   return result;
 }
+
+export interface WorkerPoolMetricsView {
+  status: 'HEALTHY' | 'DEGRADED' | 'NO_WORKERS';
+  activeWorkers: number;
+  totalWorkers: number;
+  staleWorkers: number;
+  heartbeatStatus: 'up' | 'down' | 'skipped';
+  heartbeatLatencyMs: number;
+  queueDepth: {
+    executions: number;
+    webhooks: number;
+    total: number;
+  };
+  scalingRecommendation: {
+    currentReplicas: number;
+    recommendedReplicas: number;
+    action: 'SCALE_UP' | 'SCALE_DOWN' | 'MAINTAIN';
+    reason: string;
+    backlogPerWorker: number;
+    targetBacklogPerWorker: number;
+  };
+  timestamp: string;
+}
+
+export async function getWorkerPoolMetrics(
+  healthChecks?: HealthChecks,
+  executionQueue?: ExecutionQueue,
+  webhookQueue?: WebhookQueue,
+): Promise<WorkerPoolMetricsView> {
+  let workerHealth: HealthCheckResult = { status: 'skipped', latencyMs: 0 };
+  if (healthChecks?.worker) {
+    try {
+      workerHealth = await healthChecks.worker();
+    } catch {
+      workerHealth = { status: 'down', latencyMs: 0, detail: 'worker health check failed' };
+    }
+  }
+
+  let executionBacklog = 0;
+  let webhookBacklog = 0;
+
+  if (executionQueue?.getMetrics) {
+    try {
+      const metrics = await executionQueue.getMetrics();
+      executionBacklog = metrics.counts.waiting + metrics.counts.delayed;
+    } catch {
+      // Fallback
+    }
+  } else {
+    executionBacklog = await WorkflowExecutionModel.countDocuments({
+      status: { $in: ['QUEUING', 'QUEUED'] },
+    });
+  }
+
+  if (webhookQueue?.getMetrics) {
+    try {
+      const metrics = await webhookQueue.getMetrics();
+      webhookBacklog = metrics.counts.waiting + metrics.counts.delayed;
+    } catch {
+      // Fallback
+    }
+  } else {
+    webhookBacklog = await WebhookDeliveryModel.countDocuments({
+      status: { $in: ['PENDING', 'RETRYING'] },
+    });
+  }
+
+  const totalBacklog = executionBacklog + webhookBacklog;
+  const isWorkerUp = workerHealth.status === 'up';
+  const activeWorkers = isWorkerUp ? 1 : 0;
+  const totalWorkers = 1;
+  const staleWorkers = isWorkerUp ? 0 : 1;
+  const status = isWorkerUp ? 'HEALTHY' : totalBacklog > 0 ? 'NO_WORKERS' : 'DEGRADED';
+
+  const TARGET_BACKLOG_PER_WORKER = 50;
+  const currentReplicas = Math.max(activeWorkers, 1);
+  const backlogPerWorker = Math.round(totalBacklog / currentReplicas);
+
+  let recommendedReplicas = 1;
+  let action: 'SCALE_UP' | 'SCALE_DOWN' | 'MAINTAIN' = 'MAINTAIN';
+  let reason = 'Queue backlog is within normal operational thresholds';
+
+  if (!isWorkerUp && totalBacklog > 0) {
+    recommendedReplicas = Math.max(1, Math.ceil(totalBacklog / TARGET_BACKLOG_PER_WORKER));
+    action = 'SCALE_UP';
+    reason = `No active workers detected with ${totalBacklog} queued items. Recommend starting ${recommendedReplicas} worker replica(s).`;
+  } else if (totalBacklog > TARGET_BACKLOG_PER_WORKER * currentReplicas) {
+    recommendedReplicas = Math.ceil(totalBacklog / TARGET_BACKLOG_PER_WORKER);
+    action = 'SCALE_UP';
+    reason = `High queue pressure (${totalBacklog} queued items). Target backlog is ${TARGET_BACKLOG_PER_WORKER} per replica.`;
+  } else if (totalBacklog === 0 && currentReplicas > 1) {
+    recommendedReplicas = 1;
+    action = 'SCALE_DOWN';
+    reason = 'No queue backlog. Minimal replica set is sufficient.';
+  }
+
+  return {
+    status,
+    activeWorkers,
+    totalWorkers,
+    staleWorkers,
+    heartbeatStatus: workerHealth.status,
+    heartbeatLatencyMs: workerHealth.latencyMs,
+    queueDepth: {
+      executions: executionBacklog,
+      webhooks: webhookBacklog,
+      total: totalBacklog,
+    },
+    scalingRecommendation: {
+      currentReplicas,
+      recommendedReplicas,
+      action,
+      reason,
+      backlogPerWorker,
+      targetBacklogPerWorker: TARGET_BACKLOG_PER_WORKER,
+    },
+    timestamp: new Date().toISOString(),
+  };
+}
+

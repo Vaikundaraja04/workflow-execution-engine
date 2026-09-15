@@ -4,6 +4,7 @@ import type {
   ExecutionEnqueueOptions,
   ExecutionJobData,
   ExecutionQueue,
+  QueueMetrics,
 } from './executionQueue.js';
 import {
   DEFAULT_EXECUTION_QUEUE_NAME,
@@ -48,6 +49,62 @@ export class BullMqExecutionQueue implements ExecutionQueue {
       removeOnComplete: { count: 1_000 },
       removeOnFail: { count: 1_000 },
     });
+  }
+
+  async pause(): Promise<void> {
+    await this.queue.pause();
+  }
+
+  async resume(): Promise<void> {
+    await this.queue.resume();
+  }
+
+  async isPaused(): Promise<boolean> {
+    return this.queue.isPaused();
+  }
+
+  async getMetrics(): Promise<QueueMetrics> {
+    const counts = await this.queue.getJobCounts('waiting', 'active', 'delayed', 'failed', 'completed');
+    const isPaused = await this.queue.isPaused();
+    return {
+      name: this.queue.name,
+      isPaused,
+      counts: {
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        delayed: counts.delayed ?? 0,
+        failed: counts.failed ?? 0,
+        completed: counts.completed ?? 0,
+        paused: 0,
+      },
+      total: (counts.waiting ?? 0) + (counts.active ?? 0) + (counts.delayed ?? 0) + (counts.failed ?? 0) + (counts.completed ?? 0),
+    };
+  }
+
+  async removeJob(jobId: string): Promise<boolean> {
+    try {
+      const job = await this.queue.getJob(jobId);
+      if (job) {
+        await job.remove();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  async retryJob(jobId: string): Promise<boolean> {
+    try {
+      const job = await this.queue.getJob(jobId);
+      if (job) {
+        await job.retry();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
   }
 
   async waitUntilReady(): Promise<void> {

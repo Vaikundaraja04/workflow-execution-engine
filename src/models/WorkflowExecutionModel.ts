@@ -72,13 +72,15 @@ const WorkflowExecutionSchema = new Schema<IWorkflowExecution>({
   queuedAt: { type: Date },
   startedAt: { type: Date },
   finishedAt: { type: Date },
-}, { timestamps: true, minimize: false });
+}, { timestamps: true, minimize: false, versionKey: false });
 
 WorkflowExecutionSchema.index({ workflowId: 1, idempotencyKey: 1 }, { unique: true });
 WorkflowExecutionSchema.index({ workflowId: 1, createdAt: -1 });
 WorkflowExecutionSchema.index({ status: 1, updatedAt: 1 });
 WorkflowExecutionSchema.index({ parentExecutionId: 1 });
 WorkflowExecutionSchema.index({ workspaceId: 1, createdAt: -1 });
+WorkflowExecutionSchema.index({ workspaceId: 1, status: 1, createdAt: -1 });
+WorkflowExecutionSchema.index({ status: 1, nextRetryAt: 1 });
 
 export const WorkflowExecutionModel = mongoose.model<IWorkflowExecution>(
   'WorkflowExecution',

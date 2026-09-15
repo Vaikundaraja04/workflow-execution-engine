@@ -111,8 +111,8 @@ export function createApp(options: AppOptions) {
     ),
   );
   app.use('/api/v1/developer', requireAuth, createDeveloperRouter());
-  app.use('/api/v1/admin', requireAuth, createAdminRouter(options.health));
-  app.use('/api/admin', requireAuth, createAdminRouter(options.health));
+  app.use('/api/v1/admin', requireAuth, createAdminRouter(options));
+  app.use('/api/admin', requireAuth, createAdminRouter(options));
   app.use('/api/v1/audit', requireAuth, createAuditRouter());
   app.use('/api/audit', requireAuth, createAuditRouter());
   app.use('/api/v1/workspaces/:workspaceId/audit', requireAuth, createAuditRouter());

@@ -16,9 +16,31 @@ import {
   getSystemHealth,
   getSystemMetrics,
   triggerRecalculateAnalytics,
+  getWorkerPoolMetrics,
 } from '../../services/adminService.js';
 import { createHealthChecks } from './healthRoutes.js';
 import type { HealthOptions } from './healthRoutes.js';
+import { runDataRetention, DEFAULT_RETENTION_POLICY } from '../../services/retentionService.js';
+import type { RetentionExecutionOptions, RetentionPolicy } from '../../services/retentionService.js';
+import { getDatabaseOptimizationReport } from '../../services/databaseOptimizationService.js';
+import {
+  setMaintenanceMode,
+  getMaintenanceMode,
+  createDisasterRecoverySnapshot,
+  validateDisasterRecoverySnapshot,
+} from '../../services/disasterRecoveryService.js';
+import { createAuditLog } from '../../services/auditService.js';
+import type { ExecutionQueue } from '../../queues/executionQueue.js';
+import { UnavailableExecutionQueue } from '../../queues/executionQueue.js';
+import type { WebhookQueue } from '../../queues/webhookQueue.js';
+import { UnavailableWebhookQueue } from '../../queues/webhookQueue.js';
+import {
+  cancelWorkflowExecution,
+  retryWorkflowExecution,
+  toWorkflowExecutionView,
+} from '../../services/executionService.js';
+import { CreateExecutionRequestSchema } from '../../schemas/executionSchema.js';
+import type { ExecutionCreationOptions } from '../../services/executionService.js';
 
 const paginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -26,14 +48,46 @@ const paginationQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
 });
 
+export interface AdminRouterOptions {
+  health?: HealthOptions;
+  executionQueue?: ExecutionQueue;
+  webhookQueue?: WebhookQueue;
+}
+
 function getRouteWorkspaceId(req: Request): string {
   const id = req.params.workspaceId ?? req.params.id;
   if (typeof id !== 'string' || id.length === 0) throw new Error('INVALID_WORKSPACE_ID');
   return id;
 }
 
-export function createAdminRouter(healthOptions: HealthOptions = {}): Router {
+function getRouteParameter(req: Request, name: string, errorCode: string): string {
+  const value = req.params[name];
+  if (typeof value !== 'string') throw new Error(errorCode);
+  return value;
+}
+
+function getRouteQueueName(req: Request): 'execution' | 'webhook' {
+  const name = req.params.queueName;
+  if (name === 'execution' || name === 'workflow-executions') return 'execution';
+  if (name === 'webhook' || name === 'webhook-delivery' || name === 'webhooks') return 'webhook';
+  throw new Error('INVALID_QUEUE_NAME');
+}
+
+export function createAdminRouter(options: HealthOptions | AdminRouterOptions = {}): Router {
   const router = Router({ mergeParams: true });
+
+  const healthOptions: HealthOptions = 'health' in options && options.health
+    ? options.health
+    : (options as HealthOptions);
+
+  const executionQueue: ExecutionQueue = ('executionQueue' in options && options.executionQueue)
+    ? options.executionQueue
+    : new UnavailableExecutionQueue();
+
+  const webhookQueue: WebhookQueue = ('webhookQueue' in options && options.webhookQueue)
+    ? options.webhookQueue
+    : new UnavailableWebhookQueue();
+
   const healthChecks = createHealthChecks(healthOptions);
 
   const requireAdminAccess = requirePermission('MEMBER_MANAGE');
@@ -41,7 +95,7 @@ export function createAdminRouter(healthOptions: HealthOptions = {}): Router {
   const requireAuditReadDefault = requirePermission('AUDIT_READ');
 
   // =============================================================
-  // 1. System Administration API
+  // 1. System Administration & Worker Management API
   // =============================================================
 
   // GET /system/health - System health status
@@ -68,6 +122,20 @@ export function createAdminRouter(healthOptions: HealthOptions = {}): Router {
   router.get('/system/metrics', requireAdminAccess, handleSystemMetrics);
   router.get('/system/stats', requireAdminAccess, handleSystemMetrics);
 
+  // GET /system/workers or /system/workers/metrics - Worker Pool & Autoscaling Metrics
+  const handleWorkerMetrics = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workerMetrics = await getWorkerPoolMetrics(healthChecks, executionQueue, webhookQueue);
+      res.json(workerMetrics);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  router.get('/system/workers', requireAdminAccess, handleWorkerMetrics);
+  router.get('/system/workers/metrics', requireAdminAccess, handleWorkerMetrics);
+  router.get('/workers/metrics', requireAdminAccess, handleWorkerMetrics);
+
   // POST /system/maintenance/recalculate-analytics - Recalculate rollups
   router.post('/system/maintenance/recalculate-analytics', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -81,7 +149,250 @@ export function createAdminRouter(healthOptions: HealthOptions = {}): Router {
   });
 
   // =============================================================
-  // 2. Security Center API
+  // 2. Queue Monitoring & Control API
+  // =============================================================
+
+  // GET /queues - Metrics for all queues
+  router.get('/queues', requireAdminAccess, async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const [executionMetrics, webhookMetrics] = await Promise.all([
+        executionQueue.getMetrics ? executionQueue.getMetrics() : { name: 'workflow-executions', isPaused: false, counts: { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0, paused: 0 }, total: 0 },
+        webhookQueue.getMetrics ? webhookQueue.getMetrics() : { name: 'webhook-delivery', isPaused: false, counts: { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0, paused: 0 }, total: 0 },
+      ]);
+      res.json({
+        execution: executionMetrics,
+        webhook: webhookMetrics,
+        queues: [executionMetrics, webhookMetrics],
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /queues/:queueName and /queues/:queueName/metrics
+  const handleSingleQueueMetrics = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const queueType = getRouteQueueName(req);
+      const targetQueue = queueType === 'execution' ? executionQueue : webhookQueue;
+      const metrics = targetQueue.getMetrics
+        ? await targetQueue.getMetrics()
+        : {
+            name: queueType === 'execution' ? 'workflow-executions' : 'webhook-delivery',
+            isPaused: false,
+            counts: { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0, paused: 0 },
+            total: 0,
+          };
+      res.json(metrics);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  router.get('/queues/:queueName', requireAdminAccess, handleSingleQueueMetrics);
+  router.get('/queues/:queueName/metrics', requireAdminAccess, handleSingleQueueMetrics);
+
+  // POST /queues/:queueName/pause
+  router.post('/queues/:queueName/pause', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const queueType = getRouteQueueName(req);
+      const targetQueue = queueType === 'execution' ? executionQueue : webhookQueue;
+      if (targetQueue.pause) {
+        await targetQueue.pause();
+      }
+      const user = getAuthUser(req);
+      await createAuditLog({
+        action: 'QUEUE_PAUSED',
+        userId: user.userId,
+        resource: 'queue',
+        resourceId: queueType,
+        metadata: { queue: queueType },
+      });
+      res.json({ success: true, queue: queueType, paused: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // POST /queues/:queueName/resume
+  router.post('/queues/:queueName/resume', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const queueType = getRouteQueueName(req);
+      const targetQueue = queueType === 'execution' ? executionQueue : webhookQueue;
+      if (targetQueue.resume) {
+        await targetQueue.resume();
+      }
+      const user = getAuthUser(req);
+      await createAuditLog({
+        action: 'QUEUE_RESUMED',
+        userId: user.userId,
+        resource: 'queue',
+        resourceId: queueType,
+        metadata: { queue: queueType },
+      });
+      res.json({ success: true, queue: queueType, paused: false });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // =============================================================
+  // 3. Execution Control API (Admin)
+  // =============================================================
+
+  // POST /executions/:executionId/cancel
+  router.post('/executions/:executionId/cancel', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const executionId = getRouteParameter(req, 'executionId', 'INVALID_EXECUTION_ID');
+      const user = getAuthUser(req);
+      const reason = req.body?.reason as string | undefined;
+      const cancelled = await cancelWorkflowExecution(
+        executionQueue,
+        executionId,
+        user.userId,
+        undefined,
+        reason,
+      );
+      res.json(toWorkflowExecutionView(cancelled));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // POST /executions/:executionId/retry
+  router.post('/executions/:executionId/retry', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const executionId = getRouteParameter(req, 'executionId', 'INVALID_EXECUTION_ID');
+      const user = getAuthUser(req);
+      const parsed = CreateExecutionRequestSchema.safeParse(req.body);
+      const options: ExecutionCreationOptions = {};
+      if (parsed.success && parsed.data.timeoutMs !== undefined) {
+        options.timeoutMs = parsed.data.timeoutMs;
+      }
+      const retried = await retryWorkflowExecution(
+        executionQueue,
+        executionId,
+        user.userId,
+        undefined,
+        options,
+      );
+      res.json(toWorkflowExecutionView(retried));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // =============================================================
+  // 4. Data Retention Framework API
+  // =============================================================
+
+  // POST /system/retention/run
+  router.post('/system/retention/run', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = getAuthUser(req);
+      const options: RetentionExecutionOptions = {
+        ...(typeof req.body?.workspaceId === 'string' ? { workspaceId: req.body.workspaceId } : {}),
+        dryRun: req.body?.dryRun === true,
+        ...(req.body?.policies ? { policies: req.body.policies as Partial<RetentionPolicy> } : {}),
+        actorUserId: user.userId,
+      };
+      const result = await runDataRetention(options);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /system/retention/policies
+  router.get('/system/retention/policies', requireAdminAccess, async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json(DEFAULT_RETENTION_POLICY);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // =============================================================
+  // 5. Database Optimization Review API
+  // =============================================================
+
+  // GET /system/database/optimization or /database/optimization
+  const handleDatabaseOptimization = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const report = await getDatabaseOptimizationReport();
+      res.json(report);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  router.get('/system/database/optimization', requireAdminAccess, handleDatabaseOptimization);
+  router.get('/database/optimization', requireAdminAccess, handleDatabaseOptimization);
+
+  // =============================================================
+  // 6. Disaster Recovery Foundations API
+  // =============================================================
+
+  // GET /system/maintenance/mode
+  router.get('/system/maintenance/mode', requireAdminAccess, async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const state = getMaintenanceMode();
+      res.json(state);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // POST /system/maintenance/mode
+  router.post('/system/maintenance/mode', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = getAuthUser(req);
+      const enabled = req.body?.enabled === true;
+      const reason = req.body?.reason as string | undefined;
+      const pauseQueues = req.body?.pauseQueues !== false;
+
+      const state = await setMaintenanceMode(enabled, user.userId, {
+        ...(reason !== undefined ? { reason } : {}),
+        pauseQueues,
+        executionQueue,
+        webhookQueue,
+      });
+      res.json(state);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // POST /system/disaster-recovery/snapshot
+  router.post('/system/disaster-recovery/snapshot', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = getAuthUser(req);
+      const workspaceId = req.body?.workspaceId as string | undefined;
+      const snapshot = await createDisasterRecoverySnapshot({
+        ...(typeof workspaceId === 'string' ? { workspaceId } : {}),
+        actorUserId: user.userId,
+      });
+      res.json(snapshot);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // POST /system/disaster-recovery/snapshot/validate
+  router.post('/system/disaster-recovery/snapshot/validate', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const snapshot = req.body?.snapshot ?? req.body;
+      if (!snapshot) {
+        return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Snapshot is required' } });
+      }
+      const validation = validateDisasterRecoverySnapshot(snapshot);
+      res.json(validation);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // =============================================================
+  // 7. Security Center API
   // =============================================================
 
   // GET /security/overview - Security posture of current workspace
@@ -146,7 +457,7 @@ export function createAdminRouter(healthOptions: HealthOptions = {}): Router {
   });
 
   // =============================================================
-  // 3. Usage & Quota API
+  // 8. Usage & Quota API
   // =============================================================
 
   // GET /usage - Usage metrics for current workspace
@@ -193,7 +504,7 @@ export function createAdminRouter(healthOptions: HealthOptions = {}): Router {
   });
 
   // =============================================================
-  // 4. Workspace Administration API
+  // 9. Workspace Administration API
   // =============================================================
 
   // GET /workspaces - List all workspaces user administers
