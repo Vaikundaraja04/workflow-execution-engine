@@ -8,6 +8,7 @@ import { WorkflowModel } from '../models/WorkflowModel.js';
 import { WorkflowExecutionModel } from '../models/WorkflowExecutionModel.js';
 import { AuditLogModel } from '../models/AuditLogModel.js';
 import { createAuditLog } from './auditService.js';
+import { permissionsForRole } from '../auth/permissions.js';
 
 export interface WorkspaceView {
   id: string;
@@ -97,6 +98,7 @@ export async function ensureUserWorkspace(userId: string): Promise<string> {
         workspaceId: workspace._id,
         userId: new Types.ObjectId(userId),
         role: 'OWNER',
+        permissions: permissionsForRole('OWNER'),
         status: 'ACTIVE',
       });
     } catch (error) {
@@ -135,6 +137,7 @@ export async function createWorkspace(
     workspaceId: workspace._id,
     userId: new Types.ObjectId(userId),
     role: 'OWNER',
+    permissions: permissionsForRole('OWNER'),
     status: 'ACTIVE',
   });
   await createAuditLog({
