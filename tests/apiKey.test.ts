@@ -100,27 +100,28 @@ describe('API Key Service', () => {
   it('validates a correct API key', async () => {
     const { rawKey } = await createAPIKey(workspaceId, userId, 'Valid', []);
     const validated = await validateAPIKey(rawKey);
-    expect(validated).toBeTruthy();
-    expect(validated!.status).toBe('ACTIVE');
+    expect(validated.key).toBeTruthy();
+    expect(validated.key!.status).toBe('ACTIVE');
   });
 
   it('rejects an invalid API key', async () => {
     const validated = await validateAPIKey('wke_invalidkey123');
-    expect(validated).toBeNull();
+    expect(validated.key).toBeNull();
   });
 
   it('rejects a revoked API key', async () => {
     const { key, rawKey } = await createAPIKey(workspaceId, userId, 'Revoked', []);
     await revokeAPIKey(key.id, workspaceId, userId);
     const validated = await validateAPIKey(rawKey);
-    expect(validated).toBeNull();
+    expect(validated.key).toBeNull();
   });
 
   it('rejects an expired API key', async () => {
     const past = new Date(Date.now() - 1000);
     const { rawKey } = await createAPIKey(workspaceId, userId, 'Expired', [], past);
     const validated = await validateAPIKey(rawKey);
-    expect(validated).toBeNull();
+    expect(validated.key).toBeNull();
+    expect(validated.reason).toBe('EXPIRED');
   });
 
   it('marks key as expired when past expiration', async () => {

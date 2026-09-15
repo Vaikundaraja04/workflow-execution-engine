@@ -167,19 +167,24 @@ export async function rotateAPIKey(
   return { key: toAPIKeyView(doc), rawKey };
 }
 
-export async function validateAPIKey(rawKey: string): Promise<IAPIKey | null> {
-  if (!rawKey.startsWith(API_KEY_PREFIX)) return null;
+export type ValidateAPIKeyResult = {
+  key: IAPIKey | null;
+  reason?: 'EXPIRED' | 'INVALID';
+};
+
+export async function validateAPIKey(rawKey: string): Promise<ValidateAPIKeyResult> {
+  if (!rawKey.startsWith(API_KEY_PREFIX)) return { key: null, reason: 'INVALID' };
   const keyHash = hashKey(rawKey);
   const key = await APIKeyModel.findOne({ keyHash });
-  if (!key) return null;
-  if (key.status === 'REVOKED') return null;
-  if (key.status === 'EXPIRED') return null;
+  if (!key) return { key: null, reason: 'INVALID' };
+  if (key.status === 'REVOKED') return { key: null, reason: 'INVALID' };
+  if (key.status === 'EXPIRED') return { key: null, reason: 'EXPIRED' };
   if (key.expiresAt && key.expiresAt < new Date()) {
     key.status = 'EXPIRED';
     await key.save();
-    return null;
+    return { key: null, reason: 'EXPIRED' };
   }
-  return key;
+  return { key };
 }
 
 export async function recordAPIKeyUsage(id: string): Promise<void> {

@@ -26,15 +26,38 @@ describe('API Key Auth Middleware', () => {
   const workspaceId = new mongoose.Types.ObjectId().toString();
   const userId = new mongoose.Types.ObjectId().toString();
 
-  function makeRequest(authHeader?: string): Request {
+  function makeRequest(authHeader?: string, xApiKey?: string): Request {
+    const headers: Record<string, string | undefined> = {};
+    if (authHeader !== undefined) headers.authorization = authHeader;
+    if (xApiKey !== undefined) headers['x-api-key'] = xApiKey;
     return {
-      headers: { authorization: authHeader },
+      headers,
     } as unknown as Request;
   }
 
   it('authenticates a valid API key', async () => {
     const { rawKey } = await createAPIKey(workspaceId, userId, 'Test', ['WORKFLOW_READ']);
     const req = makeRequest(`Bearer ${rawKey}`);
+    const middleware = createRequireAPIKey();
+    let nextCalled = false;
+    let nextError: string | Error | undefined;
+    await new Promise<void>((resolve) => {
+      middleware(req, {} as never, (err?: Error | string | undefined) => {
+        nextCalled = true;
+        nextError = err;
+        resolve();
+      });
+    });
+    expect(nextCalled).toBe(true);
+    expect(nextError).toBeUndefined();
+    const ctx = getAPIKeyContext(req);
+    expect(ctx.workspaceId).toBe(workspaceId);
+    expect(ctx.permissions).toEqual(['WORKFLOW_READ']);
+  });
+
+  it('authenticates a valid API key via X-API-Key header', async () => {
+    const { rawKey } = await createAPIKey(workspaceId, userId, 'Test', ['WORKFLOW_READ']);
+    const req = makeRequest(undefined, rawKey);
     const middleware = createRequireAPIKey();
     let nextCalled = false;
     let nextError: string | Error | undefined;
@@ -105,7 +128,7 @@ describe('API Key Auth Middleware', () => {
         resolve();
       });
     });
-    expect((nextError as Error)?.message).toBe('INVALID_API_KEY');
+    expect((nextError as Error)?.message).toBe('API_KEY_EXPIRED');
   });
 
   it('updates lastUsedAt on successful auth', async () => {

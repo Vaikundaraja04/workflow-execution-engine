@@ -16,26 +16,39 @@ export function getAPIKeyContext(req: Request): APIKeyAuthContext {
   return ctx;
 }
 
+function extractToken(req: Request): string | undefined {
+  const xApiKey = req.headers['x-api-key'];
+  if (typeof xApiKey === 'string' && xApiKey.trim()) {
+    return xApiKey.trim();
+  }
+  const header = req.headers.authorization;
+  if (header && header.startsWith('Bearer ')) {
+    const token = header.slice('Bearer '.length).trim();
+    if (token) return token;
+  }
+  return undefined;
+}
+
 export function createRequireAPIKey(): RequestHandler {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
-      const header = req.headers.authorization;
-      if (!header || !header.startsWith('Bearer ')) {
+      const token = extractToken(req);
+      if (!token) {
         return next(new Error('UNAUTHENTICATED'));
       }
-      const token = header.slice('Bearer '.length).trim();
-      if (!token) return next(new Error('UNAUTHENTICATED'));
 
-      const apiKey = await validateAPIKey(token);
-      if (!apiKey) return next(new Error('INVALID_API_KEY'));
+      const result = await validateAPIKey(token);
+      if (!result.key) {
+        return next(new Error(result.reason === 'EXPIRED' ? 'API_KEY_EXPIRED' : 'INVALID_API_KEY'));
+      }
 
       (req as RequestWithAPIKey).apiKeyContext = {
-        apiKeyId: apiKey._id.toString(),
-        workspaceId: apiKey.workspaceId.toString(),
-        permissions: apiKey.permissions,
+        apiKeyId: result.key._id.toString(),
+        workspaceId: result.key.workspaceId.toString(),
+        permissions: result.key.permissions,
       };
 
-      recordAPIKeyUsage(apiKey._id.toString()).catch(() => {});
+      recordAPIKeyUsage(result.key._id.toString()).catch(() => {});
       next();
     } catch (error) {
       next(error);

@@ -22,6 +22,7 @@ export const AUDIT_ACTIONS = [
   'API_KEY_CREATED',
   'API_KEY_REVOKED',
   'API_KEY_ROTATED',
+  'EXTERNAL_WORKFLOW_TRIGGERED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
