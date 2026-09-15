@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Types } from 'mongoose';
 import { executeWorkflow } from '../engine/executeWorkflow.js';
 import { WorkflowModel } from '../models/WorkflowModel.js';
@@ -7,9 +7,11 @@ import {
   WorkflowExecutionModel,
 } from '../models/WorkflowExecutionModel.js';
 import type { IWorkflowExecution } from '../models/WorkflowExecutionModel.js';
+import { DeadLetterModel } from '../models/DeadLetterModel.js';
 import type { CreateExecutionRequest } from '../schemas/executionSchema.js';
 import type { ExecutionResult, WorkflowDefinition } from '../types/workflow.js';
 import type {
+  ExecutionRetryPolicy,
   StoredExecutionError,
   WorkflowExecutionView,
 } from '../types/execution.js';
@@ -23,8 +25,90 @@ import {
 export interface ExecutionCreationOptions {
   attempts?: number;
   backoffMs?: number;
+  timeoutMs?: number;
 }
 
+export const MAX_EXECUTION_ATTEMPTS = 20;
+export const MAX_RETRY_DELAY_MS = 3_600_000;
+export const EXECUTION_TIMEOUT_CODE = 'EXECUTION_TIMEOUT';
+
+export function resolveRetryPolicy(
+  request: CreateExecutionRequest,
+  options: ExecutionCreationOptions,
+): { policy: ExecutionRetryPolicy; maxRetries: number } {
+  const requested = request.retryPolicy;
+  const attemptCap = Math.min(options.attempts ?? DEFAULT_EXECUTION_ATTEMPTS, MAX_EXECUTION_ATTEMPTS);
+  const retryCap = Math.max(attemptCap - 1, 0);
+  const maxRetries = Math.max(Math.min(requested?.maxRetries ?? retryCap, retryCap), 0);
+  const type = requested?.type ?? 'EXPONENTIAL';
+  const delayMs = requested?.delayMs ?? options.backoffMs ?? DEFAULT_EXECUTION_BACKOFF_MS;
+  const policy: ExecutionRetryPolicy = type === 'FIXED'
+    ? { type, delayMs }
+    : { type, delayMs, backoffFactor: requested?.backoffFactor ?? 2 };
+  return { policy, maxRetries };
+}
+
+export function policyOf(execution: { retryPolicy?: ExecutionRetryPolicy | undefined }): ExecutionRetryPolicy {
+  const policy = execution.retryPolicy;
+  if (!policy) return { type: 'EXPONENTIAL', delayMs: DEFAULT_EXECUTION_BACKOFF_MS, backoffFactor: 2 };
+  return policy.type === 'FIXED'
+    ? { type: 'FIXED', delayMs: policy.delayMs }
+    : { type: 'EXPONENTIAL', delayMs: policy.delayMs, backoffFactor: policy.backoffFactor ?? 2 };
+}
+export function retryDelayMs(policy: ExecutionRetryPolicy, attemptNumber: number): number {
+  if (policy.type === 'FIXED') return policy.delayMs;
+  const factor = policy.backoffFactor ?? 2;
+  const delay = policy.delayMs * factor ** Math.max(attemptNumber - 1, 0);
+  return Math.min(Math.round(delay), MAX_RETRY_DELAY_MS);
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.message === EXECUTION_TIMEOUT_CODE;
+}
+
+export async function runWithTimeout<T>(task: () => Promise<T>, timeoutMs?: number): Promise<T> {
+  if (timeoutMs === undefined || timeoutMs <= 0) return task();
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(EXECUTION_TIMEOUT_CODE)), timeoutMs);
+    task().then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+interface DeadLetterTarget {
+  _id: Types.ObjectId;
+  workflowId?: Types.ObjectId;
+  workspaceId?: Types.ObjectId;
+}
+
+async function recordDeadLetter(
+  execution: DeadLetterTarget,
+  failureReason: string,
+  message: string,
+  attempts: number,
+): Promise<void> {
+  try {
+    await DeadLetterModel.updateOne(
+      { executionId: execution._id },
+      {
+        $setOnInsert: {
+          executionId: execution._id,
+          ...(execution.workflowId ? { workflowId: execution.workflowId } : {}),
+          ...(execution.workspaceId ? { workspaceId: execution.workspaceId } : {}),
+          failureReason,
+          message,
+          attempts,
+          failedAt: new Date(),
+        },
+      },
+      { upsert: true },
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'unknown error';
+    console.error('Could not record dead letter entry:', detail);
+  }
+}
 export interface CreatedExecution {
   execution: IWorkflowExecution;
   replayed: boolean;
@@ -95,10 +179,18 @@ function getEnqueueOptions(
   execution: IWorkflowExecution,
   options: ExecutionCreationOptions,
 ) {
+  const policy = execution.retryPolicy ?? {
+    type: 'EXPONENTIAL' as const,
+    delayMs: options.backoffMs ?? DEFAULT_EXECUTION_BACKOFF_MS,
+    backoffFactor: 2,
+  };
+  const maxRetries = execution.maxRetries ?? Math.max((options.attempts ?? DEFAULT_EXECUTION_ATTEMPTS) - 1, 0);
   return {
     jobId: execution.jobId,
-    attempts: options.attempts ?? DEFAULT_EXECUTION_ATTEMPTS,
-    backoffMs: options.backoffMs ?? DEFAULT_EXECUTION_BACKOFF_MS,
+    attempts: maxRetries + 1,
+    backoffMs: policy.delayMs,
+    backoffType: policy.type === 'FIXED' ? ('fixed' as const) : ('exponential' as const),
+    ...(execution.nextRetryAt ? { delayMs: Math.max(execution.nextRetryAt.getTime() - Date.now(), 0) } : {}),
   };
 }
 
@@ -218,6 +310,8 @@ export async function createWorkflowExecution(
   const executionId = new Types.ObjectId();
   const jobId = createExecutionJobId(executionId.toString());
   const createdAt = new Date();
+  const { policy, maxRetries } = resolveRetryPolicy(request, options);
+  const timeoutMs = request.timeoutMs ?? options.timeoutMs;
   let execution: IWorkflowExecution;
 
   try {
@@ -234,6 +328,10 @@ export async function createWorkflowExecution(
       input: structuredClone(request.input),
       status: 'QUEUING',
       attemptsMade: 0,
+      retryPolicy: policy,
+      maxRetries,
+      retryCount: 0,
+      ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       statusHistory: [{ status: 'QUEUING', timestamp: createdAt }],
     });
   } catch (error) {
@@ -350,6 +448,14 @@ async function persistTerminalResult(
   );
 
   if (!execution) throw new Error('EXECUTION_STATE_CONFLICT');
+  if (!succeeded) {
+    await recordDeadLetter(
+      execution,
+      error?.code ?? 'WORKFLOW_EXECUTION_FAILED',
+      error?.message ?? 'Workflow execution failed',
+      attemptNumber,
+    );
+  }
   return execution;
 }
 
@@ -360,7 +466,7 @@ export async function markExecutionFailed(
 ): Promise<IWorkflowExecution | null> {
   assertValidId(executionId, 'INVALID_EXECUTION_ID');
   const finishedAt = new Date();
-  return WorkflowExecutionModel.findOneAndUpdate(
+  const failed = await WorkflowExecutionModel.findOneAndUpdate(
     { _id: executionId, status: { $nin: ['SUCCEEDED', 'FAILED'] } },
     {
       $set: {
@@ -379,6 +485,10 @@ export async function markExecutionFailed(
     },
     { returnDocument: 'after' },
   );
+  if (failed) {
+    await recordDeadLetter(failed, error.code, error.message, attemptNumber);
+  }
+  return failed;
 }
 
 export async function runExecutionAttempt(
@@ -386,6 +496,7 @@ export async function runExecutionAttempt(
   attemptNumber: number,
   maxAttempts: number,
   executor: WorkflowExecutor = executeWorkflow,
+  timeoutMs?: number,
 ): Promise<IWorkflowExecution> {
   assertValidId(executionId, 'INVALID_EXECUTION_ID');
   const startedAt = new Date();
@@ -434,7 +545,11 @@ export async function runExecutionAttempt(
       return failed;
     }
 
-    const result = await executor(version.definition, structuredClone(claimed.input));
+    const deadlineMs = timeoutMs ?? claimed.timeoutMs;
+    const result = await runWithTimeout(
+      () => executor(version.definition, structuredClone(claimed.input)),
+      deadlineMs,
+    );
     return persistTerminalResult(claimed._id, attemptNumber, result);
   } catch (error) {
     if (error instanceof Error && error.message === 'EXECUTION_STATE_CONFLICT') {
@@ -442,17 +557,22 @@ export async function runExecutionAttempt(
     }
 
     if (attemptNumber >= maxAttempts) {
+      const timedOut = isTimeoutError(error);
       await markExecutionFailed(
         executionId,
-        { code: 'EXECUTION_FAILED', message: 'Workflow execution failed after all retry attempts' },
+        timedOut
+          ? { code: EXECUTION_TIMEOUT_CODE, message: 'Workflow execution exceeded its time limit' }
+          : { code: 'EXECUTION_FAILED', message: 'Workflow execution failed after all retry attempts' },
         attemptNumber,
       );
     } else {
       const queuedAt = new Date();
+      const nextRetryAt = new Date(queuedAt.getTime() + retryDelayMs(policyOf(claimed), attemptNumber));
       await WorkflowExecutionModel.findOneAndUpdate(
         { _id: executionId, status: 'RUNNING', attemptsMade: attemptNumber },
         {
-          $set: { status: 'QUEUED', queuedAt },
+          $set: { status: 'QUEUED', queuedAt, nextRetryAt },
+          $inc: { retryCount: 1 },
           $push: {
             statusHistory: {
               status: 'QUEUED',
@@ -468,6 +588,51 @@ export async function runExecutionAttempt(
   }
 }
 
+export async function replayWorkflowExecution(
+  queue: ExecutionQueue,
+  executionId: string,
+  ownerId: string,
+  workspaceId: string,
+  options: ExecutionCreationOptions = {},
+): Promise<IWorkflowExecution> {
+  assertValidId(executionId, 'INVALID_EXECUTION_ID');
+
+  const original = await WorkflowExecutionModel.findOne({
+    _id: executionId,
+    ...tenantScope(ownerId, workspaceId),
+  });
+  if (!original) throw new Error('EXECUTION_NOT_FOUND');
+  if (original.status !== 'SUCCEEDED' && original.status !== 'FAILED') {
+    throw new Error('EXECUTION_NOT_REPLAYABLE');
+  }
+
+  const replayId = new Types.ObjectId();
+  const jobId = createExecutionJobId(replayId.toString());
+  const createdAt = new Date();
+  const timeoutMs = original.timeoutMs ?? options.timeoutMs;
+  const replay = await WorkflowExecutionModel.create({
+    _id: replayId,
+    workflowId: original.workflowId,
+    ownerId: original.ownerId,
+    ...(original.workspaceId ? { workspaceId: original.workspaceId } : {}),
+    workflowVersionId: original.workflowVersionId,
+    versionNumber: original.versionNumber,
+    jobId,
+    idempotencyKey: `replay-${original._id.toString()}-${randomUUID().slice(0, 8)}`,
+    inputHash: original.inputHash,
+    input: structuredClone(original.input),
+    retryPolicy: policyOf(original),
+    maxRetries: original.maxRetries ?? Math.max((options.attempts ?? DEFAULT_EXECUTION_ATTEMPTS) - 1, 0),
+    retryCount: 0,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+    parentExecutionId: original._id,
+    status: 'QUEUING',
+    attemptsMade: 0,
+    statusHistory: [{ status: 'QUEUING', timestamp: createdAt }],
+  });
+
+  return enqueuePersistedExecution(queue, replay, options);
+}
 export function toWorkflowExecutionView(execution: IWorkflowExecution): WorkflowExecutionView {
   const statusHistory = execution.statusHistory.map(event => {
     const view: {
@@ -492,11 +657,17 @@ export function toWorkflowExecutionView(execution: IWorkflowExecution): Workflow
     status: execution.status,
     input: execution.input,
     attemptsMade: execution.attemptsMade,
+    maxRetries: execution.maxRetries ?? 0,
+    retryCount: execution.retryCount ?? 0,
     statusHistory,
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
   };
 
+  if (execution.retryPolicy !== undefined) view.retryPolicy = policyOf(execution);
+  if (execution.nextRetryAt !== undefined) view.nextRetryAt = execution.nextRetryAt.toISOString();
+  if (execution.timeoutMs !== undefined) view.timeoutMs = execution.timeoutMs;
+  if (execution.parentExecutionId !== undefined) view.parentExecutionId = execution.parentExecutionId.toString();
   if (execution.result !== undefined) view.result = execution.result;
   if (execution.error !== undefined) view.error = execution.error;
   if (execution.queuedAt !== undefined) view.queuedAt = execution.queuedAt.toISOString();

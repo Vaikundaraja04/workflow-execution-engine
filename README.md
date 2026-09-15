@@ -78,6 +78,10 @@ The project is built in small, reviewable phases as an advanced backend portfoli
 - Audit logging with metadata sanitization and no raw secrets
 - Refresh token tracking: user agent, IP address, and last use per session family
 - Session management endpoints, with family revocation on logout and on replay detection
+- Per-execution retry policies (FIXED or EXPONENTIAL) with bounded retry budgets
+- Request-level execution timeouts, with EXECUTION_TIMEOUT_MS as the server default
+- Dead-letter records for terminal failures and a workflow-scoped listing endpoint
+- Manual replay of finished executions as a new linked execution
 
 ### Phase 3A: multi-tenancy foundation
 
@@ -119,6 +123,7 @@ src/
   migrate.ts
   models/
     AuditLogModel.ts
+    DeadLetterModel.ts
     RefreshTokenModel.ts
     UserModel.ts
     WorkflowExecutionModel.ts
@@ -134,6 +139,7 @@ src/
     workflowSchema.ts
   services/
     auditService.ts
+    deadLetterService.ts
     executionService.ts
     workflowService.ts
     workspaceService.ts
@@ -186,6 +192,7 @@ PORT=3000
 WORKER_CONCURRENCY=5
 EXECUTION_ATTEMPTS=3
 EXECUTION_BACKOFF_MS=1000
+EXECUTION_TIMEOUT_MS=30000
 AUTH_JWT_SECRET=replace-with-a-long-random-secret
 AUTH_ACCESS_TTL=15m
 AUTH_REFRESH_TTL=30d
@@ -245,6 +252,9 @@ Run the API and worker in separate terminals. Both processes require MongoDB and
 | `POST` | `/api/workflows/:id/validate` | Validate schema and graph | `200` |
 | `POST` | `/api/workflows/:id/publish` | Publish an immutable version | `201` |
 | `GET` | `/api/workflows/:id/versions` | List versions oldest first | `200` |
+| `GET` | `/api/workflows/:id/versions/:versionId` | Get one version by ID or version number | `200` |
+| `POST` | `/api/workflows/:id/versions/:versionId/restore` | Restore an old version as a new published version | `201` |
+| `POST` | `/api/workflows/:id/compare` | Compare two versions by ID or number | `200` |
 
 ### Executions
 
@@ -253,6 +263,8 @@ Run the API and worker in separate terminals. Both processes require MongoDB and
 | `POST` | `/api/workflows/:id/executions` | Queue the latest published version | `202` |
 | `GET` | `/api/executions/:executionId` | Get status, result, error, and history | `200` |
 | `GET` | `/api/workflows/:id/executions` | List executions newest first | `200` |
+| `POST` | `/api/executions/:executionId/replay` | Replay a finished execution as a new linked execution | `202` |
+| `GET` | `/api/workflows/:id/dead-letters` | List dead-lettered executions for a workflow | `200` |
 
 ### Queue an execution
 
@@ -261,9 +273,18 @@ Run the API and worker in separate terminals. Both processes require MongoDB and
   "input": {
     "estimatedCost": 15000
   },
-  "idempotencyKey": "booking-123"
+  "idempotencyKey": "booking-123",
+  "retryPolicy": {
+    "type": "EXPONENTIAL",
+    "delayMs": 1000,
+    "backoffFactor": 2,
+    "maxRetries": 2
+  },
+  "timeoutMs": 30000
 }
 ```
+
+`retryPolicy` and `timeoutMs` are optional. A `FIXED` policy waits `delayMs` before every retry; an `EXPONENTIAL` policy multiplies `delayMs` by `backoffFactor` (default `2`) per attempt, up to one hour. `maxRetries` can only lower the server attempt budget (`EXECUTION_ATTEMPTS`, capped at 20 attempts total). A timed-out attempt follows the same retry policy, and the final attempt fails with `EXECUTION_TIMEOUT`.
 
 The first request creates an execution and queues a deterministic job. Repeating the same key with equivalent JSON input returns the same execution without creating a second job. Reusing the key with different input returns `IDEMPOTENCY_CONFLICT`.
 
@@ -279,6 +300,8 @@ QUEUING -> QUEUED -> RUNNING -> SUCCEEDED
 Transient worker failures return the record to `QUEUED` and BullMQ retries with exponential backoff. A terminal failure stores a stable error without exposing the thrown message or stack. Each worker attempt is recorded in `statusHistory`.
 
 The execution stores both `workflowVersionId` and `versionNumber`. Draft edits and later publications cannot change the definition already selected for an execution.
+
+The stored retry policy drives every retry: an attempt that throws returns the execution to `QUEUED` with `retryCount` incremented and `nextRetryAt` set, until `maxRetries` is reached. A terminal failure — retries exhausted or a workflow that reports `FAILED` — is recorded once in the dead-letter collection, and `GET /api/workflows/:id/dead-letters` lists those records newest first. `POST /api/executions/:executionId/replay` copies a finished execution's pinned version and input into a new execution that links back through `parentExecutionId`.
 
 ## Error shape
 
@@ -297,6 +320,7 @@ Stable error codes include:
 - `EXECUTION_NOT_FOUND`
 - `NO_PUBLISHED_VERSION`
 - `IDEMPOTENCY_CONFLICT`
+- `EXECUTION_NOT_REPLAYABLE`
 - `QUEUE_UNAVAILABLE`
 - `INVALID_WORKSPACE_ID`
 - `WORKSPACE_NOT_FOUND`
@@ -305,7 +329,7 @@ Unexpected errors return a generic `INTERNAL_ERROR` response.
 
 ## Testing
 
-The test suite covers graph execution, schema contracts, publishing, immutable snapshots, execution request validation, idempotency races, queue handoff failures, retry exhaustion, worker restart recovery, version pinning, status history, real BullMQ job processing, authentication and session management, auth rate limiting, audit logging, authorization isolation, the workspace API, and the tenancy migration. Test services use `MongoMemoryReplSet` and `redis-memory-server`; no permanent test databases are required.
+The test suite covers graph execution, schema contracts, publishing, immutable snapshots, execution request validation, idempotency races, queue handoff failures, retry exhaustion, worker restart recovery, retry policies, execution timeouts, dead-letter records, execution replay, version pinning, status history, real BullMQ job processing, authentication and session management, auth rate limiting, audit logging, authorization isolation, the workspace API, and the tenancy migration. Test services use `MongoMemoryReplSet` and `redis-memory-server`; no permanent test databases are required.
 
 ```bash
 npm run typecheck
@@ -320,5 +344,6 @@ npm audit --audit-level=high
 - Workspace roles beyond `OWNER` (`ADMIN`, `EDITOR`, `VIEWER`) are stored on memberships but not enforced; collaboration, invitations, and analytics are deferred to later phases
 - Workflow and execution routes resolve the caller's workspace from the request body, so a workflow created in a second workspace can only be validated and published (`POST` with `workspaceId` in the body); reads, draft updates, and execution queueing for that workspace are not exposed yet
 - No production deployment or distributed tracing; `docker-compose.yml` only provides local MongoDB and Redis for development
+- Dead letters are replayed one execution at a time; there is no bulk redrive or automatic dead-letter processing
 
 Those capabilities belong to later phases and are intentionally outside the current phase.

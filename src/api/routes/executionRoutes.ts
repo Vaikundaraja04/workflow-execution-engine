@@ -10,8 +10,10 @@ import {
   createWorkflowExecution,
   getWorkflowExecution,
   listWorkflowExecutions,
+  replayWorkflowExecution,
   toWorkflowExecutionView,
 } from '../../services/executionService.js';
+import { listWorkflowDeadLetters, toDeadLetterView } from '../../services/deadLetterService.js';
 
 function getRouteParameter(req: Request, name: string, errorCode: string): string {
   const value = req.params[name];
@@ -20,6 +22,7 @@ function getRouteParameter(req: Request, name: string, errorCode: string): strin
 }
 
 const requireExecutionRead = requirePermission('WORKFLOW_READ', { executionParam: 'executionId' });
+const requireExecutionExecute = requirePermission('WORKFLOW_EXECUTE', { executionParam: 'executionId' });
 const requireWorkflowRead = requirePermission('WORKFLOW_READ', { workflowParam: 'workflowId' });
 const requireWorkflowExecute = requirePermission('WORKFLOW_EXECUTE', { workflowParam: 'workflowId' });
 
@@ -75,6 +78,38 @@ export function createExecutionRouter(
     },
   );
 
+  router.post(
+    '/executions/:executionId/replay',
+    requireAuth,
+    requireExecutionExecute,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const executionId = getRouteParameter(req, 'executionId', 'INVALID_EXECUTION_ID');
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const replayed = await replayWorkflowExecution(
+          queue,
+          executionId,
+          getAuthUser(req).userId,
+          workspaceId,
+          creationOptions,
+        );
+        await createAuditLog({
+          action: 'EXECUTION_REPLAYED',
+          userId: getAuthUser(req).userId,
+          workspaceId,
+          resource: 'execution',
+          resourceId: replayed._id.toString(),
+          metadata: { parentExecutionId: executionId, workflowId: replayed.workflowId.toString() },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+        return res.status(202).json(toWorkflowExecutionView(replayed));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.get(
     '/executions/:executionId',
     requireAuth,
@@ -101,6 +136,22 @@ export function createExecutionRouter(
         const workspaceId = getWorkspaceContext(req).workspaceId;
         const executions = await listWorkflowExecutions(workflowId, getAuthUser(req).userId, workspaceId);
         return res.json(executions.map(toWorkflowExecutionView));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/workflows/:workflowId/dead-letters',
+    requireAuth,
+    requireWorkflowRead,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const workflowId = getRouteParameter(req, 'workflowId', 'INVALID_WORKFLOW_ID');
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const deadLetters = await listWorkflowDeadLetters(workflowId, getAuthUser(req).userId, workspaceId);
+        return res.json(deadLetters.map(toDeadLetterView));
       } catch (error) {
         next(error);
       }

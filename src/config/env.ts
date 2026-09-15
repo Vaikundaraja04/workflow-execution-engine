@@ -9,6 +9,7 @@ const envSchema = z.object({
   WORKER_CONCURRENCY: z.coerce.number().int().positive().max(100).default(5),
   EXECUTION_ATTEMPTS: z.coerce.number().int().positive().max(20).default(3),
   EXECUTION_BACKOFF_MS: z.coerce.number().int().positive().default(1000),
+  EXECUTION_TIMEOUT_MS: z.coerce.number().int().positive().max(3600000).default(30000),
   AUTH_JWT_SECRET: z.string().min(32),
   AUTH_ACCESS_TTL: z.string().regex(/^\d+[smhd]$/).default('15m'),
   AUTH_REFRESH_TTL: z.string().regex(/^\d+[smhd]$/).default('30d'),

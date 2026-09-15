@@ -11,6 +11,8 @@ export interface ExecutionEnqueueOptions {
   jobId: string;
   attempts: number;
   backoffMs: number;
+  backoffType?: 'fixed' | 'exponential';
+  delayMs?: number;
 }
 
 export interface ExecutionQueue {

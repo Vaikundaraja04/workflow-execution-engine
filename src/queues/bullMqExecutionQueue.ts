@@ -43,7 +43,8 @@ export class BullMqExecutionQueue implements ExecutionQueue {
     await this.queue.add(EXECUTION_JOB_NAME, data, {
       jobId: options.jobId,
       attempts: options.attempts,
-      backoff: { type: 'exponential', delay: options.backoffMs },
+      backoff: { type: options.backoffType ?? 'exponential', delay: options.backoffMs },
+      ...(options.delayMs !== undefined ? { delay: options.delayMs } : {}),
       removeOnComplete: { count: 1_000 },
       removeOnFail: { count: 1_000 },
     });

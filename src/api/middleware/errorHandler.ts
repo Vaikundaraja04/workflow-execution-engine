@@ -27,6 +27,7 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   OWNER_ROLE_IMMUTABLE: { status: 409, code: 'OWNER_ROLE_IMMUTABLE', message: 'Workspace ownership is transferred, not reassigned' },
   INVALID_TRANSFER_TARGET: { status: 400, code: 'INVALID_TRANSFER_TARGET', message: 'Ownership transfer target is invalid' },
   NO_PUBLISHED_VERSION: { status: 409, code: 'NO_PUBLISHED_VERSION', message: 'Workflow has no published version' },
+  EXECUTION_NOT_REPLAYABLE: { status: 409, code: 'EXECUTION_NOT_REPLAYABLE', message: 'Execution can only be replayed after it finishes' },
   IDEMPOTENCY_CONFLICT: { status: 409, code: 'IDEMPOTENCY_CONFLICT', message: 'Idempotency key was reused with different input' },
   VERSION_CONFLICT: { status: 409, code: 'VERSION_CONFLICT', message: 'Workflow version conflict' },
   QUEUE_UNAVAILABLE: { status: 503, code: 'QUEUE_UNAVAILABLE', message: 'Execution queue is unavailable' },
