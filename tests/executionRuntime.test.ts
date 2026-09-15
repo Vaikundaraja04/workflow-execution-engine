@@ -28,6 +28,7 @@ import {
 import type { ExecutionResult, WorkflowDefinition } from '../src/types/workflow.js';
 import type { CreateExecutionRequest } from '../src/schemas/executionSchema.js';
 import { createExecutionWorker } from '../src/workers/executionWorker.js';
+import { ensureUserWorkspace } from '../src/services/workspaceService.js';
 
 interface RecordedJob {
   data: ExecutionJobData;
@@ -53,6 +54,7 @@ const authConfig = {
 };
 let accessToken: string;
 let ownerId: string;
+let workspaceId: string;
 
 function withDefaultAuth(app: Express) {
   const outer = express();
@@ -107,7 +109,7 @@ async function queueExecution(
   idempotencyKey = 'booking-1',
   input: CreateExecutionRequest['input'] = { estimatedCost: 15_000 },
 ) {
-  return createWorkflowExecution(queue, workflowId, { idempotencyKey, input }, ownerId, {
+  return createWorkflowExecution(queue, workflowId, { idempotencyKey, input }, ownerId, workspaceId, {
     attempts: 3,
     backoffMs: 10,
   });
@@ -141,6 +143,7 @@ beforeAll(async () => {
     passwordHash: await hashPassword('test-password-123'),
   });
   ownerId = user._id.toString();
+  workspaceId = await ensureUserWorkspace(ownerId);
   accessToken = signAccessToken(authConfig, { userId: ownerId, email: user.email });
 
   request = supertest(withDefaultAuth(createApp({

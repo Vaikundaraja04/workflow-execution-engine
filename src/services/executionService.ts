@@ -40,6 +40,27 @@ function assertValidId(id: string, errorCode: string): void {
     throw new Error(errorCode);
   }
 }
+function tenantScope(ownerId: string, workspaceId: string) {
+  return {
+    ownerId: new Types.ObjectId(ownerId),
+    $or: [
+      { workspaceId: new Types.ObjectId(workspaceId) },
+      { workspaceId: { $exists: false } },
+      { workspaceId: null },
+    ],
+  };
+}
+
+function executionScope(ownerId: string, workspaceId: string) {
+  return {
+    ownerId: new Types.ObjectId(ownerId),
+    $or: [
+      { workspaceId: new Types.ObjectId(workspaceId) },
+      { workspaceId: { $exists: false } },
+      { workspaceId: null },
+    ],
+  };
+}
 
 function encodeJson(value: unknown): string {
   if (value === null) return 'null';
@@ -191,11 +212,12 @@ export async function createWorkflowExecution(
   workflowId: string,
   request: CreateExecutionRequest,
   ownerId: string,
+  workspaceId: string,
   options: ExecutionCreationOptions = {},
 ): Promise<CreatedExecution> {
   assertValidId(workflowId, 'INVALID_WORKFLOW_ID');
 
-  const workflow = await WorkflowModel.findOne({ _id: workflowId, ownerId: new Types.ObjectId(ownerId) });
+  const workflow = await WorkflowModel.findOne({ _id: workflowId, ...tenantScope(ownerId, workspaceId) });
   if (!workflow) throw new Error('WORKFLOW_NOT_FOUND');
 
   const inputHash = hashExecutionInput(request.input);
@@ -224,6 +246,7 @@ export async function createWorkflowExecution(
       _id: executionId,
       workflowId: workflow._id,
       ownerId: workflow.ownerId,
+      ...(workflow.workspaceId ? { workspaceId: workflow.workspaceId } : {}),
       workflowVersionId: version._id,
       versionNumber: version.versionNumber,
       jobId,
@@ -245,16 +268,16 @@ export async function createWorkflowExecution(
   return { execution, replayed: false };
 }
 
-export async function getWorkflowExecution(executionId: string, ownerId: string): Promise<IWorkflowExecution> {
+export async function getWorkflowExecution(executionId: string, ownerId: string, workspaceId: string): Promise<IWorkflowExecution> {
   assertValidId(executionId, 'INVALID_EXECUTION_ID');
-  const execution = await WorkflowExecutionModel.findOne({ _id: executionId, ownerId: new Types.ObjectId(ownerId) });
+  const execution = await WorkflowExecutionModel.findOne({ _id: executionId, ...executionScope(ownerId, workspaceId) });
   if (!execution) throw new Error('EXECUTION_NOT_FOUND');
   return execution;
 }
 
-export async function listWorkflowExecutions(workflowId: string, ownerId: string): Promise<IWorkflowExecution[]> {
+export async function listWorkflowExecutions(workflowId: string, ownerId: string, workspaceId: string): Promise<IWorkflowExecution[]> {
   assertValidId(workflowId, 'INVALID_WORKFLOW_ID');
-  const workflowExists = await WorkflowModel.exists({ _id: workflowId, ownerId: new Types.ObjectId(ownerId) });
+  const workflowExists = await WorkflowModel.exists({ _id: workflowId, ...tenantScope(ownerId, workspaceId) });
   if (!workflowExists) throw new Error('WORKFLOW_NOT_FOUND');
   return WorkflowExecutionModel.find({ workflowId }).sort({ createdAt: -1 });
 }

@@ -6,6 +6,7 @@ import type { ExecutionQueue } from '../queues/executionQueue.js';
 import { UnavailableExecutionQueue } from '../queues/executionQueue.js';
 import type { ExecutionCreationOptions } from '../services/executionService.js';
 import { createAuthRouter } from '../auth/auth.routes.js';
+import { createWorkspaceRouter } from './routes/workspaceRoutes.js';
 import { createRequireAuth } from '../auth/auth.middleware.js';
 import type { AuthConfig } from '../auth/jwt.service.js';
 import { createAuthRateLimiters, DEFAULT_AUTH_RATE_LIMIT } from './middleware/rateLimiter.js';
@@ -34,6 +35,7 @@ export function createApp(options: AppOptions) {
   const authRateLimiters = createAuthRateLimiters(rateLimitOptions);
   const requireAuth = createRequireAuth(options.auth);
   app.use('/api/auth', createAuthRouter(options.auth, authRateLimiters, requireAuth));
+  app.use('/api/workspaces', requireAuth, createWorkspaceRouter());
 
   app.use('/api/workflows', requireAuth, workflowRouter);
   app.use(

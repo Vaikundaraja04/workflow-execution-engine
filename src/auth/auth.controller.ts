@@ -16,6 +16,7 @@ import {
 } from './auth.service.js';
 import type { SessionContext } from './auth.service.js';
 import { getAuthUser } from './auth.middleware.js';
+import { ensureUserWorkspace } from '../services/workspaceService.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 
@@ -62,7 +63,8 @@ export function createAuthController(config: AuthConfig): AuthController {
           userId: user._id,
           ...requestContext(req),
         });
-        res.status(201).json(toUserView(user));
+        const defaultWorkspaceId = await ensureUserWorkspace(user._id.toString());
+        res.status(201).json({ ...toUserView(user), defaultWorkspaceId });
       } catch (error) {
         next(error);
       }
@@ -91,7 +93,8 @@ export function createAuthController(config: AuthConfig): AuthController {
           ...requestContext(req),
         });
         const tokens = await issueTokens(config, user._id, user.email, requestContext(req));
-        res.json(tokens);
+        const defaultWorkspaceId = await ensureUserWorkspace(user._id.toString());
+        res.json({ ...tokens, defaultWorkspaceId });
       } catch (error) {
         next(error);
       }
