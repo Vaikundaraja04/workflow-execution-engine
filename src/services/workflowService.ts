@@ -5,6 +5,7 @@ import type { WorkflowDefinition } from '../types/workflow.js';
 import { validateGraph } from '../engine/validateGraph.js';
 import { WorkflowDefinitionSchema } from '../schemas/workflowSchema.js';
 import { tenantScope } from './tenantScope.js';
+import { recordWorkflowCreated } from './analyticsService.js';
 import { hashDefinition } from './versionService.js';
 
 function assertValidWorkflowId(id: string): void {
@@ -23,6 +24,7 @@ export async function createWorkflow(name: string, definition: WorkflowDefinitio
     createdBy: new Types.ObjectId(ownerId),
     workspaceId: new Types.ObjectId(workspaceId),
   });
+  await recordWorkflowCreated(workspaceId);
   return doc.toObject();
 }
 

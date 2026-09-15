@@ -8,6 +8,7 @@ import {
 } from '../models/WorkflowExecutionModel.js';
 import type { IWorkflowExecution } from '../models/WorkflowExecutionModel.js';
 import { DeadLetterModel } from '../models/DeadLetterModel.js';
+import { recordExecutionOutcome, recordExecutionReplay } from './analyticsService.js';
 import type { CreateExecutionRequest } from '../schemas/executionSchema.js';
 import type { ExecutionResult, WorkflowDefinition } from '../types/workflow.js';
 import type {
@@ -456,6 +457,7 @@ async function persistTerminalResult(
       attemptNumber,
     );
   }
+  await recordExecutionOutcome(execution);
   return execution;
 }
 
@@ -487,6 +489,7 @@ export async function markExecutionFailed(
   );
   if (failed) {
     await recordDeadLetter(failed, error.code, error.message, attemptNumber);
+    await recordExecutionOutcome(failed);
   }
   return failed;
 }
@@ -631,7 +634,9 @@ export async function replayWorkflowExecution(
     statusHistory: [{ status: 'QUEUING', timestamp: createdAt }],
   });
 
-  return enqueuePersistedExecution(queue, replay, options);
+  const queued = await enqueuePersistedExecution(queue, replay, options);
+  await recordExecutionReplay(queued.workflowId, queued.workspaceId);
+  return queued;
 }
 export function toWorkflowExecutionView(execution: IWorkflowExecution): WorkflowExecutionView {
   const statusHistory = execution.statusHistory.map(event => {
