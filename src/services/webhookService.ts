@@ -5,6 +5,7 @@ import type { IWebhook, WebhookEvent, WebhookStatus } from '../models/WebhookMod
 import { WebhookDeliveryModel } from '../models/WebhookDeliveryModel.js';
 import type { IWebhookDelivery, WebhookDeliveryStatus } from '../models/WebhookDeliveryModel.js';
 import { createAuditLog } from './auditService.js';
+import { validateWorkspaceQuota } from './planService.js';
 
 interface EncryptionResult {
   encryptedData: string;
@@ -75,6 +76,8 @@ export async function createWebhook(
       throw new Error('INVALID_WEBHOOK_EVENT');
     }
   }
+
+  await validateWorkspaceQuota(workspaceId, 'webhooks');
 
   // Generate secret for signing
   const secret = randomBytes(32).toString('hex');

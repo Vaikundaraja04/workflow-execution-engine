@@ -7,6 +7,7 @@ import { WorkflowDefinitionSchema } from '../schemas/workflowSchema.js';
 import { tenantScope } from './tenantScope.js';
 import { recordWorkflowCreated } from './analyticsService.js';
 import { hashDefinition } from './versionService.js';
+import { validateWorkspaceQuota } from './planService.js';
 
 function assertValidWorkflowId(id: string): void {
   if (!Types.ObjectId.isValid(id)) {
@@ -15,6 +16,7 @@ function assertValidWorkflowId(id: string): void {
 }
 
 export async function createWorkflow(name: string, definition: WorkflowDefinition, ownerId: string, workspaceId: string) {
+  await validateWorkspaceQuota(workspaceId, 'workflows');
   const doc = await WorkflowModel.create({
     name: name.trim(),
     draftDefinition: definition,
