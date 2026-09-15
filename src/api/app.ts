@@ -13,6 +13,7 @@ import { createAuthRouter } from '../auth/auth.routes.js';
 import { createWorkspaceRouter } from './routes/workspaceRoutes.js';
 import { createAnalyticsRouter } from './routes/analyticsRoutes.js';
 import { createAPIKeyRouter } from './routes/apiKeyRoutes.js';
+import { createExternalWorkflowRouter } from './routes/externalWorkflowRoutes.js';
 import { createHealthChecks, createHealthRouter } from './routes/healthRoutes.js';
 import type { HealthOptions } from './routes/healthRoutes.js';
 import { createRequireAuth } from '../auth/auth.middleware.js';
@@ -90,6 +91,10 @@ export function createApp(options: AppOptions) {
 
   app.use('/api/workflows', requireAuth, workflowRouter);
   app.use('/api/analytics', requireAuth, createAnalyticsRouter());
+  app.use('/api/v1', createExternalWorkflowRouter(
+    options.executionQueue ?? new UnavailableExecutionQueue(),
+    options.executionCreationOptions ?? {},
+  ));
   app.use('/api/v1', requireAuth, createAPIKeyRouter());
   app.use(
     '/api',
