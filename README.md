@@ -345,7 +345,7 @@ Unexpected errors return a generic `INTERNAL_ERROR` response.
 
 ## Testing
 
-The test suite covers graph execution, schema contracts, publishing, immutable snapshots, execution request validation, idempotency races, queue handoff failures, retry exhaustion, worker restart recovery, retry policies, execution timeouts, dead-letter records, execution replay, version pinning, status history, real BullMQ job processing, authentication and session management, auth rate limiting, audit logging, authorization isolation, the workspace API, and the tenancy migration. Test services use `MongoMemoryReplSet` and `redis-memory-server`; no permanent test databases are required.
+The test suite covers graph execution, schema contracts, publishing, immutable snapshots, execution request validation, idempotency races, queue handoff failures, retry exhaustion, worker restart recovery, retry policies, execution timeouts, dead-letter records, execution replay, version pinning, status history, real BullMQ job processing, authentication and session management, auth rate limiting, audit logging, authorization isolation, the workspace API, the tenancy migration, and the analytics platform (workflow, execution, and workspace metrics with RBAC and tenant isolation). Test services use `MongoMemoryReplSet` and `redis-memory-server`; no permanent test databases are required.
 
 ```bash
 npm run typecheck
