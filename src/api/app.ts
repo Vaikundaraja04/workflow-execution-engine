@@ -15,6 +15,7 @@ import { createAnalyticsRouter } from './routes/analyticsRoutes.js';
 import { createAPIKeyRouter } from './routes/apiKeyRoutes.js';
 import { createExternalWorkflowRouter } from './routes/externalWorkflowRoutes.js';
 import { createWebhookRouter } from './routes/webhookRoutes.js';
+import { createDeveloperRouter } from './routes/developerRoutes.js';
 import { createHealthChecks, createHealthRouter } from './routes/healthRoutes.js';
 import type { HealthOptions } from './routes/healthRoutes.js';
 import { createRequireAuth } from '../auth/auth.middleware.js';
@@ -107,6 +108,7 @@ export function createApp(options: AppOptions) {
       options.webhookQueue ?? new UnavailableWebhookQueue(),
     ),
   );
+  app.use('/api/v1/developer', requireAuth, createDeveloperRouter());
   app.use(
     '/api',
     createExecutionRouter(

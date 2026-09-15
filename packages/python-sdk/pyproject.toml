@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "workflow-engine"
+version = "1.0.0"
+description = "Official Python SDK for the Workflow Execution Engine"
+authors = ["Workflow Engine Team"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "workflow_engine" }]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "^2.28.0"
+cryptography = "^3.4.8"
+pydantic = "^2.0.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.0.0"
+black = "^22.0.0"
+flake8 = "^4.0.0"
+mypy = "^0.950"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+workflow-engine = "workflow_engine.cli:main"
