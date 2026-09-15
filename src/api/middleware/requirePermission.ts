@@ -62,7 +62,9 @@ export async function resolveTargetWorkspace(
 ): Promise<string> {
   if (source.workflowParam) return resolveWorkflowWorkspace(req, source.workflowParam, userId);
   if (source.executionParam) return resolveExecutionWorkspace(req, source.executionParam, userId);
-  if (source.workspaceParam) return requireObjectId(req.params[source.workspaceParam], 'INVALID_WORKSPACE_ID');
+  if (source.workspaceParam && req.params[source.workspaceParam]) {
+    return requireObjectId(req.params[source.workspaceParam], 'INVALID_WORKSPACE_ID');
+  }
   if (source.useBodyWorkspace) {
     const body = req.body as { workspaceId?: unknown } | undefined;
     const requested = body?.workspaceId;
