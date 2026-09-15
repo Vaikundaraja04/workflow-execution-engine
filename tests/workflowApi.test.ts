@@ -270,6 +270,7 @@ describe('Phase 2B API', () => {
       error: {
         code: 'INVALID_JSON',
         message: 'Request body contains invalid JSON',
+        requestId: expect.any(String),
       },
     });
   });

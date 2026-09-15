@@ -3,6 +3,8 @@ import { connectDB, disconnectDB } from '../db/connection.js';
 import { createExecutionWorker } from './executionWorker.js';
 import { BullMqExecutionQueue } from '../queues/bullMqExecutionQueue.js';
 import { recoverPendingExecutions } from '../services/executionService.js';
+import { startWorkerHeartbeat } from '../observability/workerHeartbeat.js';
+import { logger } from '../observability/logger.js';
 
 const env = loadEnv();
 let isShuttingDown = false;
@@ -25,12 +27,14 @@ async function startWorker(): Promise<void> {
       concurrency: env.WORKER_CONCURRENCY,
     });
     await worker.waitUntilReady();
-    console.log('Execution worker is ready');
+    const heartbeat = startWorkerHeartbeat(env.REDIS_URL);
+    logger.info('execution_worker_ready', { concurrency: env.WORKER_CONCURRENCY });
 
     const shutdown = async (signal: string): Promise<void> => {
       if (isShuttingDown) return;
       isShuttingDown = true;
       console.log(`Received ${signal}, shutting down worker gracefully...`);
+      await heartbeat.stop();
       await worker.close();
       await disconnectDB();
       process.exit(0);

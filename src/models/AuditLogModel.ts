@@ -19,6 +19,9 @@ export const AUDIT_ACTIONS = [
   'WORKSPACE_MEMBER_ROLE_CHANGED',
   'WORKSPACE_MEMBER_REMOVED',
   'WORKFLOW_TRANSFERRED',
+  'API_KEY_CREATED',
+  'API_KEY_REVOKED',
+  'API_KEY_ROTATED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

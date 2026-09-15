@@ -19,12 +19,23 @@ The project is built in small, reviewable phases as an advanced backend portfoli
 - Rate limiting on the login and refresh endpoints
 - Audit logging for auth, workspace, workflow, and execution events, with sensitive-key sanitization
 - Authorization: workspace, workflow, and execution routes require a valid access token and are scoped to the caller
+- `helmet` security headers, a `CORS_ORIGINS` allowlist, and a global `/api` rate limit (`RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW_MS`)
 
 ### Multi-tenancy
 
 - Workspace architecture: the workspace is the tenancy root, and every user gets a personal workspace
 - Workspace ownership: an `OWNER` membership is created with the workspace, and workspace routes require membership
 - Tenant isolation: `workspaceId` on workflows and executions keeps other tenants unreachable
+
+### Observability
+
+- Structured JSON logs with a request id (`x-request-id`) echoed on every response and repeated in error bodies
+- Health endpoints: `/health` aggregates MongoDB, Redis, and worker-heartbeat checks, while `/health/ready` and `/health/live` back readiness and liveness probes
+- Workers publish a Redis heartbeat with a TTL, so a missing worker surfaces as `degraded` instead of a hard failure
+
+### API documentation
+
+- OpenAPI 3.0 document at `/api/openapi.json` and Swagger UI at `/api/docs`
 
 ## Implemented scope
 
@@ -82,6 +93,11 @@ The project is built in small, reviewable phases as an advanced backend portfoli
 - Request-level execution timeouts, with EXECUTION_TIMEOUT_MS as the server default
 - Dead-letter records for terminal failures and a workflow-scoped listing endpoint
 - Manual replay of finished executions as a new linked execution
+- Security headers (`helmet`), CORS origins from `CORS_ORIGINS`, and a global `/api` rate limit (`RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`)
+- Structured request logs with `x-request-id` correlation ids, status, duration, and sensitive-field redaction
+- Health endpoints (`/health`, `/health/ready`, `/health/live`) backed by MongoDB, Redis, and a worker heartbeat key
+- OpenAPI 3.0 document and Swagger UI
+- GitHub Actions CI: install, typecheck, test, and `npm audit --audit-level=high`
 
 ### Phase 3A: multi-tenancy foundation
 
@@ -99,13 +115,17 @@ The project is built in small, reviewable phases as an advanced backend portfoli
 src/
   api/
     app.ts
+    openapi.ts
     server.ts
     middleware/
+      cors.ts
       errorHandler.ts
       rateLimiter.ts
+      requestLogger.ts
     routes/
       analyticsRoutes.ts
       executionRoutes.ts
+      healthRoutes.ts
       workflowRoutes.ts
       workspaceRoutes.ts
   auth/
@@ -135,6 +155,10 @@ src/
     WorkspaceMemberModel.ts
     WorkspaceModel.ts
     WorkspaceUsageModel.ts
+  observability/
+    health.ts
+    logger.ts
+    workerHeartbeat.ts
   queues/
     bullMqExecutionQueue.ts
     executionQueue.ts
@@ -199,6 +223,9 @@ WORKER_CONCURRENCY=5
 EXECUTION_ATTEMPTS=3
 EXECUTION_BACKOFF_MS=1000
 EXECUTION_TIMEOUT_MS=30000
+CORS_ORIGINS=
+RATE_LIMIT_MAX=1000
+RATE_LIMIT_WINDOW_MS=60000
 AUTH_JWT_SECRET=replace-with-a-long-random-secret
 AUTH_ACCESS_TTL=15m
 AUTH_REFRESH_TTL=30d
@@ -223,6 +250,18 @@ npm run typecheck    # strict TypeScript check
 Run the API and worker in separate terminals. Both processes require MongoDB and Redis.
 
 ## API endpoints
+
+### Health and documentation
+
+| Method | Path | Purpose | Success |
+| --- | --- | --- | --- |
+| `GET` | `/health` | Aggregated MongoDB, Redis, and worker-heartbeat report | `200` |
+| `GET` | `/health/ready` | Readiness probe: MongoDB and Redis must be reachable | `200` |
+| `GET` | `/health/live` | Liveness probe: the process is running | `200` |
+| `GET` | `/api/openapi.json` | OpenAPI 3.0 document for this API | `200` |
+| `GET` | `/api/docs` | Swagger UI for exploring this API | `200` |
+
+`/health` returns `503` when MongoDB or Redis is unreachable, and `200` with `status: degraded` when only the worker heartbeat is missing. Health and documentation routes are public and are not rate limited.
 
 ### Authentication
 
@@ -251,7 +290,6 @@ Run the API and worker in separate terminals. Both processes require MongoDB and
 
 | Method | Path | Purpose | Success |
 | --- | --- | --- | --- |
-| `GET` | `/health` | Health check | `200` |
 | `POST` | `/api/workflows` | Create a workflow draft | `201` |
 | `GET` | `/api/workflows/:id` | Get a workflow and current draft | `200` |
 | `PUT` | `/api/workflows/:id/draft` | Update a draft | `200` |
@@ -325,7 +363,8 @@ The stored retry policy drives every retry: an attempt that throws returns the e
 {
   "error": {
     "code": "INVALID_EXECUTION_ID",
-    "message": "Invalid execution ID"
+    "message": "Invalid execution ID",
+    "requestId": "6ac1f7f4-9d1f-4f4f-9c1b-2f7a2b6f4a11"
   }
 }
 ```
@@ -341,11 +380,11 @@ Stable error codes include:
 - `INVALID_WORKSPACE_ID`
 - `WORKSPACE_NOT_FOUND`
 
-Unexpected errors return a generic `INTERNAL_ERROR` response.
+Unexpected errors return a generic `INTERNAL_ERROR` response. Every response carries an `x-request-id` header, and error responses repeat that id as `requestId`.
 
 ## Testing
 
-The test suite covers graph execution, schema contracts, publishing, immutable snapshots, execution request validation, idempotency races, queue handoff failures, retry exhaustion, worker restart recovery, retry policies, execution timeouts, dead-letter records, execution replay, version pinning, status history, real BullMQ job processing, authentication and session management, auth rate limiting, audit logging, authorization isolation, the workspace API, the tenancy migration, and the analytics platform (workflow, execution, and workspace metrics with RBAC and tenant isolation). Test services use `MongoMemoryReplSet` and `redis-memory-server`; no permanent test databases are required.
+The test suite covers graph execution, schema contracts, publishing, immutable snapshots, execution request validation, idempotency races, queue handoff failures, retry exhaustion, worker restart recovery, retry policies, execution timeouts, dead-letter records, execution replay, version pinning, status history, real BullMQ job processing, authentication and session management, auth rate limiting, audit logging, authorization isolation, the workspace API, the tenancy migration, and the analytics platform (workflow, execution, and workspace metrics with RBAC and tenant isolation), and the production hardening layer (security headers, CORS, global rate limiting, structured request logs with correlation ids, and health monitoring with worker heartbeats). Test services use `MongoMemoryReplSet` and `redis-memory-server`; no permanent test databases are required.
 
 ```bash
 npm run typecheck
@@ -360,6 +399,7 @@ npm audit --audit-level=high
 - Workspace roles beyond `OWNER` (`ADMIN`, `EDITOR`, `VIEWER`) are stored on memberships but not enforced; collaboration, invitations, and analytics are deferred to later phases
 - Workflow and execution routes resolve the caller's workspace from the request body, so a workflow created in a second workspace can only be validated and published (`POST` with `workspaceId` in the body); reads, draft updates, and execution queueing for that workspace are not exposed yet
 - No production deployment or distributed tracing; `docker-compose.yml` only provides local MongoDB and Redis for development
+- The OpenAPI document is hand-maintained in `src/api/openapi.ts`; it is not generated from the route definitions, so it can drift
 - Dead letters are replayed one execution at a time; there is no bulk redrive or automatic dead-letter processing
 
 Those capabilities belong to later phases and are intentionally outside the current phase.
