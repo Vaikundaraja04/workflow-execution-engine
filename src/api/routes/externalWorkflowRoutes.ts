@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { ExternalTriggerSchema } from '../../schemas/externalTriggerSchema.js';
 import { createRequireAPIKey, requireAPIKeyPermission, getAPIKeyContext } from '../../auth/apiKeyAuth.middleware.js';
+import { createRateLimitMiddleware } from '../../api/middleware/rateLimitMiddleware.js';
 import { createWorkflowExecution, toWorkflowExecutionView } from '../../services/executionService.js';
 import { createAuditLog } from '../../services/auditService.js';
 import type { ExecutionQueue } from '../../queues/executionQueue.js';
@@ -24,6 +25,7 @@ export function createExternalWorkflowRouter(
     '/workflows/:id/trigger',
     createRequireAPIKey(),
     requireAPIKeyPermission('WORKFLOW_EXECUTE'),
+    createRateLimitMiddleware(),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const workflowId = getRouteId(req);

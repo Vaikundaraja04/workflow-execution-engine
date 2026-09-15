@@ -68,6 +68,11 @@ export async function resolveTargetWorkspace(
     const requested = body?.workspaceId;
     if (typeof requested === 'string' && Types.ObjectId.isValid(requested)) return requested;
   }
+  // Check for X-Workspace-Id header
+  const headerWorkspaceId = req.headers['x-workspace-id'];
+  if (typeof headerWorkspaceId === 'string' && Types.ObjectId.isValid(headerWorkspaceId)) {
+    return headerWorkspaceId;
+  }
   return resolveWorkspaceId(userId);
 }
 

@@ -15,6 +15,10 @@ export interface IAPIKey extends Document<Types.ObjectId> {
   createdBy: Types.ObjectId;
   revokedAt?: Date;
   revokedBy?: Types.ObjectId;
+  rateLimit?: {
+    requestsPerMinute: number;
+    executionsPerHour: number;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +35,10 @@ const APIKeySchema = new Schema<IAPIKey>({
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   revokedAt: { type: Date },
   revokedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  rateLimit: {
+    requestsPerMinute: { type: Number, default: 1000 },
+    executionsPerHour: { type: Number, default: 5000 },
+  },
 }, { timestamps: true });
 
 APIKeySchema.index({ workspaceId: 1 });

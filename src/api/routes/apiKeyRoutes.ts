@@ -16,6 +16,7 @@ import { requirePermission, getWorkspaceContext } from '../middleware/requirePer
 import { createAuditLog } from '../../services/auditService.js';
 import type { Permission } from '../../auth/permissions.js';
 import type { RequestHandler } from 'express';
+import { APIKeyModel } from '../../models/APIKeyModel.js';
 
 const requireMemberManage = requirePermission('MEMBER_MANAGE');
 
@@ -30,7 +31,6 @@ export function createAPIKeyRouter(): Router {
 
   router.post(
     '/keys',
-    getAuthUser as RequestHandler,
     requireMemberManage,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -63,7 +63,6 @@ export function createAPIKeyRouter(): Router {
 
   router.get(
     '/keys',
-    getAuthUser as RequestHandler,
     requireMemberManage,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -78,7 +77,6 @@ export function createAPIKeyRouter(): Router {
 
   router.get(
     '/keys/:id',
-    getAuthUser as RequestHandler,
     requireMemberManage,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -94,7 +92,6 @@ export function createAPIKeyRouter(): Router {
 
   router.patch(
     '/keys/:id',
-    getAuthUser as RequestHandler,
     requireMemberManage,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -120,7 +117,6 @@ export function createAPIKeyRouter(): Router {
 
   router.delete(
     '/keys/:id',
-    getAuthUser as RequestHandler,
     requireMemberManage,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -146,7 +142,6 @@ export function createAPIKeyRouter(): Router {
 
   router.post(
     '/keys/:id/rotate',
-    getAuthUser as RequestHandler,
     requireMemberManage,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -165,6 +160,93 @@ export function createAPIKeyRouter(): Router {
           userAgent: req.get('user-agent'),
         });
         return res.status(201).json(rotated);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  const UpdateRateLimitSchema = z.object({
+    requestsPerMinute: z.number().int().positive().max(10000).optional(),
+    executionsPerHour: z.number().int().positive().max(100000).optional(),
+  }).strict().refine(data => Object.keys(data).length > 0, {
+    message: 'At least one field is required',
+  });
+
+  router.patch(
+    '/keys/:id/limits',
+    requireMemberManage,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = getRouteId(req);
+        const parsed = UpdateRateLimitSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+        }
+
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const userId = getAuthUser(req).userId;
+
+        // Get current key to capture old limits
+        const keyDoc = await APIKeyModel.findById(id);
+        if (!keyDoc) {
+          throw new Error('API_KEY_NOT_FOUND');
+        }
+        if (keyDoc.workspaceId.toString() !== workspaceId) {
+          throw new Error('FORBIDDEN');
+        }
+        const currentKey = {
+          id: keyDoc._id.toString(),
+          name: keyDoc.name,
+          keyPrefix: keyDoc.keyPrefix,
+          status: keyDoc.status,
+          permissions: keyDoc.permissions,
+          lastUsedAt: keyDoc.lastUsedAt?.toISOString(),
+          expiresAt: keyDoc.expiresAt?.toISOString(),
+          createdBy: keyDoc.createdBy.toString(),
+          revokedAt: keyDoc.revokedAt?.toISOString(),
+          rateLimit: keyDoc.rateLimit
+            ? {
+                requestsPerMinute: keyDoc.rateLimit.requestsPerMinute,
+                executionsPerHour: keyDoc.rateLimit.executionsPerHour,
+              }
+            : {
+                requestsPerMinute: 1000,
+                executionsPerHour: 5000,
+              },
+          createdAt: keyDoc.createdAt.toISOString(),
+          updatedAt: keyDoc.updatedAt.toISOString(),
+        };
+
+        // Update rate limits
+        const rateLimitUpdates: { requestsPerMinute?: number; executionsPerHour?: number } = {};
+        if (parsed.data.requestsPerMinute !== undefined) {
+          rateLimitUpdates.requestsPerMinute = parsed.data.requestsPerMinute;
+        }
+        if (parsed.data.executionsPerHour !== undefined) {
+          rateLimitUpdates.executionsPerHour = parsed.data.executionsPerHour;
+        }
+
+        const key = await updateAPIKey(id, workspaceId, {
+          rateLimit: rateLimitUpdates,
+        });
+
+        await createAuditLog({
+          action: 'API_KEY_RATE_LIMIT_UPDATED',
+          userId,
+          workspaceId,
+          resource: 'api_key',
+          resourceId: id,
+          metadata: {
+            apiKeyId: id,
+            oldLimit: currentKey.rateLimit,
+            newLimit: key.rateLimit,
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+
+        return res.json(key);
       } catch (err) {
         next(err);
       }
