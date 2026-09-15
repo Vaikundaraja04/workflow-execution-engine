@@ -11,6 +11,8 @@ import { WebhookDeliveryModel } from '../models/WebhookDeliveryModel.js';
 import { DeadLetterModel } from '../models/DeadLetterModel.js';
 import { AuditLogModel } from '../models/AuditLogModel.js';
 import { WorkspaceUsageModel } from '../models/WorkspaceUsageModel.js';
+import { SubscriptionModel } from '../models/SubscriptionModel.js';
+import type { SubscriptionPlan, SubscriptionStatus } from '../models/SubscriptionModel.js';
 import { createAuditLog } from './auditService.js';
 import {
   computeWorkspaceStorageBytes,
@@ -1138,6 +1140,133 @@ export interface WorkerPoolMetricsView {
     targetBacklogPerWorker: number;
   };
   timestamp: string;
+}
+
+export async function getAdminBillingWorkspaces(
+  actorUserId: string,
+): Promise<Array<{
+  workspaceId: string;
+  workspaceName: string;
+  plan: SubscriptionPlan;
+  status: string;
+  currentPeriodEnd: Date;
+  customerId: string;
+}>> {
+  assertValidId(actorUserId, 'INVALID_USER_ID');
+  const userObjectId = new Types.ObjectId(actorUserId);
+
+  // Verify the actor is an OWNER or ADMIN of at least one workspace (simple auth check)
+  const memberships = await WorkspaceMemberModel.find({
+    userId: userObjectId,
+    role: { $in: ['OWNER', 'ADMIN'] },
+    status: 'ACTIVE',
+  });
+
+  if (memberships.length === 0) {
+    throw new Error('FORBIDDEN');
+  }
+
+  // Get all subscriptions with workspace details
+  const subscriptions = await SubscriptionModel.find({})
+    .populate('workspaceId', 'name slug')
+    .lean();
+
+  return (subscriptions as any[]).map((sub: any) => ({
+    workspaceId: sub.workspaceId?._id ? sub.workspaceId._id.toString() : sub.workspaceId.toString(),
+    workspaceName: sub.workspaceId?.name ?? 'Unknown',
+    plan: sub.plan,
+    status: sub.status,
+    currentPeriodEnd: sub.currentPeriodEnd,
+    customerId: sub.externalCustomerId,
+  }));
+}
+
+export async function getAdminBillingRevenue(
+  actorUserId: string,
+  options: { period?: string } = {}
+): Promise<{
+  totalRevenue: number; // in currency smallest unit (cents)
+  period: string;
+  currency: string;
+  count: number;
+}> {
+  assertValidId(actorUserId, 'INVALID_USER_ID');
+  const userObjectId = new Types.ObjectId(actorUserId);
+
+  // Verify the actor is an OWNER or ADMIN of at least one workspace
+  const memberships = await WorkspaceMemberModel.find({
+    userId: userObjectId,
+    role: { $in: ['OWNER', 'ADMIN'] },
+    status: 'ACTIVE',
+  });
+
+  if (memberships.length === 0) {
+    throw new Error('FORBIDDEN');
+  }
+
+  // For now, we'll return mock data since we don't have actual payment processing
+  // In a real implementation, we would query payment records or invoices
+  const period = options.period ?? monthKeyOf(new Date());
+
+  return {
+    totalRevenue: 0, // Placeholder
+    period,
+    currency: 'USD',
+    count: 0,
+  };
+}
+
+export async function getAdminBillingSubscriptions(
+  actorUserId: string,
+  filters: {
+    plan?: SubscriptionPlan;
+    status?: SubscriptionStatus;
+  } = {}
+): Promise<Array<{
+  subscriptionId: string;
+  workspaceId: string;
+  workspaceName: string;
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  trialEndsAt?: Date | null;
+  customerId: string;
+}>> {
+  assertValidId(actorUserId, 'INVALID_USER_ID');
+  const userObjectId = new Types.ObjectId(actorUserId);
+
+  // Verify the actor is an OWNER or ADMIN of at least one workspace
+  const memberships = await WorkspaceMemberModel.find({
+    userId: userObjectId,
+    role: { $in: ['OWNER', 'ADMIN'] },
+    status: 'ACTIVE',
+  });
+
+  if (memberships.length === 0) {
+    throw new Error('FORBIDDEN');
+  }
+
+  // Build query
+  const query: any = {};
+  if (filters.plan) query.plan = filters.plan;
+  if (filters.status) query.status = filters.status;
+
+  const subscriptions = await SubscriptionModel.find(query)
+    .populate('workspaceId', 'name slug')
+    .lean();
+
+  return (subscriptions as any[]).map((sub: any) => ({
+    subscriptionId: sub._id.toString(),
+    workspaceId: sub.workspaceId?._id ? sub.workspaceId._id.toString() : sub.workspaceId.toString(),
+    workspaceName: sub.workspaceId?.name ?? 'Unknown',
+    plan: sub.plan,
+    status: sub.status,
+    currentPeriodStart: sub.currentPeriodStart,
+    currentPeriodEnd: sub.currentPeriodEnd,
+    trialEndsAt: sub.trialEndsAt !== undefined ? sub.trialEndsAt : null,
+    customerId: sub.externalCustomerId,
+  }));
 }
 
 export async function getWorkerPoolMetrics(

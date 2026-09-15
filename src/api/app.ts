@@ -16,6 +16,8 @@ import { createAPIKeyRouter } from './routes/apiKeyRoutes.js';
 import { createExternalWorkflowRouter } from './routes/externalWorkflowRoutes.js';
 import { createWebhookRouter } from './routes/webhookRoutes.js';
 import { createDeveloperRouter } from './routes/developerRoutes.js';
+import { createSubscriptionRouter } from './routes/subscriptionRoutes.js';
+import { createBillingRouter } from './routes/billingRoutes.js';
 import { createHealthChecks, createHealthRouter } from './routes/healthRoutes.js';
 import type { HealthOptions } from './routes/healthRoutes.js';
 import { createAdminRouter } from './routes/adminRoutes.js';
@@ -102,7 +104,9 @@ export function createApp(options: AppOptions) {
     options.executionQueue ?? new UnavailableExecutionQueue(),
     options.executionCreationOptions ?? {},
   ));
+  app.use('/api/v1/billing', createBillingRouter());
   app.use('/api/v1', requireAuth, createAPIKeyRouter());
+  app.use('/api/v1/subscription', requireAuth, createSubscriptionRouter());
   app.use(
     '/api/v1/webhooks',
     requireAuth,

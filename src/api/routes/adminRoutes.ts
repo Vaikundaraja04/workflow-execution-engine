@@ -3,6 +3,8 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { requirePermission, getWorkspaceContext } from '../middleware/requirePermission.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
+import { Types } from 'mongoose';
+import type { SubscriptionPlan, SubscriptionStatus } from '../../models/SubscriptionModel.js';
 import {
   suspendWorkspace,
   unsuspendWorkspace,
@@ -17,7 +19,11 @@ import {
   getSystemMetrics,
   triggerRecalculateAnalytics,
   getWorkerPoolMetrics,
+  getAdminBillingWorkspaces,
+  getAdminBillingRevenue,
+  getAdminBillingSubscriptions,
 } from '../../services/adminService.js';
+import { WorkspaceMemberModel } from '../../models/WorkspaceMemberModel.js';
 import { createHealthChecks } from './healthRoutes.js';
 import type { HealthOptions } from './healthRoutes.js';
 import { runDataRetention, DEFAULT_RETENTION_POLICY } from '../../services/retentionService.js';
@@ -567,6 +573,85 @@ export function createAdminRouter(options: HealthOptions | AdminRouterOptions = 
       const user = getAuthUser(req);
       const detail = await deleteWorkspace(workspaceId, user.userId);
       res.json(detail);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // =============================================================
+  // 10. Billing Administration API (Owner only)
+  // =============================================================
+
+  // GET /billing/workspaces - List all workspaces with billing info (Owner only)
+  router.get('/billing/workspaces', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = getAuthUser(req);
+      // Additional check: ensure user is OWNER (not just ADMIN) for billing access
+      const membership = await WorkspaceMemberModel.findOne({
+        userId: new Types.ObjectId(user.userId),
+        role: 'OWNER',
+        status: 'ACTIVE',
+      });
+      if (!membership) {
+        return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Owner access required for billing' } });
+      }
+
+      const workspaces = await getAdminBillingWorkspaces(user.userId);
+      res.json(workspaces);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /billing/revenue - Get billing revenue metrics (Owner only)
+  router.get('/billing/revenue', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = getAuthUser(req);
+      // Additional check: ensure user is OWNER (not just ADMIN) for billing access
+      const membership = await WorkspaceMemberModel.findOne({
+        userId: new Types.ObjectId(user.userId),
+        role: 'OWNER',
+        status: 'ACTIVE',
+      });
+      if (!membership) {
+        return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Owner access required for billing' } });
+      }
+
+      const filters: { period?: string } = {};
+      if (req.query.period) {
+        filters.period = req.query.period as string;
+      }
+      const revenue = await getAdminBillingRevenue(user.userId, filters);
+      res.json(revenue);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /billing/subscriptions - Get subscription list with filters (Owner only)
+  router.get('/billing/subscriptions', requireAdminAccess, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = getAuthUser(req);
+      // Additional check: ensure user is OWNER (not just ADMIN) for billing access
+      const membership = await WorkspaceMemberModel.findOne({
+        userId: new Types.ObjectId(user.userId),
+        role: 'OWNER',
+        status: 'ACTIVE',
+      });
+      if (!membership) {
+        return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Owner access required for billing' } });
+      }
+
+      const filters: Record<string, SubscriptionPlan | SubscriptionStatus | undefined> = {};
+      if (req.query.plan) {
+        filters.plan = req.query.plan as SubscriptionPlan;
+      }
+      if (req.query.status) {
+        filters.status = req.query.status as SubscriptionStatus;
+      }
+
+      const subscriptions = await getAdminBillingSubscriptions(user.userId, filters);
+      res.json(subscriptions);
     } catch (error) {
       next(error);
     }

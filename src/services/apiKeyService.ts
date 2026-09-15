@@ -5,6 +5,7 @@ import type { IAPIKey, APIKeyStatus } from '../models/APIKeyModel.js';
 import type { Permission } from '../auth/permissions.js';
 import { permissionsForRole } from '../auth/permissions.js';
 import type { WorkspaceRole } from '../models/WorkspaceMemberModel.js';
+import { validateWorkspaceQuota } from './planService.js';
 
 const API_KEY_PREFIX = 'wke_';
 const API_KEY_BYTES = 32;
@@ -76,6 +77,7 @@ export async function createAPIKey(
   permissions: Permission[],
   expiresAt?: Date,
 ): Promise<CreatedAPIKey> {
+  await validateWorkspaceQuota(workspaceId, 'apiKeys');
   const rawKey = generateRawKey();
   const keyHash = hashKey(rawKey);
   const keyPrefix = getKeyPrefix(rawKey);

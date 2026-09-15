@@ -6,6 +6,7 @@ import { UserModel } from '../models/UserModel.js';
 import { permissionsForRole } from '../auth/permissions.js';
 import type { Permission } from '../auth/permissions.js';
 import { createAuditLog } from './auditService.js';
+import { validateWorkspaceQuota } from './planService.js';
 
 export interface WorkspaceMemberView {
   id: string;
@@ -133,6 +134,8 @@ export async function inviteMember(
     userId: user._id,
   });
   if (existing && existing.status !== 'REMOVED') throw new Error('MEMBER_ALREADY_EXISTS');
+
+  await validateWorkspaceQuota(workspaceId, 'members');
 
   let membership;
   if (existing) {

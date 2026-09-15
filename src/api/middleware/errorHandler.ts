@@ -57,6 +57,10 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   CANNOT_RETRY_NON_FAILED_EXECUTION: { status: 409, code: 'CANNOT_RETRY_NON_FAILED_EXECUTION', message: 'Only failed executions can be retried' },
   INVALID_QUEUE_NAME: { status: 400, code: 'INVALID_QUEUE_NAME', message: 'Invalid queue name' },
   INVALID_RETENTION_DAYS: { status: 400, code: 'INVALID_RETENTION_DAYS', message: 'Retention days must be at least 1' },
+  SUBSCRIPTION_NOT_FOUND: { status: 404, code: 'SUBSCRIPTION_NOT_FOUND', message: 'Subscription not found' },
+  INVALID_PLAN: { status: 400, code: 'INVALID_PLAN', message: 'Invalid plan specified' },
+  SUBSCRIPTION_ALREADY_CANCELLED: { status: 400, code: 'SUBSCRIPTION_ALREADY_CANCELLED', message: 'Subscription is already cancelled or expired' },
+  PLAN_LIMIT_EXCEEDED: { status: 403, code: 'PLAN_LIMIT_EXCEEDED', message: 'Plan limit exceeded' },
 };
 
 type JsonSyntaxError = SyntaxError & {
@@ -78,6 +82,20 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     }
   }
   if (err instanceof Error) {
+    if (err.message === 'PLAN_LIMIT_EXCEEDED') {
+      const anyErr = err as any;
+      logger.warn('request_rejected', { ...context, code: 'PLAN_LIMIT_EXCEEDED', status: 403 });
+      return res.status(403).json({
+        error: {
+          code: 'PLAN_LIMIT_EXCEEDED',
+          message: 'Plan limit exceeded',
+          resource: anyErr.resource,
+          limit: anyErr.limit,
+          currentUsage: anyErr.currentUsage,
+          requestId,
+        },
+      });
+    }
     const mapped = ERROR_MAP[err.message];
     if (mapped) {
       const emit = mapped.status >= 500 ? logger.error : logger.warn;
