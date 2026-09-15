@@ -10,8 +10,8 @@ export {
   WorkflowEdgeSchema,
 } from './schemas/workflowSchema.js';
 
-export { CreateExecutionRequestSchema } from './schemas/executionSchema.js';
-export type { CreateExecutionRequest } from './schemas/executionSchema.js';
+export { CreateExecutionRequestSchema, ExecutionRetryPolicySchema } from './schemas/executionSchema.js';
+export type { CreateExecutionRequest, ExecutionRetryPolicyInput } from './schemas/executionSchema.js';
 export {
   createExecutionJobId,
   DEFAULT_EXECUTION_ATTEMPTS,
@@ -32,8 +32,10 @@ export type {
 } from './types/workflow.js';
 
 export type {
+  ExecutionRetryPolicy,
   ExecutionStatus,
   ExecutionStatusEvent,
+  DeadLetterView,
   StoredExecutionError,
   WorkflowExecutionView,
 } from './types/execution.js';

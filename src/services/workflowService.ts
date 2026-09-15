@@ -124,9 +124,3 @@ export async function publishWorkflow(
   }
 }
 
-export async function getVersions(id: string, ownerId: string, workspaceId: string) {
-  assertValidWorkflowId(id);
-  const wf = await WorkflowModel.findOne({ _id: id, ...tenantScope(ownerId, workspaceId) });
-  if (!wf) throw new Error('WORKFLOW_NOT_FOUND');
-  return WorkflowVersionModel.find({ workflowId: id }).sort({ versionNumber: 1 }).lean();
-}

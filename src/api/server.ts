@@ -17,6 +17,7 @@ async function startServer() {
     const recovery = await recoverPendingExecutions(queue, {
       attempts: env.EXECUTION_ATTEMPTS,
       backoffMs: env.EXECUTION_BACKOFF_MS,
+      timeoutMs: env.EXECUTION_TIMEOUT_MS,
     });
     if (recovery.examined > 0) {
       console.log(`Recovered ${recovery.recovered} pending executions`);
@@ -26,6 +27,7 @@ async function startServer() {
       executionCreationOptions: {
         attempts: env.EXECUTION_ATTEMPTS,
         backoffMs: env.EXECUTION_BACKOFF_MS,
+        timeoutMs: env.EXECUTION_TIMEOUT_MS,
       },
       auth: {
         jwtSecret: env.AUTH_JWT_SECRET,

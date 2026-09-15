@@ -10,6 +10,14 @@ export const EXECUTION_STATUSES = [
 
 export type ExecutionStatus = (typeof EXECUTION_STATUSES)[number];
 
+export type RetryPolicyType = 'FIXED' | 'EXPONENTIAL';
+
+export interface ExecutionRetryPolicy {
+  type: RetryPolicyType;
+  delayMs: number;
+  backoffFactor?: number;
+}
+
 export interface StoredExecutionError {
   code: string;
   message: string;
@@ -33,6 +41,12 @@ export interface WorkflowExecutionView {
   result?: ExecutionResult;
   error?: StoredExecutionError;
   attemptsMade: number;
+  retryPolicy?: ExecutionRetryPolicy;
+  maxRetries: number;
+  retryCount: number;
+  nextRetryAt?: string;
+  timeoutMs?: number;
+  parentExecutionId?: string;
   statusHistory: Array<{
     status: ExecutionStatus;
     timestamp: string;
@@ -43,4 +57,14 @@ export interface WorkflowExecutionView {
   finishedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DeadLetterView {
+  executionId: string;
+  workflowId?: string;
+  failureReason: string;
+  message?: string;
+  attempts: number;
+  failedAt: string;
+  createdAt: string;
 }

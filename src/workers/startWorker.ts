@@ -15,6 +15,7 @@ async function startWorker(): Promise<void> {
     const recovery = await recoverPendingExecutions(recoveryQueue, {
       attempts: env.EXECUTION_ATTEMPTS,
       backoffMs: env.EXECUTION_BACKOFF_MS,
+      timeoutMs: env.EXECUTION_TIMEOUT_MS,
     });
     await recoveryQueue.close();
     if (recovery.examined > 0) {

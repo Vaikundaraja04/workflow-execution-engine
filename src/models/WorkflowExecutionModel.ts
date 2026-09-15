@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 import type { ExecutionResult } from '../types/workflow.js';
 import type {
   ExecutionStatus,
+  ExecutionRetryPolicy,
   ExecutionStatusEvent,
   StoredExecutionError,
 } from '../types/execution.js';
@@ -21,6 +22,12 @@ export interface IWorkflowExecution extends Document<Types.ObjectId> {
   result?: ExecutionResult;
   error?: StoredExecutionError;
   attemptsMade: number;
+  retryPolicy?: ExecutionRetryPolicy;
+  maxRetries?: number;
+  retryCount?: number;
+  nextRetryAt?: Date;
+  timeoutMs?: number;
+  parentExecutionId?: Types.ObjectId;
   statusHistory: ExecutionStatusEvent[];
   queuedAt?: Date;
   startedAt?: Date;
@@ -33,6 +40,12 @@ const ExecutionStatusEventSchema = new Schema<ExecutionStatusEvent>({
   status: { type: String, enum: EXECUTION_STATUSES, required: true },
   timestamp: { type: Date, required: true },
   attempt: { type: Number, min: 1 },
+}, { _id: false });
+
+const RetryPolicySchema = new Schema<ExecutionRetryPolicy>({
+  type: { type: String, enum: ['FIXED', 'EXPONENTIAL'], required: true },
+  delayMs: { type: Number, required: true, min: 0 },
+  backoffFactor: { type: Number, min: 1 },
 }, { _id: false });
 
 const WorkflowExecutionSchema = new Schema<IWorkflowExecution>({
@@ -49,6 +62,12 @@ const WorkflowExecutionSchema = new Schema<IWorkflowExecution>({
   result: { type: Schema.Types.Mixed },
   error: { type: Schema.Types.Mixed },
   attemptsMade: { type: Number, required: true, min: 0, default: 0 },
+  retryPolicy: { type: RetryPolicySchema },
+  maxRetries: { type: Number, min: 0, default: 0 },
+  retryCount: { type: Number, min: 0, default: 0 },
+  nextRetryAt: { type: Date },
+  timeoutMs: { type: Number, min: 1 },
+  parentExecutionId: { type: Schema.Types.ObjectId, ref: 'WorkflowExecution' },
   statusHistory: { type: [ExecutionStatusEventSchema], required: true, default: [] },
   queuedAt: { type: Date },
   startedAt: { type: Date },
@@ -58,6 +77,7 @@ const WorkflowExecutionSchema = new Schema<IWorkflowExecution>({
 WorkflowExecutionSchema.index({ workflowId: 1, idempotencyKey: 1 }, { unique: true });
 WorkflowExecutionSchema.index({ workflowId: 1, createdAt: -1 });
 WorkflowExecutionSchema.index({ status: 1, updatedAt: 1 });
+WorkflowExecutionSchema.index({ parentExecutionId: 1 });
 WorkflowExecutionSchema.index({ workspaceId: 1, createdAt: -1 });
 
 export const WorkflowExecutionModel = mongoose.model<IWorkflowExecution>(
