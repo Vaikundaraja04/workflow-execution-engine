@@ -29,6 +29,12 @@ async function startServer() {
         backoffMs: env.EXECUTION_BACKOFF_MS,
         timeoutMs: env.EXECUTION_TIMEOUT_MS,
       },
+      rateLimit: {
+        windowMs: env.RATE_LIMIT_WINDOW_MS,
+        limit: env.RATE_LIMIT_MAX,
+      },
+      corsOrigins: (env.CORS_ORIGINS ?? '').split(',').map(origin => origin.trim()).filter(origin => origin.length > 0),
+      health: { redisUrl: env.REDIS_URL },
       auth: {
         jwtSecret: env.AUTH_JWT_SECRET,
         accessTtl: env.AUTH_ACCESS_TTL,

@@ -1,4 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
+import { errorFields, logger } from '../../observability/logger.js';
+import { getRequestId, requestPath } from './requestLogger.js';
 
 const ERROR_MAP: Record<string, { status: number; code: string; message: string }> = {
   INVALID_REQUEST: { status: 400, code: 'INVALID_REQUEST', message: 'Invalid request' },
@@ -32,6 +34,10 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   VERSION_CONFLICT: { status: 409, code: 'VERSION_CONFLICT', message: 'Workflow version conflict' },
   QUEUE_UNAVAILABLE: { status: 503, code: 'QUEUE_UNAVAILABLE', message: 'Execution queue is unavailable' },
   INVALID_WORKFLOW_SCHEMA: { status: 422, code: 'INVALID_WORKFLOW_SCHEMA', message: 'Draft schema is invalid' },
+  INVALID_API_KEY: { status: 401, code: 'INVALID_API_KEY', message: 'API key is invalid or revoked' },
+  API_KEY_NOT_FOUND: { status: 404, code: 'API_KEY_NOT_FOUND', message: 'API key was not found' },
+  INVALID_API_KEY_ID: { status: 400, code: 'INVALID_API_KEY_ID', message: 'Invalid API key ID' },
+  API_KEY_EXPIRED: { status: 401, code: 'API_KEY_EXPIRED', message: 'API key has expired' },
   INVALID_WORKFLOW_GRAPH: { status: 422, code: 'INVALID_WORKFLOW_GRAPH', message: 'Draft graph is invalid' },
 };
 
@@ -40,23 +46,41 @@ type JsonSyntaxError = SyntaxError & {
   body?: unknown;
 };
 
-export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
+  const requestId = getRequestId(req);
+  const context = { requestId, method: req.method, path: requestPath(req) };
+
   if (err instanceof SyntaxError) {
     const jsonErr = err as JsonSyntaxError;
     if (jsonErr.status === 400 && 'body' in jsonErr) {
-      return res.status(400).json({ error: { code: 'INVALID_JSON', message: 'Request body contains invalid JSON' } });
+      logger.warn('request_rejected', { ...context, code: 'INVALID_JSON', status: 400 });
+      return res.status(400).json({
+        error: { code: 'INVALID_JSON', message: 'Request body contains invalid JSON', requestId },
+      });
     }
   }
   if (err instanceof Error) {
     const mapped = ERROR_MAP[err.message];
     if (mapped) {
-      return res.status(mapped.status).json({ error: { code: mapped.code, message: mapped.message } });
+      const emit = mapped.status >= 500 ? logger.error : logger.warn;
+      emit('request_rejected', { ...context, code: mapped.code, status: mapped.status });
+      return res.status(mapped.status).json({
+        error: { code: mapped.code, message: mapped.message, requestId },
+      });
     }
-    // Mongo duplicate key (11000)
     const mongoErr = err as { code?: number };
     if (mongoErr.code === 11000) {
-      return res.status(409).json({ error: { code: 'VERSION_CONFLICT', message: 'Workflow version conflict' } });
+      logger.warn('request_rejected', { ...context, code: 'VERSION_CONFLICT', status: 409 });
+      return res.status(409).json({
+        error: { code: 'VERSION_CONFLICT', message: 'Workflow version conflict', requestId },
+      });
     }
+    logger.error('request_failed', { ...context, ...errorFields(err) });
+  } else {
+    logger.error('request_failed', { ...context, errorMessage: String(err) });
   }
-  res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
+
+  res.status(500).json({
+    error: { code: 'INTERNAL_ERROR', message: 'Internal server error', requestId },
+  });
 }
