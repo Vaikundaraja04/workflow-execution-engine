@@ -1,0 +1,21 @@
+{
+  "name": "@workflow-engine/sdk",
+  "version": "1.0.0",
+  "description": "Official JavaScript/TypeScript SDK for the Workflow Execution Engine",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "workflow",
+    "automation",
+    "sdk",
+    "api-client"
+  ],
+  "author": "",
+  "license": "ISC"
+}

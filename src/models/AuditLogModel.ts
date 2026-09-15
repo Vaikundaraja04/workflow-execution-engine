@@ -29,6 +29,8 @@ export const AUDIT_ACTIONS = [
   'WEBHOOK_DELETED',
   'WEBHOOK_DELIVERY_FAILED',
   'WEBHOOK_DELIVERY_RETRIED',
+  'DEVELOPER_DOCS_VIEWED',
+  'SDK_REQUEST_EXECUTED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
