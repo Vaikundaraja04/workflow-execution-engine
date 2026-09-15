@@ -57,6 +57,7 @@ export function createExecutionRouter(
           await createAuditLog({
             action: 'EXECUTION_STARTED',
             userId: getAuthUser(req).userId,
+            workspaceId,
             resource: 'execution',
             resourceId: created.execution._id.toString(),
             metadata: { workflowId },

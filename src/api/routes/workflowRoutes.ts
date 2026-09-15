@@ -12,7 +12,8 @@ import {
 } from '../../services/workflowService.js';
 import { WorkflowDefinitionSchema } from '../../schemas/workflowSchema.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
-import { requirePermission, getWorkspaceContext } from '../middleware/requirePermission.js';
+import { requirePermission, requireMembership, getWorkspaceContext } from '../middleware/requirePermission.js';
+import { transferWorkflowOwnership } from '../../services/collaborationService.js';
 import { createAuditLog } from '../../services/auditService.js';
 
 const createWorkflowSchema = z.object({
@@ -28,6 +29,13 @@ const updateDraftSchema = z.object({
   message: 'At least one field is required',
 });
 
+const transferSchema = z.object({
+  memberId: z.string().trim().min(1).max(64).optional(),
+  userId: z.string().trim().min(1).max(64).optional(),
+}).strict().refine((data) => data.memberId !== undefined || data.userId !== undefined, {
+  message: 'memberId or userId is required',
+});
+
 function getRouteId(req: Request): string {
   const id = req.params.id;
   if (typeof id !== 'string') {
@@ -39,6 +47,7 @@ function getRouteId(req: Request): string {
 const requireWorkflowCreate = requirePermission('WORKFLOW_CREATE', { useBodyWorkspace: true });
 const requireWorkflowRead = requirePermission('WORKFLOW_READ', { workflowParam: 'id' });
 const requireWorkflowUpdate = requirePermission('WORKFLOW_UPDATE', { workflowParam: 'id' });
+const requireWorkflowMembership = requireMembership({ workflowParam: 'id' });
 
 export const workflowRouter = Router();
 
@@ -53,6 +62,7 @@ workflowRouter.post('/', requireWorkflowCreate, async (req: Request, res: Respon
     await createAuditLog({
       action: 'WORKFLOW_CREATED',
       userId: getAuthUser(req).userId,
+      workspaceId,
       resource: 'workflow',
       resourceId: wf._id.toString(),
       ipAddress: req.ip,
@@ -90,6 +100,7 @@ workflowRouter.put('/:id/draft', requireWorkflowUpdate, async (req: Request, res
     await createAuditLog({
       action: 'WORKFLOW_UPDATED',
       userId: getAuthUser(req).userId,
+      workspaceId,
       resource: 'workflow',
       resourceId: wf._id.toString(),
       ipAddress: req.ip,
@@ -118,6 +129,25 @@ workflowRouter.post('/:id/publish', requireWorkflowUpdate, async (req: Request, 
     const workspaceId = getWorkspaceContext(req).workspaceId;
     const result = await publishWorkflow(id, getAuthUser(req).userId, workspaceId);
     res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+workflowRouter.post('/:id/transfer', requireWorkflowMembership, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = getRouteId(req);
+    const parsed = transferSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+    }
+    const reference = parsed.data.memberId ?? parsed.data.userId;
+    if (reference === undefined) {
+      return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+    }
+    const workspaceId = getWorkspaceContext(req).workspaceId;
+    const summary = await transferWorkflowOwnership(id, getAuthUser(req).userId, reference, workspaceId);
+    res.json(summary);
   } catch (err) {
     next(err);
   }

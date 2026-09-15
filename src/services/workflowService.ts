@@ -4,7 +4,7 @@ import { WorkflowVersionModel } from '../models/WorkflowVersionModel.js';
 import type { WorkflowDefinition } from '../types/workflow.js';
 import { validateGraph } from '../engine/validateGraph.js';
 import { WorkflowDefinitionSchema } from '../schemas/workflowSchema.js';
-function tenantScope(userId: string, workspaceId: string) {
+export function tenantScope(userId: string, workspaceId: string) {
   return {
     $or: [
       { workspaceId: new Types.ObjectId(workspaceId) },
