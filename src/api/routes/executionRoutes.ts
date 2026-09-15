@@ -11,6 +11,8 @@ import {
   getWorkflowExecution,
   listWorkflowExecutions,
   replayWorkflowExecution,
+  cancelWorkflowExecution,
+  retryWorkflowExecution,
   toWorkflowExecutionView,
 } from '../../services/executionService.js';
 import { listWorkflowDeadLetters, toDeadLetterView } from '../../services/deadLetterService.js';
@@ -152,6 +154,82 @@ export function createExecutionRouter(
         const workspaceId = getWorkspaceContext(req).workspaceId;
         const deadLetters = await listWorkflowDeadLetters(workflowId, getAuthUser(req).userId, workspaceId);
         return res.json(deadLetters.map(toDeadLetterView));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // Execution control endpoints
+  router.post(
+    '/executions/:executionId/cancel',
+    requireAuth,
+    requireExecutionExecute,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const executionId = getRouteParameter(req, 'executionId', 'INVALID_EXECUTION_ID');
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const reason = req.body.reason as string | undefined;
+        const cancelled = await cancelWorkflowExecution(
+          queue,
+          executionId,
+          getAuthUser(req).userId,
+          workspaceId,
+          reason,
+        );
+        await createAuditLog({
+          action: 'EXECUTION_CANCELLED',
+          userId: getAuthUser(req).userId,
+          workspaceId,
+          resource: 'execution',
+          resourceId: executionId,
+          metadata: {
+            executionId,
+            reason: cancelled.error?.message,
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+        return res.json(toWorkflowExecutionView(cancelled));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/executions/:executionId/retry',
+    requireAuth,
+    requireExecutionExecute,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const executionId = getRouteParameter(req, 'executionId', 'INVALID_EXECUTION_ID');
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const parsed = CreateExecutionRequestSchema.safeParse(req.body);
+        const options: ExecutionCreationOptions = {};
+        if (parsed.success && parsed.data.timeoutMs !== undefined) {
+          options.timeoutMs = parsed.data.timeoutMs;
+        }
+        const retried = await retryWorkflowExecution(
+          queue,
+          executionId,
+          getAuthUser(req).userId,
+          workspaceId,
+          options,
+        );
+        await createAuditLog({
+          action: 'EXECUTION_RETRIED',
+          userId: getAuthUser(req).userId,
+          workspaceId,
+          resource: 'execution',
+          resourceId: executionId,
+          metadata: {
+            executionId,
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+        return res.json(toWorkflowExecutionView(retried));
       } catch (error) {
         next(error);
       }

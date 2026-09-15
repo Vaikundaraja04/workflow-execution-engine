@@ -9,6 +9,7 @@ import {
 import type { IWorkflowExecution } from '../models/WorkflowExecutionModel.js';
 import { DeadLetterModel } from '../models/DeadLetterModel.js';
 import { recordExecutionOutcome, recordExecutionReplay } from './analyticsService.js';
+import { createAuditLog } from './auditService.js';
 import type { CreateExecutionRequest } from '../schemas/executionSchema.js';
 import type { ExecutionResult, WorkflowDefinition } from '../types/workflow.js';
 import type {
@@ -680,3 +681,142 @@ export function toWorkflowExecutionView(execution: IWorkflowExecution): Workflow
   if (execution.finishedAt !== undefined) view.finishedAt = execution.finishedAt.toISOString();
   return view;
 }
+
+export async function cancelWorkflowExecution(
+  queue: ExecutionQueue,
+  executionId: string,
+  actorUserId: string,
+  workspaceId?: string,
+  reason?: string,
+): Promise<IWorkflowExecution> {
+  assertValidId(executionId, 'INVALID_EXECUTION_ID');
+  const execution = await WorkflowExecutionModel.findById(executionId);
+  if (!execution) throw new Error('EXECUTION_NOT_FOUND');
+  if (workspaceId && execution.workspaceId && execution.workspaceId.toString() !== workspaceId) {
+    throw new Error('EXECUTION_NOT_FOUND');
+  }
+
+  if (execution.status === 'SUCCEEDED') {
+    throw new Error('CANNOT_CANCEL_COMPLETED_EXECUTION');
+  }
+  if (execution.status === 'FAILED' && execution.error?.code === 'EXECUTION_CANCELLED') {
+    return execution;
+  }
+
+  if (queue.removeJob) {
+    try {
+      await queue.removeJob(execution.jobId);
+    } catch {
+      // Best effort removal from queue
+    }
+  }
+
+  const finishedAt = new Date();
+  const cancelError: StoredExecutionError = {
+    code: 'EXECUTION_CANCELLED',
+    message: reason ?? 'Execution was cancelled by operator',
+  };
+
+  const updated = await WorkflowExecutionModel.findByIdAndUpdate(
+    executionId,
+    {
+      $set: {
+        status: 'FAILED',
+        error: cancelError,
+        finishedAt,
+      },
+      $push: {
+        statusHistory: {
+          status: 'FAILED',
+          timestamp: finishedAt,
+          attempt: execution.attemptsMade,
+        },
+      },
+    },
+    { returnDocument: 'after' },
+  );
+
+  if (!updated) throw new Error('EXECUTION_NOT_FOUND');
+
+  await createAuditLog({
+    action: 'EXECUTION_CANCELLED',
+    userId: actorUserId,
+    workspaceId: updated.workspaceId?.toString() ?? workspaceId,
+    resource: 'execution',
+    resourceId: executionId,
+    metadata: {
+      executionId,
+      workflowId: updated.workflowId.toString(),
+      reason: cancelError.message,
+      previousStatus: execution.status,
+    },
+  });
+
+  return updated;
+}
+
+export async function retryWorkflowExecution(
+  queue: ExecutionQueue,
+  executionId: string,
+  actorUserId: string,
+  workspaceId?: string,
+  options: ExecutionCreationOptions = {},
+): Promise<IWorkflowExecution> {
+  assertValidId(executionId, 'INVALID_EXECUTION_ID');
+  const execution = await WorkflowExecutionModel.findById(executionId);
+  if (!execution) throw new Error('EXECUTION_NOT_FOUND');
+  if (workspaceId && execution.workspaceId && execution.workspaceId.toString() !== workspaceId) {
+    throw new Error('EXECUTION_NOT_FOUND');
+  }
+
+  if (execution.status !== 'FAILED') {
+    throw new Error('CANNOT_RETRY_NON_FAILED_EXECUTION');
+  }
+
+  await DeadLetterModel.deleteOne({ executionId: execution._id });
+
+  const retryAt = new Date();
+  const updated = await WorkflowExecutionModel.findByIdAndUpdate(
+    executionId,
+    {
+      $set: {
+        status: 'QUEUING',
+        attemptsMade: 0,
+      },
+      $unset: { error: 1, finishedAt: 1, result: 1 },
+      $inc: { retryCount: 1 },
+      $push: {
+        statusHistory: {
+          status: 'QUEUING',
+          timestamp: retryAt,
+        },
+      },
+    },
+    { returnDocument: 'after' },
+  );
+
+  if (!updated) throw new Error('EXECUTION_NOT_FOUND');
+
+  let enqueuedExecution: IWorkflowExecution = updated;
+  try {
+    enqueuedExecution = await enqueuePersistedExecution(queue, updated, options);
+  } catch {
+    // Handled in enqueuePersistedExecution
+  }
+
+  await createAuditLog({
+    action: 'EXECUTION_RETRIED',
+    userId: actorUserId,
+    workspaceId: updated.workspaceId?.toString() ?? workspaceId,
+    resource: 'execution',
+    resourceId: executionId,
+    metadata: {
+      executionId,
+      workflowId: updated.workflowId.toString(),
+      retryCount: updated.retryCount,
+    },
+  });
+
+  return enqueuedExecution;
+}
+
