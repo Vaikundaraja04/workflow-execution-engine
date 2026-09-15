@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { z } from 'zod';
+import { requireMembership } from '../middleware/requirePermission.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
 import {
   createWorkspace,
@@ -31,6 +32,8 @@ function getRouteId(req: Request): string {
 export function createWorkspaceRouter(): Router {
   const router = Router();
 
+  const requireWorkspaceMembership = requireMembership({ workspaceParam: 'id' });
+
   router.post('/', (async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = createWorkspaceSchema.safeParse(req.body);
@@ -52,7 +55,7 @@ export function createWorkspaceRouter(): Router {
     }
   }) as RequestHandler);
 
-  router.get('/:id', (async (req: Request, res: Response, next: NextFunction) => {
+  router.get('/:id', requireWorkspaceMembership, (async (req: Request, res: Response, next: NextFunction) => {
     try {
       const workspace = await getWorkspace(getRouteId(req), getAuthUser(req).userId);
       res.json(workspace);
@@ -61,7 +64,7 @@ export function createWorkspaceRouter(): Router {
     }
   }) as RequestHandler);
 
-  router.patch('/:id', (async (req: Request, res: Response, next: NextFunction) => {
+  router.patch('/:id', requireWorkspaceMembership, (async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = updateWorkspaceSchema.safeParse(req.body);
       if (!parsed.success) {

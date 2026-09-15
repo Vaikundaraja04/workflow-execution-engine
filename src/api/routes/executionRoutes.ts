@@ -4,7 +4,7 @@ import { CreateExecutionRequestSchema } from '../../schemas/executionSchema.js';
 import type { ExecutionQueue } from '../../queues/executionQueue.js';
 import type { ExecutionCreationOptions } from '../../services/executionService.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
-import { resolveWorkspaceId } from '../../services/workspaceService.js';
+import { requirePermission, getWorkspaceContext } from '../middleware/requirePermission.js';
 import { createAuditLog } from '../../services/auditService.js';
 import {
   createWorkflowExecution,
@@ -19,9 +19,10 @@ function getRouteParameter(req: Request, name: string, errorCode: string): strin
   return value;
 }
 
-async function resolveTenantId(req: Request): Promise<string> {
-  return resolveWorkspaceId(getAuthUser(req).userId);
-}
+const requireExecutionRead = requirePermission('WORKFLOW_READ', { executionParam: 'executionId' });
+const requireWorkflowRead = requirePermission('WORKFLOW_READ', { workflowParam: 'workflowId' });
+const requireWorkflowExecute = requirePermission('WORKFLOW_EXECUTE', { workflowParam: 'workflowId' });
+
 export function createExecutionRouter(
   queue: ExecutionQueue,
   creationOptions: ExecutionCreationOptions,
@@ -32,6 +33,7 @@ export function createExecutionRouter(
   router.post(
     '/workflows/:workflowId/executions',
     requireAuth,
+    requireWorkflowExecute,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const workflowId = getRouteParameter(req, 'workflowId', 'INVALID_WORKFLOW_ID');
@@ -42,7 +44,7 @@ export function createExecutionRouter(
           });
         }
 
-        const workspaceId = await resolveTenantId(req);
+        const workspaceId = getWorkspaceContext(req).workspaceId;
         const created = await createWorkflowExecution(
           queue,
           workflowId,
@@ -75,10 +77,11 @@ export function createExecutionRouter(
   router.get(
     '/executions/:executionId',
     requireAuth,
+    requireExecutionRead,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const executionId = getRouteParameter(req, 'executionId', 'INVALID_EXECUTION_ID');
-        const workspaceId = await resolveTenantId(req);
+        const workspaceId = getWorkspaceContext(req).workspaceId;
         const execution = await getWorkflowExecution(executionId, getAuthUser(req).userId, workspaceId);
         return res.json(toWorkflowExecutionView(execution));
       } catch (error) {
@@ -90,10 +93,11 @@ export function createExecutionRouter(
   router.get(
     '/workflows/:workflowId/executions',
     requireAuth,
+    requireWorkflowRead,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const workflowId = getRouteParameter(req, 'workflowId', 'INVALID_WORKFLOW_ID');
-        const workspaceId = await resolveTenantId(req);
+        const workspaceId = getWorkspaceContext(req).workspaceId;
         const executions = await listWorkflowExecutions(workflowId, getAuthUser(req).userId, workspaceId);
         return res.json(executions.map(toWorkflowExecutionView));
       } catch (error) {

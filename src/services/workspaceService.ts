@@ -177,7 +177,8 @@ export async function updateWorkspace(
 ): Promise<WorkspaceView> {
   assertValidId(workspaceId, 'INVALID_WORKSPACE_ID');
   const membership = await findActiveMembership(workspaceId, userId);
-  if (!membership || membership.role !== 'OWNER') throw new Error('WORKSPACE_NOT_FOUND');
+  if (!membership) throw new Error('WORKSPACE_NOT_FOUND');
+  if (membership.role !== 'OWNER') throw new Error('FORBIDDEN');
   const workspace = await WorkspaceModel.findById(workspaceId);
   if (!workspace) throw new Error('WORKSPACE_NOT_FOUND');
   if (updates.name !== undefined) workspace.name = updates.name.trim();
