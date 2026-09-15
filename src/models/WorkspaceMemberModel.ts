@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
+import type { Permission } from '../auth/permissions.js';
 
 export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'EDITOR' | 'VIEWER';
 export type MembershipStatus = 'ACTIVE' | 'INVITED' | 'REMOVED';
@@ -7,6 +8,7 @@ export interface IWorkspaceMember extends Document<Types.ObjectId> {
   workspaceId: Types.ObjectId;
   userId: Types.ObjectId;
   role: WorkspaceRole;
+  permissions: Permission[];
   status: MembershipStatus;
   invitedBy?: Types.ObjectId;
   lastActiveAt?: Date;
@@ -19,6 +21,7 @@ const WorkspaceMemberSchema = new Schema<IWorkspaceMember>({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   role: { type: String, enum: ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'], required: true },
   status: { type: String, enum: ['ACTIVE', 'INVITED', 'REMOVED'], default: 'ACTIVE' },
+  permissions: { type: [String], default: [] },
   invitedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   lastActiveAt: { type: Date },
 }, { timestamps: true });
