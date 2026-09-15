@@ -19,6 +19,10 @@ export interface APIKeyView {
   expiresAt?: string | undefined;
   createdBy: string;
   revokedAt?: string | undefined;
+  rateLimit: {
+    requestsPerMinute: number;
+    executionsPerHour: number;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -51,6 +55,15 @@ function toAPIKeyView(doc: IAPIKey): APIKeyView {
     expiresAt: doc.expiresAt?.toISOString(),
     createdBy: doc.createdBy.toString(),
     revokedAt: doc.revokedAt?.toISOString(),
+    rateLimit: doc.rateLimit
+      ? {
+          requestsPerMinute: doc.rateLimit.requestsPerMinute,
+          executionsPerHour: doc.rateLimit.executionsPerHour,
+        }
+      : {
+          requestsPerMinute: 1000,
+          executionsPerHour: 5000,
+        },
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };
@@ -100,12 +113,32 @@ export async function getAPIKey(id: string, workspaceId: string): Promise<APIKey
 export async function updateAPIKey(
   id: string,
   workspaceId: string,
-  updates: { name?: string; permissions?: Permission[]; expiresAt?: Date | null },
+  updates: {
+    name?: string;
+    permissions?: Permission[];
+    expiresAt?: Date | null;
+    rateLimit?: {
+      requestsPerMinute?: number;
+      executionsPerHour?: number;
+    };
+  },
 ): Promise<APIKeyView> {
   if (!Types.ObjectId.isValid(id)) throw new Error('INVALID_API_KEY_ID');
+  const updateDoc: Record<string, unknown> = {};
+  if (updates.name !== undefined) updateDoc.name = updates.name;
+  if (updates.permissions !== undefined) updateDoc.permissions = updates.permissions;
+  if (updates.expiresAt !== undefined) updateDoc.expiresAt = updates.expiresAt;
+  if (updates.rateLimit !== undefined) {
+    if (updates.rateLimit.requestsPerMinute !== undefined) {
+      updateDoc['rateLimit.requestsPerMinute'] = updates.rateLimit.requestsPerMinute;
+    }
+    if (updates.rateLimit.executionsPerHour !== undefined) {
+      updateDoc['rateLimit.executionsPerHour'] = updates.rateLimit.executionsPerHour;
+    }
+  }
   const key = await APIKeyModel.findOneAndUpdate(
     { _id: new Types.ObjectId(id), workspaceId: new Types.ObjectId(workspaceId) },
-    { $set: { ...updates } },
+    { $set: updateDoc },
     { returnDocument: 'after' },
   );
   if (!key) throw new Error('API_KEY_NOT_FOUND');
