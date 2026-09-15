@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { z } from 'zod';
 import { requireMembership } from '../middleware/requirePermission.js';
+import { createMemberRouter } from './memberRoutes.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
 import {
   createWorkspace,
@@ -33,6 +34,8 @@ export function createWorkspaceRouter(): Router {
   const router = Router();
 
   const requireWorkspaceMembership = requireMembership({ workspaceParam: 'id' });
+
+  router.use('/:id/members', createMemberRouter());
 
   router.post('/', (async (req: Request, res: Response, next: NextFunction) => {
     try {
