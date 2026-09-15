@@ -17,6 +17,8 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   SESSION_NOT_FOUND: { status: 404, code: 'SESSION_NOT_FOUND', message: 'Session was not found' },
   INVALID_WORKSPACE_ID: { status: 400, code: 'INVALID_WORKSPACE_ID', message: 'Invalid workspace ID' },
   WORKSPACE_NOT_FOUND: { status: 404, code: 'WORKSPACE_NOT_FOUND', message: 'Workspace was not found' },
+  FORBIDDEN: { status: 403, code: 'FORBIDDEN', message: 'Insufficient permission for this action' },
+  PERMISSION_DENIED: { status: 403, code: 'PERMISSION_DENIED', message: 'Workspace membership required' },
   NO_PUBLISHED_VERSION: { status: 409, code: 'NO_PUBLISHED_VERSION', message: 'Workflow has no published version' },
   IDEMPOTENCY_CONFLICT: { status: 409, code: 'IDEMPOTENCY_CONFLICT', message: 'Idempotency key was reused with different input' },
   VERSION_CONFLICT: { status: 409, code: 'VERSION_CONFLICT', message: 'Workflow version conflict' },

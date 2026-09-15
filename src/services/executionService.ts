@@ -40,24 +40,22 @@ function assertValidId(id: string, errorCode: string): void {
     throw new Error(errorCode);
   }
 }
-function tenantScope(ownerId: string, workspaceId: string) {
+function tenantScope(userId: string, workspaceId: string) {
   return {
-    ownerId: new Types.ObjectId(ownerId),
     $or: [
       { workspaceId: new Types.ObjectId(workspaceId) },
-      { workspaceId: { $exists: false } },
-      { workspaceId: null },
+      { workspaceId: { $exists: false }, ownerId: new Types.ObjectId(userId) },
+      { workspaceId: null, ownerId: new Types.ObjectId(userId) },
     ],
   };
 }
 
-function executionScope(ownerId: string, workspaceId: string) {
+function executionScope(userId: string, workspaceId: string) {
   return {
-    ownerId: new Types.ObjectId(ownerId),
     $or: [
       { workspaceId: new Types.ObjectId(workspaceId) },
-      { workspaceId: { $exists: false } },
-      { workspaceId: null },
+      { workspaceId: { $exists: false }, ownerId: new Types.ObjectId(userId) },
+      { workspaceId: null, ownerId: new Types.ObjectId(userId) },
     ],
   };
 }

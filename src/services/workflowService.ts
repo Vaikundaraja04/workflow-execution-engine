@@ -4,13 +4,12 @@ import { WorkflowVersionModel } from '../models/WorkflowVersionModel.js';
 import type { WorkflowDefinition } from '../types/workflow.js';
 import { validateGraph } from '../engine/validateGraph.js';
 import { WorkflowDefinitionSchema } from '../schemas/workflowSchema.js';
-function tenantScope(ownerId: string, workspaceId: string) {
+function tenantScope(userId: string, workspaceId: string) {
   return {
-    ownerId: new Types.ObjectId(ownerId),
     $or: [
       { workspaceId: new Types.ObjectId(workspaceId) },
-      { workspaceId: { $exists: false } },
-      { workspaceId: null },
+      { workspaceId: { $exists: false }, ownerId: new Types.ObjectId(userId) },
+      { workspaceId: null, ownerId: new Types.ObjectId(userId) },
     ],
   };
 }
