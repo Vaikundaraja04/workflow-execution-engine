@@ -4,6 +4,17 @@ import { WorkflowVersionModel } from '../models/WorkflowVersionModel.js';
 import type { WorkflowDefinition } from '../types/workflow.js';
 import { validateGraph } from '../engine/validateGraph.js';
 import { WorkflowDefinitionSchema } from '../schemas/workflowSchema.js';
+function tenantScope(ownerId: string, workspaceId: string) {
+  return {
+    ownerId: new Types.ObjectId(ownerId),
+    $or: [
+      { workspaceId: new Types.ObjectId(workspaceId) },
+      { workspaceId: { $exists: false } },
+      { workspaceId: null },
+    ],
+  };
+}
+
 
 function assertValidWorkflowId(id: string): void {
   if (!Types.ObjectId.isValid(id)) {
@@ -11,27 +22,29 @@ function assertValidWorkflowId(id: string): void {
   }
 }
 
-export async function createWorkflow(name: string, definition: WorkflowDefinition, ownerId: string) {
+export async function createWorkflow(name: string, definition: WorkflowDefinition, ownerId: string, workspaceId: string) {
   const doc = await WorkflowModel.create({
     name: name.trim(),
     draftDefinition: definition,
     status: 'DRAFT',
     latestVersionNumber: 0,
     ownerId: new Types.ObjectId(ownerId),
+    createdBy: new Types.ObjectId(ownerId),
+    workspaceId: new Types.ObjectId(workspaceId),
   });
   return doc.toObject();
 }
 
-export async function getWorkflow(id: string, ownerId: string) {
+export async function getWorkflow(id: string, ownerId: string, workspaceId: string) {
   assertValidWorkflowId(id);
-  const doc = await WorkflowModel.findOne({ _id: id, ownerId: new Types.ObjectId(ownerId) });
+  const doc = await WorkflowModel.findOne({ _id: id, ...tenantScope(ownerId, workspaceId) });
   if (!doc) throw new Error('WORKFLOW_NOT_FOUND');
   return doc.toObject();
 }
 
-export async function updateDraft(id: string, updates: { name?: string; definition?: WorkflowDefinition }, ownerId: string) {
+export async function updateDraft(id: string, updates: { name?: string; definition?: WorkflowDefinition }, ownerId: string, workspaceId: string) {
   assertValidWorkflowId(id);
-  const doc = await WorkflowModel.findOne({ _id: id, ownerId: new Types.ObjectId(ownerId) });
+  const doc = await WorkflowModel.findOne({ _id: id, ...tenantScope(ownerId, workspaceId) });
   if (!doc) throw new Error('WORKFLOW_NOT_FOUND');
 
   if (updates.name !== undefined) doc.name = updates.name.trim();
@@ -43,8 +56,8 @@ export async function updateDraft(id: string, updates: { name?: string; definiti
   return doc.toObject();
 }
 
-export async function validateDraft(id: string, ownerId: string) {
-  const wf = await getWorkflow(id, ownerId);
+export async function validateDraft(id: string, ownerId: string, workspaceId: string) {
+  const wf = await getWorkflow(id, ownerId, workspaceId);
   const draft: unknown = JSON.parse(JSON.stringify(wf.draftDefinition));
   const schemaResult = WorkflowDefinitionSchema.safeParse(draft);
 
@@ -64,12 +77,12 @@ export async function validateDraft(id: string, ownerId: string) {
   };
 }
 
-export async function publishWorkflow(id: string, ownerId: string) {
+export async function publishWorkflow(id: string, ownerId: string, workspaceId: string) {
   assertValidWorkflowId(id);
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const wf = await WorkflowModel.findOne({ _id: id, ownerId: new Types.ObjectId(ownerId) }).session(session);
+    const wf = await WorkflowModel.findOne({ _id: id, ...tenantScope(ownerId, workspaceId) }).session(session);
     if (!wf) throw new Error('WORKFLOW_NOT_FOUND');
 
     const parsedDraft = JSON.parse(JSON.stringify(wf.draftDefinition));
@@ -109,9 +122,9 @@ export async function publishWorkflow(id: string, ownerId: string) {
   }
 }
 
-export async function getVersions(id: string, ownerId: string) {
+export async function getVersions(id: string, ownerId: string, workspaceId: string) {
   assertValidWorkflowId(id);
-  const wf = await WorkflowModel.findOne({ _id: id, ownerId: new Types.ObjectId(ownerId) });
+  const wf = await WorkflowModel.findOne({ _id: id, ...tenantScope(ownerId, workspaceId) });
   if (!wf) throw new Error('WORKFLOW_NOT_FOUND');
   return WorkflowVersionModel.find({ workflowId: id }).sort({ versionNumber: 1 }).lean();
 }
