@@ -39,6 +39,14 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   INVALID_API_KEY_ID: { status: 400, code: 'INVALID_API_KEY_ID', message: 'Invalid API key ID' },
   API_KEY_EXPIRED: { status: 401, code: 'API_KEY_EXPIRED', message: 'API key has expired' },
   INVALID_WORKFLOW_GRAPH: { status: 422, code: 'INVALID_WORKFLOW_GRAPH', message: 'Draft graph is invalid' },
+  INVALID_WEBHOOK_ID: { status: 400, code: 'INVALID_WEBHOOK_ID', message: 'Invalid webhook ID' },
+  WEBHOOK_NOT_FOUND: { status: 404, code: 'WEBHOOK_NOT_FOUND', message: 'Webhook was not found' },
+  WEBHOOK_URL_MUST_BE_HTTPS: { status: 400, code: 'WEBHOOK_URL_MUST_BE_HTTPS', message: 'Webhook URL must use HTTPS' },
+  WEBHOOK_EVENTS_REQUIRED: { status: 400, code: 'WEBHOOK_EVENTS_REQUIRED', message: 'At least one webhook event is required' },
+  INVALID_WEBHOOK_EVENT: { status: 400, code: 'INVALID_WEBHOOK_EVENT', message: 'Invalid webhook event' },
+  INVALID_WEBHOOK_DELIVERY_ID: { status: 400, code: 'INVALID_WEBHOOK_DELIVERY_ID', message: 'Invalid webhook delivery ID' },
+  WEBHOOK_DELIVERY_NOT_FOUND: { status: 404, code: 'WEBHOOK_DELIVERY_NOT_FOUND', message: 'Webhook delivery was not found' },
+  WEBHOOK_DELIVERY_NOT_FAILED: { status: 409, code: 'WEBHOOK_DELIVERY_NOT_FAILED', message: 'Only failed deliveries can be retried' },
 };
 
 type JsonSyntaxError = SyntaxError & {

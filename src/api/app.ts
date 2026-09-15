@@ -14,6 +14,7 @@ import { createWorkspaceRouter } from './routes/workspaceRoutes.js';
 import { createAnalyticsRouter } from './routes/analyticsRoutes.js';
 import { createAPIKeyRouter } from './routes/apiKeyRoutes.js';
 import { createExternalWorkflowRouter } from './routes/externalWorkflowRoutes.js';
+import { createWebhookRouter } from './routes/webhookRoutes.js';
 import { createHealthChecks, createHealthRouter } from './routes/healthRoutes.js';
 import type { HealthOptions } from './routes/healthRoutes.js';
 import { createRequireAuth } from '../auth/auth.middleware.js';
@@ -28,6 +29,8 @@ import type { AuthRateLimitOptions, GlobalRateLimitOptions } from './middleware/
 import { createCorsMiddleware } from './middleware/cors.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { buildOpenApiDocument } from './openapi.js';
+import type { WebhookQueue } from '../queues/webhookQueue.js';
+import { UnavailableWebhookQueue } from '../queues/webhookQueue.js';
 
 const OPENAPI_DOCUMENT = buildOpenApiDocument();
 
@@ -43,6 +46,7 @@ const docsContentSecurityPolicy: RequestHandler = (_req, res, next) => {
 export interface AppOptions {
   executionQueue?: ExecutionQueue;
   executionCreationOptions?: ExecutionCreationOptions;
+  webhookQueue?: WebhookQueue;
   auth: AuthConfig;
   authRateLimit?: Partial<AuthRateLimitOptions>;
   rateLimit?: Partial<GlobalRateLimitOptions>;
@@ -96,6 +100,13 @@ export function createApp(options: AppOptions) {
     options.executionCreationOptions ?? {},
   ));
   app.use('/api/v1', requireAuth, createAPIKeyRouter());
+  app.use(
+    '/api/v1/webhooks',
+    requireAuth,
+    createWebhookRouter(
+      options.webhookQueue ?? new UnavailableWebhookQueue(),
+    ),
+  );
   app.use(
     '/api',
     createExecutionRouter(
