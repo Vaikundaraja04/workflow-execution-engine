@@ -4,16 +4,8 @@ import { WorkflowVersionModel } from '../models/WorkflowVersionModel.js';
 import type { WorkflowDefinition } from '../types/workflow.js';
 import { validateGraph } from '../engine/validateGraph.js';
 import { WorkflowDefinitionSchema } from '../schemas/workflowSchema.js';
-export function tenantScope(userId: string, workspaceId: string) {
-  return {
-    $or: [
-      { workspaceId: new Types.ObjectId(workspaceId) },
-      { workspaceId: { $exists: false }, ownerId: new Types.ObjectId(userId) },
-      { workspaceId: null, ownerId: new Types.ObjectId(userId) },
-    ],
-  };
-}
-
+import { tenantScope } from './tenantScope.js';
+import { hashDefinition } from './versionService.js';
 
 function assertValidWorkflowId(id: string): void {
   if (!Types.ObjectId.isValid(id)) {
@@ -76,7 +68,12 @@ export async function validateDraft(id: string, ownerId: string, workspaceId: st
   };
 }
 
-export async function publishWorkflow(id: string, ownerId: string, workspaceId: string) {
+export async function publishWorkflow(
+  id: string,
+  ownerId: string,
+  workspaceId: string,
+  changeSummary?: string,
+) {
   assertValidWorkflowId(id);
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -96,10 +93,16 @@ export async function publishWorkflow(id: string, ownerId: string, workspaceId: 
     }
 
     const nextVersion = wf.latestVersionNumber + 1;
+    const definition = JSON.parse(JSON.stringify(schemaResult.data));
     const [createdVersion] = await WorkflowVersionModel.create([{
       workflowId: wf._id,
+      ...(wf.workspaceId ? { workspaceId: wf.workspaceId } : {}),
       versionNumber: nextVersion,
-      definition: JSON.parse(JSON.stringify(schemaResult.data)),
+      definition,
+      definitionHash: hashDefinition(definition),
+      createdBy: new Types.ObjectId(ownerId),
+      status: 'PUBLISHED',
+      ...(changeSummary !== undefined ? { changeSummary } : {}),
     }], { session });
 
     if (!createdVersion) {

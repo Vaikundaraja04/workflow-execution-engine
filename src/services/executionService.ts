@@ -40,26 +40,7 @@ function assertValidId(id: string, errorCode: string): void {
     throw new Error(errorCode);
   }
 }
-function tenantScope(userId: string, workspaceId: string) {
-  return {
-    $or: [
-      { workspaceId: new Types.ObjectId(workspaceId) },
-      { workspaceId: { $exists: false }, ownerId: new Types.ObjectId(userId) },
-      { workspaceId: null, ownerId: new Types.ObjectId(userId) },
-    ],
-  };
-}
-
-function executionScope(userId: string, workspaceId: string) {
-  return {
-    $or: [
-      { workspaceId: new Types.ObjectId(workspaceId) },
-      { workspaceId: { $exists: false }, ownerId: new Types.ObjectId(userId) },
-      { workspaceId: null, ownerId: new Types.ObjectId(userId) },
-    ],
-  };
-}
-
+import { tenantScope } from './tenantScope.js';
 function encodeJson(value: unknown): string {
   if (value === null) return 'null';
 
@@ -268,7 +249,7 @@ export async function createWorkflowExecution(
 
 export async function getWorkflowExecution(executionId: string, ownerId: string, workspaceId: string): Promise<IWorkflowExecution> {
   assertValidId(executionId, 'INVALID_EXECUTION_ID');
-  const execution = await WorkflowExecutionModel.findOne({ _id: executionId, ...executionScope(ownerId, workspaceId) });
+  const execution = await WorkflowExecutionModel.findOne({ _id: executionId, ...tenantScope(ownerId, workspaceId) });
   if (!execution) throw new Error('EXECUTION_NOT_FOUND');
   return execution;
 }

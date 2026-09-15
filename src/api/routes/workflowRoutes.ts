@@ -8,12 +8,17 @@ import {
   updateDraft,
   validateDraft,
   publishWorkflow,
-  getVersions,
 } from '../../services/workflowService.js';
 import { WorkflowDefinitionSchema } from '../../schemas/workflowSchema.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
 import { requirePermission, requireMembership, getWorkspaceContext } from '../middleware/requirePermission.js';
 import { transferWorkflowOwnership } from '../../services/collaborationService.js';
+import {
+  compareWorkflowVersions,
+  getWorkflowVersion,
+  listWorkflowVersions,
+  restoreWorkflowVersion,
+} from '../../services/versionService.js';
 import { createAuditLog } from '../../services/auditService.js';
 
 const createWorkflowSchema = z.object({
@@ -28,6 +33,15 @@ const updateDraftSchema = z.object({
 }).strict().refine(data => Object.keys(data).length > 0, {
   message: 'At least one field is required',
 });
+
+const changeSummarySchema = z.object({
+  changeSummary: z.string().trim().min(1).max(280).optional(),
+}).strict();
+
+const compareSchema = z.object({
+  from: z.union([z.string().trim().min(1), z.number().int().positive()]),
+  to: z.union([z.string().trim().min(1), z.number().int().positive()]),
+}).strict();
 
 const transferSchema = z.object({
   memberId: z.string().trim().min(1).max(64).optional(),
@@ -127,7 +141,11 @@ workflowRouter.post('/:id/publish', requireWorkflowUpdate, async (req: Request, 
   try {
     const id = getRouteId(req);
     const workspaceId = getWorkspaceContext(req).workspaceId;
-    const result = await publishWorkflow(id, getAuthUser(req).userId, workspaceId);
+    const parsed = changeSummarySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+    }
+    const result = await publishWorkflow(id, getAuthUser(req).userId, workspaceId, parsed.data.changeSummary);
     res.status(201).json(result);
   } catch (err) {
     next(err);
@@ -157,8 +175,66 @@ workflowRouter.get('/:id/versions', requireWorkflowRead, async (req: Request, re
   try {
     const id = getRouteId(req);
     const workspaceId = getWorkspaceContext(req).workspaceId;
-    const versions = await getVersions(id, getAuthUser(req).userId, workspaceId);
+    const versions = await listWorkflowVersions(id, getAuthUser(req).userId, workspaceId);
     res.json(versions);
+  } catch (err) {
+    next(err);
+  }
+});
+
+function getVersionReference(req: Request): string {
+  const reference = req.params.versionId;
+  if (typeof reference !== 'string' || reference.length === 0) throw new Error('VERSION_NOT_FOUND');
+  return reference;
+}
+
+workflowRouter.get('/:id/versions/:versionId', requireWorkflowRead, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = getRouteId(req);
+    const workspaceId = getWorkspaceContext(req).workspaceId;
+    const version = await getWorkflowVersion(id, getVersionReference(req), getAuthUser(req).userId, workspaceId);
+    res.json(version);
+  } catch (err) {
+    next(err);
+  }
+});
+
+workflowRouter.post('/:id/versions/:versionId/restore', requireWorkflowUpdate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = getRouteId(req);
+    const parsed = changeSummarySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+    }
+    const workspaceId = getWorkspaceContext(req).workspaceId;
+    const version = await restoreWorkflowVersion(
+      id,
+      getVersionReference(req),
+      getAuthUser(req).userId,
+      workspaceId,
+      parsed.data.changeSummary,
+    );
+    res.status(201).json(version);
+  } catch (err) {
+    next(err);
+  }
+});
+workflowRouter.post('/:id/compare', requireWorkflowRead, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = getRouteId(req);
+    const parsed = compareSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+    }
+    const workspaceId = getWorkspaceContext(req).workspaceId;
+    const comparison = await compareWorkflowVersions(
+      id,
+      String(parsed.data.from),
+      String(parsed.data.to),
+      getAuthUser(req).userId,
+      workspaceId,
+    );
+    res.json(comparison);
   } catch (err) {
     next(err);
   }
