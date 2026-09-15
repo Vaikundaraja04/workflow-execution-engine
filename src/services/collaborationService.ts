@@ -4,7 +4,7 @@ import { permissionsForRole } from '../auth/permissions.js';
 import type { WorkspaceRole } from '../models/WorkspaceMemberModel.js';
 import { createAuditLog } from './auditService.js';
 import { findTargetMembership, getActiveMembership, requireWorkspace } from './memberService.js';
-import { tenantScope } from './workflowService.js';
+import { tenantScope } from './tenantScope.js';
 
 export interface TransferSummary {
   workflowId: string;

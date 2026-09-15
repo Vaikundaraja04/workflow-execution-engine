@@ -13,6 +13,7 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   INVALID_WORKFLOW_ID: { status: 400, code: 'INVALID_WORKFLOW_ID', message: 'Invalid workflow ID' },
   INVALID_EXECUTION_ID: { status: 400, code: 'INVALID_EXECUTION_ID', message: 'Invalid execution ID' },
   WORKFLOW_NOT_FOUND: { status: 404, code: 'WORKFLOW_NOT_FOUND', message: 'Workflow was not found' },
+  VERSION_NOT_FOUND: { status: 404, code: 'VERSION_NOT_FOUND', message: 'Workflow version was not found' },
   EXECUTION_NOT_FOUND: { status: 404, code: 'EXECUTION_NOT_FOUND', message: 'Execution was not found' },
   SESSION_NOT_FOUND: { status: 404, code: 'SESSION_NOT_FOUND', message: 'Session was not found' },
   INVALID_WORKSPACE_ID: { status: 400, code: 'INVALID_WORKSPACE_ID', message: 'Invalid workspace ID' },
