@@ -104,6 +104,7 @@ src/
       errorHandler.ts
       rateLimiter.ts
     routes/
+      analyticsRoutes.ts
       executionRoutes.ts
       workflowRoutes.ts
       workspaceRoutes.ts
@@ -124,13 +125,16 @@ src/
   models/
     AuditLogModel.ts
     DeadLetterModel.ts
+    ExecutionAnalyticsModel.ts
     RefreshTokenModel.ts
     UserModel.ts
+    WorkflowAnalyticsModel.ts
     WorkflowExecutionModel.ts
     WorkflowModel.ts
     WorkflowVersionModel.ts
     WorkspaceMemberModel.ts
     WorkspaceModel.ts
+    WorkspaceUsageModel.ts
   queues/
     bullMqExecutionQueue.ts
     executionQueue.ts
@@ -138,12 +142,14 @@ src/
     executionSchema.ts
     workflowSchema.ts
   services/
+    analyticsService.ts
     auditService.ts
     deadLetterService.ts
     executionService.ts
     workflowService.ts
     workspaceService.ts
   types/
+    analytics.ts
     execution.ts
     workflow.ts
   workers/
@@ -265,6 +271,16 @@ Run the API and worker in separate terminals. Both processes require MongoDB and
 | `GET` | `/api/workflows/:id/executions` | List executions newest first | `200` |
 | `POST` | `/api/executions/:executionId/replay` | Replay a finished execution as a new linked execution | `202` |
 | `GET` | `/api/workflows/:id/dead-letters` | List dead-lettered executions for a workflow | `200` |
+
+### Analytics
+
+| Method | Path | Purpose | Success |
+| --- | --- | --- | --- |
+| `GET` | `/api/analytics/workflows/:id` | Per-workflow totals, success/failure rates, retries, average duration (`WORKFLOW_READ`) | `200` |
+| `GET` | `/api/analytics/executions/:executionId` | Single-execution duration, retries, node count, and per-node timings (`WORKFLOW_READ`) | `200` |
+| `GET` | `/api/analytics/workspaces/:id` | Workspace usage: workflows, executions, monthly totals, success rate, storage (`AUDIT_READ`) | `200` |
+
+Metrics are recorded automatically when an execution reaches a terminal status and when an execution is replayed. `recalculateAnalytics()` rebuilds every rollup from the stored executions.
 
 ### Queue an execution
 

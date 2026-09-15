@@ -2,6 +2,7 @@ import express from 'express';
 import workflowRouter from './routes/workflowRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createExecutionRouter } from './routes/executionRoutes.js';
+import { createAnalyticsRouter } from './routes/analyticsRoutes.js';
 import type { ExecutionQueue } from '../queues/executionQueue.js';
 import { UnavailableExecutionQueue } from '../queues/executionQueue.js';
 import type { ExecutionCreationOptions } from '../services/executionService.js';
@@ -38,6 +39,7 @@ export function createApp(options: AppOptions) {
   app.use('/api/workspaces', requireAuth, createWorkspaceRouter());
 
   app.use('/api/workflows', requireAuth, workflowRouter);
+  app.use('/api/analytics', requireAuth, createAnalyticsRouter());
   app.use(
     '/api',
     createExecutionRouter(
