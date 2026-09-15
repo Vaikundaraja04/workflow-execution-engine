@@ -18,6 +18,8 @@ import { createWebhookRouter } from './routes/webhookRoutes.js';
 import { createDeveloperRouter } from './routes/developerRoutes.js';
 import { createHealthChecks, createHealthRouter } from './routes/healthRoutes.js';
 import type { HealthOptions } from './routes/healthRoutes.js';
+import { createAdminRouter } from './routes/adminRoutes.js';
+import { createAuditRouter } from './routes/auditRoutes.js';
 import { createRequireAuth } from '../auth/auth.middleware.js';
 import type { AuthConfig } from '../auth/jwt.service.js';
 import {
@@ -109,6 +111,12 @@ export function createApp(options: AppOptions) {
     ),
   );
   app.use('/api/v1/developer', requireAuth, createDeveloperRouter());
+  app.use('/api/v1/admin', requireAuth, createAdminRouter(options.health));
+  app.use('/api/admin', requireAuth, createAdminRouter(options.health));
+  app.use('/api/v1/audit', requireAuth, createAuditRouter());
+  app.use('/api/audit', requireAuth, createAuditRouter());
+  app.use('/api/v1/workspaces/:workspaceId/audit', requireAuth, createAuditRouter());
+  app.use('/api/workspaces/:workspaceId/audit', requireAuth, createAuditRouter());
   app.use(
     '/api',
     createExecutionRouter(

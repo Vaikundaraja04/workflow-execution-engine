@@ -48,6 +48,11 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   INVALID_WEBHOOK_DELIVERY_ID: { status: 400, code: 'INVALID_WEBHOOK_DELIVERY_ID', message: 'Invalid webhook delivery ID' },
   WEBHOOK_DELIVERY_NOT_FOUND: { status: 404, code: 'WEBHOOK_DELIVERY_NOT_FOUND', message: 'Webhook delivery was not found' },
   WEBHOOK_DELIVERY_NOT_FAILED: { status: 409, code: 'WEBHOOK_DELIVERY_NOT_FAILED', message: 'Only failed deliveries can be retried' },
+  INVALID_AUDIT_LOG_ID: { status: 400, code: 'INVALID_AUDIT_LOG_ID', message: 'Invalid audit log ID' },
+  AUDIT_LOG_NOT_FOUND: { status: 404, code: 'AUDIT_LOG_NOT_FOUND', message: 'Audit log was not found' },
+  INVALID_USER_ID: { status: 400, code: 'INVALID_USER_ID', message: 'Invalid user ID' },
+  WORKSPACE_SUSPENDED: { status: 403, code: 'WORKSPACE_SUSPENDED', message: 'Workspace is suspended' },
+  WORKSPACE_DELETED: { status: 404, code: 'WORKSPACE_DELETED', message: 'Workspace is deleted' },
 };
 
 type JsonSyntaxError = SyntaxError & {
