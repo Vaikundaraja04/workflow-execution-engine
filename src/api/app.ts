@@ -22,6 +22,8 @@ import { createHealthChecks, createHealthRouter } from './routes/healthRoutes.js
 import type { HealthOptions } from './routes/healthRoutes.js';
 import { createAdminRouter } from './routes/adminRoutes.js';
 import { createAuditRouter } from './routes/auditRoutes.js';
+import { createSsoRouter, createSSOAdminRouter } from './routes/ssoRoutes.js';
+import { createSCIMRouter } from './routes/scimRoutes.js';
 import { createRequireAuth } from '../auth/auth.middleware.js';
 import type { AuthConfig } from '../auth/jwt.service.js';
 import {
@@ -121,6 +123,19 @@ export function createApp(options: AppOptions) {
   app.use('/api/audit', requireAuth, createAuditRouter());
   app.use('/api/v1/workspaces/:workspaceId/audit', requireAuth, createAuditRouter());
   app.use('/api/workspaces/:workspaceId/audit', requireAuth, createAuditRouter());
+
+  // SSO & SCIM Workspace Admin Routes
+  app.use('/api/v1/admin/workspaces/:workspaceId', requireAuth, createSSOAdminRouter());
+  app.use('/api/admin/workspaces/:workspaceId', requireAuth, createSSOAdminRouter());
+  app.use('/api/workspaces/:workspaceId', requireAuth, createSSOAdminRouter());
+  app.use('/api/workspaces/:id', requireAuth, createSSOAdminRouter());
+
+  // SSO Routes (Public authentication endpoints)
+  app.use('/api/auth/sso', createSsoRouter());
+
+  // SCIM Routes (Provisioning API)
+  app.use('/scim/v2', createSCIMRouter());
+
   app.use(
     '/api',
     createExecutionRouter(

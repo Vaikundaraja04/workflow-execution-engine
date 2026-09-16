@@ -108,6 +108,123 @@ The project is built in small, reviewable phases as an advanced backend portfoli
 - `defaultWorkspaceId` returned by `/api/auth/register` and `/api/auth/login`.
 - RBAC, collaboration, and analytics are deferred to later phases.
 
+### Phase 6B: Enterprise Identity (SSO & SCIM)
+
+- **Single Sign-On (SSO)**: OIDC (OpenID Connect) & SAML 2.0 Identity Provider configuration, PKCE authorization code grant with SHA-256 state/nonce cryptographic tokens, Redis transaction storage with atomic one-time consumption, and auto-provisioning with safe account identity linking.
+- **Enterprise Domain Discovery**: Public discovery API (`/api/auth/sso/providers`) resolving IdPs by email domain, verified custom domain, or workspace ID.
+- **SCIM 2.0 Inbound Provisioning**: RFC 7643 & RFC 7644 compliant endpoints (`/scim/v2/ServiceProviderConfig`, `/scim/v2/Users`) supporting user provisioning, filtering (`userName eq "..."`), pagination, patch operations, and workspace deprovisioning with Bearer token authentication.
+- **Role Mapping & Safety Clamping**: Role claim translation (`ADMIN`, `EDITOR`, `VIEWER`) with automated `OWNER` clamping to protect tenant ownership.
+- **Security & Cryptography**: AES-256-GCM encryption with initialization vector (IV) and authentication tag for stored IdP client secrets; SHA-256 hashing for SCIM bearer tokens; tenant-isolated secret projections.
+
+#### Usage Guides
+
+##### Configuring SSO Providers
+SSO providers can be configured via the admin API:
+```bash
+POST /api/v1/admin/workspaces/:workspaceId/identity-providers
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "type": "OIDC",
+  "name": "Corporate Okta",
+  "issuer": "https://acme.okta.com",
+  "clientId": "client-id-123",
+  "clientSecret": "secret-xyz",
+  "authorizationEndpoint": "https://acme.okta.com/oauth2/v1/authorize",
+  "tokenEndpoint": "https://acme.okta.com/oauth2/v1/token",
+  "userinfoEndpoint": "https://acme.okta.com/oauth2/v1/userinfo",
+  "domains": ["acme.com"],
+  "domainVerificationStatus": "VERIFIED",
+  "enforceSSO": true,
+  "allowPasswordFallback": false,
+  "roleMapping": {
+    "Engineering": "EDITOR",
+    "IT-Admin": "ADMIN"
+  }
+}
+```
+
+##### Initiating SSO Login
+Users can initiate SSO login via the public endpoint:
+```bash
+POST /api/auth/sso/:providerId/start
+Content-Type: application/json
+
+{
+  "redirectUri": "https://app.example.com/callback"
+}
+```
+
+Response:
+```json
+{
+  "authorizationUrl": "https://acme.okta.com/oauth2/v1/authorize?client_id=okta-client-123&response_type=code&scope=openid%20profile%20email&state=abc123&code_challenge=xyz789&code_challenge_method=S256",
+  "state": "abc123"
+}
+```
+
+##### SCIM Token Administration
+SCIM tokens for inbound provisioning can be managed via:
+```bash
+# Generate SCIM token
+POST /api/v1/admin/workspaces/:workspaceId/scim-tokens
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "description": "Azure AD SCIM Integration",
+  "expiresInDays": 180
+}
+
+# List SCIM tokens
+GET /api/v1/admin/workspaces/:workspaceId/scim-tokens
+Authorization: Bearer <access_token>
+
+# Revoke SCIM token
+DELETE /api/v1/admin/workspaces/:workspaceId/scim-tokens/:tokenId
+Authorization: Bearer <access_token>
+```
+
+##### SCIM User Provisioning
+Identity providers can provision users via SCIM:
+```bash
+# Provision new user
+POST /scim/v2/Users
+Authorization: Bearer <scim_token>
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+  "userName": "john.doe@enterprise.io",
+  "emails": [{ "value": "john.doe@enterprise.io", "primary": true }],
+  "name": { "givenName": "John", "familyName": "Doe" },
+  "active": true,
+  "roles": [{ "value": "EDITOR", "primary": true }]
+}
+
+# Fetch user
+GET /scim/v2/Users/:id
+Authorization: Bearer <scim_token>
+
+# Update user
+PATCH /scim/v2/Users/:id
+Authorization: Bearer <scim_token>
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    { "op": "replace", "path": "roles", "value": [{ "value": "ADMIN" }] },
+    { "op": "replace", "path": "active", "value": false }
+  ]
+}
+
+# Deprovision user
+DELETE /scim/v2/Users/:id
+Authorization: Bearer <scim_token>
+```
+
 
 ## Architecture
 
