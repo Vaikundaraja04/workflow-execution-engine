@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { Types } from 'mongoose';
 import { getAuthUser } from '../../auth/auth.middleware.js';
-import type { Permission } from '../../auth/permissions.js';
+import type { Permission, AIPermission, TemplatePermission } from '../../auth/permissions.js';
 import { checkUserPermission, checkWorkspaceMembership } from '../../services/permissionService.js';
 import type { PermissionOutcome, WorkspaceContext } from '../../services/permissionService.js';
 import { resolveWorkspaceId } from '../../services/workspaceService.js';
@@ -9,6 +9,7 @@ import { WorkflowModel } from '../../models/WorkflowModel.js';
 import { WorkflowExecutionModel } from '../../models/WorkflowExecutionModel.js';
 
 type RequestWithWorkspace = Request & { workspaceContext?: WorkspaceContext };
+export type AnyPermission = Permission | AIPermission | TemplatePermission;
 
 export interface WorkspaceSource {
   workflowParam?: string;
@@ -19,7 +20,7 @@ export interface WorkspaceSource {
 
 export interface PermissionResolver {
   hiddenErrorCode: string;
-  resolve(req: Request, permission?: Permission): Promise<PermissionOutcome>;
+  resolve(req: Request, permission?: AnyPermission): Promise<PermissionOutcome>;
 }
 
 const WORKSPACE_HIDDEN_ERROR = 'WORKSPACE_NOT_FOUND';
@@ -72,8 +73,16 @@ export async function resolveTargetWorkspace(
   }
   // Check for X-Workspace-Id header
   const headerWorkspaceId = req.headers['x-workspace-id'];
-  if (typeof headerWorkspaceId === 'string' && Types.ObjectId.isValid(headerWorkspaceId)) {
-    return headerWorkspaceId;
+  if (headerWorkspaceId !== undefined) {
+    if (Array.isArray(headerWorkspaceId)) {
+      for (const value of headerWorkspaceId) {
+        if (typeof value === 'string' && Types.ObjectId.isValid(value)) {
+          return value;
+        }
+      }
+    } else if (typeof headerWorkspaceId === 'string' && Types.ObjectId.isValid(headerWorkspaceId)) {
+      return headerWorkspaceId;
+    }
   }
   return resolveWorkspaceId(userId);
 }
@@ -81,7 +90,7 @@ export async function resolveTargetWorkspace(
 export async function authorizeRequest(
   req: Request,
   source: WorkspaceSource,
-  permission?: Permission,
+  permission?: AnyPermission,
 ): Promise<PermissionOutcome> {
   const { userId } = getAuthUser(req);
   const workspaceId = await resolveTargetWorkspace(req, source, userId);
@@ -101,17 +110,17 @@ export async function authorizeRequest(
 export function createWorkspaceResolver(source: WorkspaceSource): PermissionResolver {
   return {
     hiddenErrorCode: hiddenErrorFor(source),
-    resolve: (req: Request, permission?: Permission) => authorizeRequest(req, source, permission),
+    resolve: (req: Request, permission?: AnyPermission) => authorizeRequest(req, source, permission),
   };
 }
 
 export interface PermissionGuard {
-  require(permission: Permission): RequestHandler;
+  require(permission: AnyPermission): RequestHandler;
   requireMembership(): RequestHandler;
 }
 
 export function buildRequirePermission(resolver: PermissionResolver): PermissionGuard {
-  const guard = (permission?: Permission): RequestHandler =>
+  const guard = (permission?: AnyPermission): RequestHandler =>
     async (req: Request, _res: Response, next: NextFunction) => {
       try {
         const outcome = await resolver.resolve(req, permission);
@@ -135,7 +144,7 @@ export function buildRequirePermission(resolver: PermissionResolver): Permission
   return { require: guard, requireMembership: () => guard() };
 }
 
-export function requirePermission(permission: Permission, source: WorkspaceSource = {}): RequestHandler {
+export function requirePermission(permission: AnyPermission, source: WorkspaceSource = {}): RequestHandler {
   return buildRequirePermission(createWorkspaceResolver(source)).require(permission);
 }
 

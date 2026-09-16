@@ -2,8 +2,8 @@ import { Types } from 'mongoose';
 import { WorkspaceMemberModel } from '../models/WorkspaceMemberModel.js';
 import type { MembershipStatus, WorkspaceRole } from '../models/WorkspaceMemberModel.js';
 import { WorkspaceModel } from '../models/WorkspaceModel.js';
-import { permissionsForRole, roleHasPermission } from '../auth/permissions.js';
-import type { Permission } from '../auth/permissions.js';
+import { permissionsForRole, roleHasPermission, roleHasAiPermission, roleHasTemplatePermission, isAiPermission, isTemplatePermission } from '../auth/permissions.js';
+import type { Permission, AIPermission, TemplatePermission } from '../auth/permissions.js';
 
 export interface MembershipSnapshot {
   workspaceId: string;
@@ -55,14 +55,24 @@ export async function isWorkspaceActive(workspaceId: string): Promise<boolean> {
 async function evaluateMembership(
   workspaceId: string,
   userId: string,
-  permission?: Permission,
+  permission?: Permission | AIPermission | TemplatePermission,
 ): Promise<PermissionCheck> {
   const membership = await findMembership(workspaceId, userId);
   if (!membership || membership.status === 'REMOVED') return { outcome: 'absent', membership: null };
   if (membership.status !== 'ACTIVE') return { outcome: 'denied', membership };
   if (!(await isWorkspaceActive(membership.workspaceId))) return { outcome: 'denied', membership };
-  if (permission !== undefined && !roleHasPermission(membership.role, permission)) {
-    return { outcome: 'forbidden', membership };
+  if (permission !== undefined) {
+    if (isAiPermission(permission)) {
+      if (!roleHasAiPermission(membership.role, permission)) {
+        return { outcome: 'forbidden', membership };
+      }
+    } else if (isTemplatePermission(permission)) {
+      if (!roleHasTemplatePermission(membership.role, permission)) {
+        return { outcome: 'forbidden', membership };
+      }
+    } else if (!roleHasPermission(membership.role, permission as Permission)) {
+      return { outcome: 'forbidden', membership };
+    }
   }
   return { outcome: 'allow', membership };
 }
@@ -70,9 +80,24 @@ async function evaluateMembership(
 export async function checkUserPermission(
   workspaceId: string,
   userId: string,
-  permission: Permission,
+  permission: Permission | AIPermission | TemplatePermission,
 ): Promise<PermissionCheck> {
   return evaluateMembership(workspaceId, userId, permission);
+}
+
+export async function checkUserAiPermission(
+  workspaceId: string,
+  userId: string,
+  permission: AIPermission,
+): Promise<PermissionCheck> {
+  const membership = await findMembership(workspaceId, userId);
+  if (!membership || membership.status === 'REMOVED') return { outcome: 'absent', membership: null };
+  if (membership.status !== 'ACTIVE') return { outcome: 'denied', membership };
+  if (!(await isWorkspaceActive(membership.workspaceId))) return { outcome: 'denied', membership };
+  if (!roleHasAiPermission(membership.role, permission)) {
+    return { outcome: 'forbidden', membership };
+  }
+  return { outcome: 'allow', membership };
 }
 
 export async function checkWorkspaceMembership(
