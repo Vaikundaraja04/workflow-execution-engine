@@ -21,6 +21,15 @@ export const TEMPLATE_PERMISSIONS = [
 
 export type TemplatePermission = (typeof TEMPLATE_PERMISSIONS)[number];
 
+export const AI_PERMISSIONS = [
+  'AI_WORKFLOW_CREATE',
+  'AI_ANALYSIS_READ',
+  'AI_OPTIMIZATION_CREATE',
+  'AI_CONFIGURATION_MANAGE',
+] as const;
+
+export type AIPermission = (typeof AI_PERMISSIONS)[number];
+
 export const WORKSPACE_ROLES: readonly WorkspaceRole[] = ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'];
 
 export const OWNER_ONLY_ACTIONS = [
@@ -56,12 +65,31 @@ export const ROLE_TEMPLATE_PERMISSIONS: Record<WorkspaceRole, readonly TemplateP
   VIEWER: ['TEMPLATE_INSTALL'],
 };
 
+export const ROLE_AI_PERMISSIONS: Record<WorkspaceRole, readonly AIPermission[]> = {
+  OWNER: AI_PERMISSIONS,
+  ADMIN: AI_PERMISSIONS,
+  EDITOR: ['AI_WORKFLOW_CREATE', 'AI_OPTIMIZATION_CREATE', 'AI_ANALYSIS_READ'],
+  VIEWER: ['AI_ANALYSIS_READ'],
+};
+
 export function roleHasTemplatePermission(role: WorkspaceRole, permission: TemplatePermission): boolean {
   return ROLE_TEMPLATE_PERMISSIONS[role]?.includes(permission) ?? false;
 }
 
+export function roleHasAiPermission(role: WorkspaceRole, permission: AIPermission): boolean {
+  return ROLE_AI_PERMISSIONS[role]?.includes(permission) ?? false;
+}
+
 export function isPermission(value: unknown): value is Permission {
   return typeof value === 'string' && (PERMISSIONS as readonly string[]).includes(value);
+}
+
+export function isTemplatePermission(value: unknown): value is TemplatePermission {
+  return typeof value === 'string' && (TEMPLATE_PERMISSIONS as readonly string[]).includes(value as TemplatePermission);
+}
+
+export function isAiPermission(value: unknown): value is AIPermission {
+  return typeof value === 'string' && (AI_PERMISSIONS as readonly string[]).includes(value as AIPermission);
 }
 
 export function isWorkspaceRole(value: unknown): value is WorkspaceRole {
@@ -70,6 +98,10 @@ export function isWorkspaceRole(value: unknown): value is WorkspaceRole {
 
 export function permissionsForRole(role: WorkspaceRole): Permission[] {
   return [...ROLE_PERMISSIONS[role]];
+}
+
+export function aiPermissionsForRole(role: WorkspaceRole): AIPermission[] {
+  return [...ROLE_AI_PERMISSIONS[role]];
 }
 
 export function roleHasPermission(role: WorkspaceRole, permission: Permission): boolean {
