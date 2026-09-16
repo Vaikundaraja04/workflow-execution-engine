@@ -341,6 +341,49 @@ The frontend supports:
 - Edge (latest)
 - Mobile browsers (iOS Safari, Android Chrome)
 
+## Visual Workflow Builder (Phase 7B)
+
+### Overview
+
+Phase 7B introduces an enterprise visual workflow designer powered by `@xyflow/react` (React Flow), Zustand, and React Hook Form + Zod. It enables visual authoring, real-time graph validation, node configuration, undo/redo history, JSON import/export, draft/publish lifecycle management, and visual version diffing.
+
+### Key Capabilities
+
+1. **Interactive Node Canvas (`@xyflow/react`)**:
+   - Custom styled nodes with status badges, category coloring, icons, and connection handles (including dual True/False branches for condition logic).
+   - Drag-and-drop node placement from palette with precise coordinate projection via `screenToFlowPosition`.
+   - Smooth edge routing, minimap navigation, interactive background grid, and zoom/pan controls.
+
+2. **Node Palette & Types**:
+   - **Triggers**: Webhook Trigger (`webhook_trigger`), Manual Trigger (`manual_trigger`), Scheduled Trigger (`schedule_trigger`).
+   - **Actions**: HTTP Request (`http_request`), Send Email (`email`), Database Query (`database_query`), Notification (`notification`), Logger (`log`).
+   - **Logic**: Conditional Branching (`condition`), Delay / Sleep (`delay`).
+   - **Marketplace**: Template Node (`installed_template`).
+
+3. **Dynamic Properties Panel**:
+   - Schema-driven node configuration forms using React Hook Form and Zod.
+   - Real-time parameter updates reflecting immediately in the canvas state.
+
+4. **Real-time Graph Validation Engine**:
+   - Cycle detection via Depth-First Search (DFS) graph traversal.
+   - Missing trigger detection and empty graph validation.
+   - Disconnected / unreachable node warnings.
+   - Dedicated validation panel with click-to-focus error navigation.
+
+5. **History & State Management (Zustand)**:
+   - Full Undo (`Ctrl+Z`) and Redo (`Ctrl+Y`) action stack (up to 20 snapshot levels).
+   - Change tracking with visual dirty indicators.
+   - Bidirectional serialization to/from backend `WorkflowDefinition` format.
+
+6. **Draft, Publish & Version Diffing**:
+   - Save Draft and Publish workflows with optional change summaries.
+   - Version history and comparison page (`/workflows/[id]/versions`) displaying structural diffs (added, removed, modified nodes and edge changes).
+   - JSON Workflow Export & Import with schema validation.
+
+7. **RBAC Integration**:
+   - Enforces `WORKFLOW_READ`, `WORKFLOW_UPDATE`, and `WORKFLOW_CREATE` permissions across builder toolbar, saving, and publishing actions.
+   - Automatic read-only canvas mode for unauthorized or published historic versions.
+
 ## License
 
 parameter>
