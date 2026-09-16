@@ -131,6 +131,7 @@ export function buildOpenApiDocument(): JsonObject {
       { name: 'External Triggers', description: 'Execute published workflows via API key authentication' },
       { name: 'Webhooks', description: 'Enterprise webhook subscriptions, signature verification, and delivery logs' },
       { name: 'Developer', description: 'Developer platform, API documentation, and SDKs' },
+      { name: 'Templates & Marketplace', description: 'Workflow templates, versioning, marketplace publishing, installation, and packages' },
       { name: 'SSO', description: 'Single Sign-On (OIDC/SAML) authentication and provider discovery' },
       { name: 'SCIM', description: 'SCIM 2.0 endpoints for user provisioning and management' },
     ],
@@ -1797,5 +1798,260 @@ const PATHS: JsonObject = {
         '404': notFound('SCIM_USER_NOT_FOUND', 'SCIM user was not found')['404'],
       },
     },
+  },
+  '/api/v1/templates': {
+    get: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Search and filter workflow templates',
+      membership: true,
+      parameters: [
+        { name: 'q', in: 'query', required: false, schema: { type: 'string' }, description: 'Search term for name, description, tags' },
+        { name: 'category', in: 'query', required: false, schema: { type: 'string' }, description: 'Template category' },
+        { name: 'visibility', in: 'query', required: false, schema: { type: 'string' }, description: 'PRIVATE, WORKSPACE, PUBLIC, or MARKETPLACE' },
+        { name: 'status', in: 'query', required: false, schema: { type: 'string' }, description: 'DRAFT, PUBLISHED, or ARCHIVED' },
+        { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+        { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 20 } },
+      ],
+      responses: {
+        '200': jsonResponse('Paginated search results of templates'),
+        '401': unauthorized['401'],
+      },
+    }),
+    post: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Create a new workflow template',
+      permission: 'TEMPLATE_CREATE',
+      requestBody: jsonBody({
+        name: 'Order Fulfillment Template',
+        description: 'Automated order processing pipeline',
+        category: 'Automation',
+        visibility: 'WORKSPACE',
+        tags: ['orders', 'fulfillment', 'ecommerce'],
+        workflowDefinition: {
+          nodes: [
+            { id: 'trigger', type: 'webhook', config: {} },
+            { id: 'log', type: 'log', config: { message: 'Order processed' } },
+          ],
+          edges: [{ source: 'trigger', target: 'log' }],
+        },
+      }),
+      responses: {
+        '201': jsonResponse('Template created successfully'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+      },
+    }),
+  },
+  '/api/v1/templates/import': {
+    post: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Import a workflow package as a template',
+      permission: 'TEMPLATE_CREATE',
+      requestBody: jsonBody({
+        schemaVersion: '1.0.0',
+        exportedAt: '2026-09-15T08:00:00.000Z',
+        template: {
+          name: 'Imported Webhook Flow',
+          category: 'Integration',
+          description: 'Package description',
+          tags: ['imported'],
+        },
+        workflow: {
+          nodes: [
+            { id: 'trigger', type: 'webhook', config: {} },
+            { id: 'log', type: 'log', config: { message: 'hello' } },
+          ],
+          edges: [{ source: 'trigger', target: 'log' }],
+        },
+      }),
+      responses: {
+        '201': jsonResponse('Workflow package imported as template'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+      },
+    }),
+  },
+  '/api/v1/templates/publisher/profile': {
+    get: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Get current user publisher profile',
+      responses: {
+        '200': jsonResponse('Publisher profile information'),
+        '401': unauthorized['401'],
+      },
+    }),
+    put: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Create or update publisher profile',
+      requestBody: jsonBody({
+        displayName: 'Acme Automation Labs',
+        description: 'Verified enterprise template creator',
+      }),
+      responses: {
+        '200': jsonResponse('Updated publisher profile'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}': {
+    parameters: [idParameter('id', 'Template identifier')],
+    get: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Get template details by ID',
+      responses: {
+        '200': jsonResponse('Template details'),
+        '401': unauthorized['401'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+    patch: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Update template metadata or workflow definition',
+      permission: 'TEMPLATE_MANAGE',
+      requestBody: jsonBody({ name: 'Updated Template Name' }, false),
+      responses: {
+        '200': jsonResponse('Template updated'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}/publish': {
+    parameters: [idParameter('id', 'Template identifier')],
+    post: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Publish template or submit for marketplace listing',
+      permission: 'TEMPLATE_PUBLISH',
+      requestBody: jsonBody({ approve: false }, false),
+      responses: {
+        '200': jsonResponse('Template published'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}/archive': {
+    parameters: [idParameter('id', 'Template identifier')],
+    post: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Archive a template',
+      permission: 'TEMPLATE_MANAGE',
+      responses: {
+        '200': jsonResponse('Template archived'),
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}/install': {
+    parameters: [idParameter('id', 'Template identifier')],
+    post: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Install a template into target workspace as a runnable workflow',
+      permission: 'TEMPLATE_INSTALL',
+      requestBody: jsonBody({ workspaceId: '652f1f77bcf86cd799439012', workflowName: 'My Installed Automation' }, false),
+      responses: {
+        '201': jsonResponse('Template installed as workflow'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}/clone': {
+    parameters: [idParameter('id', 'Template identifier')],
+    post: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Clone a template into a new draft template',
+      permission: 'TEMPLATE_CREATE',
+      requestBody: jsonBody({ name: 'Cloned Template Copy' }, false),
+      responses: {
+        '201': jsonResponse('Template cloned'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}/export': {
+    parameters: [idParameter('id', 'Template identifier')],
+    post: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Export template as a portable workflow package JSON',
+      responses: {
+        '200': jsonResponse('Workflow package bundle'),
+        '401': unauthorized['401'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}/rate': {
+    parameters: [idParameter('id', 'Template identifier')],
+    post: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Rate a published/marketplace template (1-5 stars)',
+      requestBody: jsonBody({ rating: 5, review: 'Excellent template, saved us hours of setup!' }),
+      responses: {
+        '200': jsonResponse('Template rating submitted'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}/versions': {
+    parameters: [idParameter('id', 'Template identifier')],
+    get: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'List version history for a template',
+      responses: {
+        '200': jsonResponse('List of template versions'),
+        '401': unauthorized['401'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}/rollback': {
+    parameters: [idParameter('id', 'Template identifier')],
+    post: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Rollback template to a previous version',
+      permission: 'TEMPLATE_MANAGE',
+      requestBody: jsonBody({ versionNumber: 1 }),
+      responses: {
+        '200': jsonResponse('Template rolled back to specified version'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/templates/{id}/compare': {
+    parameters: [
+      idParameter('id', 'Template identifier'),
+      { name: 'v1', in: 'query', required: true, schema: { type: 'integer' }, description: 'First version number' },
+      { name: 'v2', in: 'query', required: true, schema: { type: 'integer' }, description: 'Second version number' },
+    ],
+    get: operation({
+      tag: 'Templates & Marketplace',
+      summary: 'Compare two versions of a template',
+      responses: {
+        '200': jsonResponse('Version diff summary and node changes'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '404': notFound('TEMPLATE_NOT_FOUND', 'Template was not found')['404'],
+      },
+    }),
   },
 };

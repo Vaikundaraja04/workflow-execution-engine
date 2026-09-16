@@ -225,6 +225,89 @@ DELETE /scim/v2/Users/:id
 Authorization: Bearer <scim_token>
 ```
 
+### Phase 6C: Workflow Marketplace & Template Ecosystem
+
+- **Reusable Workflow Templates**: Create, update, publish, archive, and clone pre-built workflows with categories (`Automation`, `Data Processing`, `Integration`, `AI Workflow`, `Approval Flow`, `Monitoring`, `Notifications`), rich metadata (documentation, icons, requirements, input variables), and configurable visibility (`PRIVATE`, `WORKSPACE`, `PUBLIC`, `MARKETPLACE`).
+- **Immutable Template Versioning**: Version history tracking with SHA-256 graph hashing, visual node-level diff comparison (`GET /api/v1/templates/:id/compare?v1=1&v2=2`), and safe version rollback (`POST /api/v1/templates/:id/rollback`).
+- **Template Installation**: One-click instantiation of templates into target workspaces as runnable workflows, validating tenant quotas and incrementing download/installation statistics.
+- **Workflow Package Import/Export**: Portable `.json` workflow package bundle specification with SHA-256 checksum verification, schema validation, graph integrity checks, and prototype pollution defenses.
+- **Marketplace Foundation & Ratings**: Publisher profiles (`displayName`, `description`, `verified`), multi-user rating system (1-5 stars with running average scoring and reviews), and full-text / multi-facet search across categories, tags, visibility, and keywords.
+- **Role-Based Permissions & Audit Logging**: RBAC integration (`TEMPLATE_CREATE`, `TEMPLATE_PUBLISH`, `TEMPLATE_INSTALL`, `TEMPLATE_MANAGE`) and audit logs for all template lifecycle events (`TEMPLATE_CREATED`, `TEMPLATE_UPDATED`, `TEMPLATE_PUBLISHED`, `TEMPLATE_ARCHIVED`, `TEMPLATE_INSTALLED`, `TEMPLATE_EXPORTED`, `TEMPLATE_IMPORTED`, `TEMPLATE_RATED`).
+
+#### Template Usage Guide
+
+##### Creating a Workflow Template
+```bash
+POST /api/v1/templates
+Content-Type: application/json
+Authorization: Bearer <access_token>
+x-workspace-id: <workspace_id>
+
+{
+  "name": "Stripe Payment Processor",
+  "description": "Validates inbound payment webhooks and logs transaction records",
+  "category": "Integration",
+  "visibility": "WORKSPACE",
+  "tags": ["stripe", "finance", "webhooks"],
+  "metadata": {
+    "icon": "credit-card",
+    "documentation": "Configure webhook signature in secret variables",
+    "requirements": ["webhook", "log"]
+  },
+  "workflowDefinition": {
+    "nodes": [
+      { "id": "trigger", "type": "webhook", "config": {} },
+      { "id": "log", "type": "log", "config": { "message": "Payment verified" } }
+    ],
+    "edges": [
+      { "source": "trigger", "target": "log" }
+    ]
+  }
+}
+```
+
+##### Installing a Template into a Workspace
+```bash
+POST /api/v1/templates/:templateId/install
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "workspaceId": "<target_workspace_id>",
+  "workflowName": "Production Stripe Ingestion"
+}
+```
+
+##### Exporting and Importing Workflow Packages
+```bash
+# Export template to package JSON
+POST /api/v1/templates/:templateId/export
+Authorization: Bearer <access_token>
+
+# Import package JSON as new template
+POST /api/v1/templates/import
+Content-Type: application/json
+Authorization: Bearer <access_token>
+x-workspace-id: <workspace_id>
+
+{
+  "packageData": { ...exportedPackageJson },
+  "visibility": "WORKSPACE"
+}
+```
+
+##### Rating a Template
+```bash
+POST /api/v1/templates/:templateId/rate
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "rating": 5,
+  "review": "Seamless integration, worked out of the box!"
+}
+```
+
 
 ## Architecture
 
@@ -243,6 +326,7 @@ src/
       analyticsRoutes.ts
       executionRoutes.ts
       healthRoutes.ts
+      templateRoutes.ts
       workflowRoutes.ts
       workspaceRoutes.ts
   auth/
@@ -252,22 +336,28 @@ src/
     auth.service.ts
     jwt.service.ts
     password.service.ts
+    permissions.ts
   config/env.ts
   db/connection.ts
   engine/
     executeWorkflow.ts
     getReadyNodes.ts
     validateGraph.ts
+  errors/
+    templateErrors.ts
   migrate.ts
   models/
     AuditLogModel.ts
     DeadLetterModel.ts
     ExecutionAnalyticsModel.ts
+    PublisherProfileModel.ts
     RefreshTokenModel.ts
+    TemplateVersionModel.ts
     UserModel.ts
     WorkflowAnalyticsModel.ts
     WorkflowExecutionModel.ts
     WorkflowModel.ts
+    WorkflowTemplateModel.ts
     WorkflowVersionModel.ts
     WorkspaceMemberModel.ts
     WorkspaceModel.ts
@@ -287,6 +377,8 @@ src/
     auditService.ts
     deadLetterService.ts
     executionService.ts
+    templateService.ts
+    workflowPackageService.ts
     workflowService.ts
     workspaceService.ts
   types/

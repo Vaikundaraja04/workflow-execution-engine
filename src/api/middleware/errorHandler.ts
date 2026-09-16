@@ -73,6 +73,11 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   SCIM_CONFLICT: { status: 409, code: 'SCIM_CONFLICT', message: 'SCIM user already exists' },
   SCIM_TOKEN_NOT_FOUND: { status: 404, code: 'SCIM_TOKEN_NOT_FOUND', message: 'SCIM token was not found' },
   INVALID_PROVIDER_ID: { status: 400, code: 'INVALID_PROVIDER_ID', message: 'Invalid identity provider ID' },
+  TEMPLATE_NOT_FOUND: { status: 404, code: 'TEMPLATE_NOT_FOUND', message: 'Template not found' },
+  TEMPLATE_ACCESS_DENIED: { status: 403, code: 'TEMPLATE_ACCESS_DENIED', message: 'Access denied to template' },
+  TEMPLATE_PUBLISH_ERROR: { status: 400, code: 'TEMPLATE_PUBLISH_ERROR', message: 'Template cannot be published' },
+  TEMPLATE_VALIDATION_ERROR: { status: 400, code: 'TEMPLATE_VALIDATION_ERROR', message: 'Template validation failed' },
+  INVALID_TEMPLATE_PACKAGE: { status: 400, code: 'INVALID_TEMPLATE_PACKAGE', message: 'Invalid template package' },
 };
 
 type JsonSyntaxError = SyntaxError & {
@@ -106,6 +111,14 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
           currentUsage: anyErr.currentUsage,
           requestId,
         },
+      });
+    }
+    // Handle TemplateValidationError by error name
+    if (err.name === 'TemplateValidationError') {
+      // Use the original error message from the service to preserve graph details
+      logger.warn('request_rejected', { ...context, code: 'TEMPLATE_VALIDATION_ERROR', status: 400, ...errorFields(err) });
+      return res.status(400).json({
+        error: { code: 'TEMPLATE_VALIDATION_ERROR', message: err.message, requestId },
       });
     }
     const mapped = ERROR_MAP[err.message];
