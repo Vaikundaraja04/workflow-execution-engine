@@ -19,6 +19,7 @@ import { createDeveloperRouter } from './routes/developerRoutes.js';
 import { createSubscriptionRouter } from './routes/subscriptionRoutes.js';
 import { createBillingRouter } from './routes/billingRoutes.js';
 import { createHealthChecks, createHealthRouter } from './routes/healthRoutes.js';
+import { createTemplateRouter } from './routes/templateRoutes.js';
 import type { HealthOptions } from './routes/healthRoutes.js';
 import { createAdminRouter } from './routes/adminRoutes.js';
 import { createAuditRouter } from './routes/auditRoutes.js';
@@ -117,6 +118,7 @@ export function createApp(options: AppOptions) {
     ),
   );
   app.use('/api/v1/developer', requireAuth, createDeveloperRouter());
+  app.use('/api/v1/templates', requireAuth, createTemplateRouter());
   app.use('/api/v1/admin', requireAuth, createAdminRouter(options));
   app.use('/api/admin', requireAuth, createAdminRouter(options));
   app.use('/api/v1/audit', requireAuth, createAuditRouter());

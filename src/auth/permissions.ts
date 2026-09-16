@@ -12,6 +12,15 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+export const TEMPLATE_PERMISSIONS = [
+  'TEMPLATE_CREATE',
+  'TEMPLATE_PUBLISH',
+  'TEMPLATE_INSTALL',
+  'TEMPLATE_MANAGE',
+] as const;
+
+export type TemplatePermission = (typeof TEMPLATE_PERMISSIONS)[number];
+
 export const WORKSPACE_ROLES: readonly WorkspaceRole[] = ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'];
 
 export const OWNER_ONLY_ACTIONS = [
@@ -19,6 +28,7 @@ export const OWNER_ONLY_ACTIONS = [
   'workspace.suspend',
   'workspace.delete',
   'member.remove-owner',
+  'template.marketplace-approve',
 ] as const;
 
 export type OwnerOnlyAction = (typeof OWNER_ONLY_ACTIONS)[number];
@@ -38,6 +48,17 @@ export const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly Permission[]> = {
   EDITOR: EDITOR_PERMISSIONS,
   VIEWER: VIEWER_PERMISSIONS,
 };
+
+export const ROLE_TEMPLATE_PERMISSIONS: Record<WorkspaceRole, readonly TemplatePermission[]> = {
+  OWNER: TEMPLATE_PERMISSIONS,
+  ADMIN: TEMPLATE_PERMISSIONS,
+  EDITOR: ['TEMPLATE_CREATE', 'TEMPLATE_INSTALL'],
+  VIEWER: ['TEMPLATE_INSTALL'],
+};
+
+export function roleHasTemplatePermission(role: WorkspaceRole, permission: TemplatePermission): boolean {
+  return ROLE_TEMPLATE_PERMISSIONS[role]?.includes(permission) ?? false;
+}
 
 export function isPermission(value: unknown): value is Permission {
   return typeof value === 'string' && (PERMISSIONS as readonly string[]).includes(value);
