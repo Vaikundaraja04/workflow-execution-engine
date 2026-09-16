@@ -87,14 +87,14 @@ beforeAll(async () => {
     externalCustomerId: 'cus_test_123',
     externalSubscriptionId: 'sub_test_123',
     currentPeriodStart: new Date(),
-    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   });
-});
+}, 180000);
 
 afterAll(async () => {
   await mongoose.disconnect();
   await replSet.stop();
-});
+}, 30000);
 
 describe('Billing Limits Enforcement', () => {
   const validDefinition = {

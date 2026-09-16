@@ -131,6 +131,8 @@ export function buildOpenApiDocument(): JsonObject {
       { name: 'External Triggers', description: 'Execute published workflows via API key authentication' },
       { name: 'Webhooks', description: 'Enterprise webhook subscriptions, signature verification, and delivery logs' },
       { name: 'Developer', description: 'Developer platform, API documentation, and SDKs' },
+      { name: 'SSO', description: 'Single Sign-On (OIDC/SAML) authentication and provider discovery' },
+      { name: 'SCIM', description: 'SCIM 2.0 endpoints for user provisioning and management' },
     ],
     security: BEARER_SECURITY,
     components: {
@@ -520,6 +522,81 @@ const SCHEMAS: JsonObject = {
       averageExecutionTime: { type: 'integer' },
       storageUsed: { type: 'integer', description: 'Approximate stored bytes for the workspace' },
       updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  IdentityProvider: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      workspaceId: { type: 'string' },
+      type: { type: 'string', enum: ['OIDC', 'SAML'] },
+      name: { type: 'string' },
+      status: { type: 'string', enum: ['ACTIVE', 'DISABLED'] },
+      issuer: { type: 'string' },
+      clientId: { type: 'string' },
+      authorizationEndpoint: { type: 'string' },
+      tokenEndpoint: { type: 'string' },
+      userinfoEndpoint: { type: 'string' },
+      jwksUri: { type: 'string' },
+      scopes: { type: 'array', items: { type: 'string' } },
+      domains: { type: 'array', items: { type: 'string' } },
+      domainVerificationStatus: { type: 'string', enum: ['VERIFIED', 'PENDING'] },
+      enforceSSO: { type: 'boolean' },
+      allowPasswordFallback: { type: 'boolean' },
+      roleMapping: { type: 'object', additionalProperties: { type: 'string' } },
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  SCIMToken: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      workspaceId: { type: 'string' },
+      prefix: { type: 'string' },
+      description: { type: 'string' },
+      status: { type: 'string', enum: ['ACTIVE', 'REVOKED'] },
+      expiresAt: { type: 'string', format: 'date-time' },
+      lastUsedAt: { type: 'string', format: 'date-time' },
+      createdAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  SCIMUser: {
+    type: 'object',
+    properties: {
+      schemas: { type: 'array', items: { type: 'string' } },
+      id: { type: 'string' },
+      userName: { type: 'string' },
+      name: {
+        type: 'object',
+        properties: {
+          givenName: { type: 'string' },
+          familyName: { type: 'string' },
+          formatted: { type: 'string' },
+        },
+      },
+      emails: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            value: { type: 'string' },
+            primary: { type: 'boolean' },
+            type: { type: 'string' },
+          },
+        },
+      },
+      active: { type: 'boolean' },
+      roles: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            value: { type: 'string' },
+            primary: { type: 'boolean' },
+          },
+        },
+      },
     },
   },
 };
@@ -1447,4 +1524,278 @@ const PATHS: JsonObject = {
         '404': notFound('WORKSPACE_NOT_FOUND', 'Workspace was not found')['404'],
       },
     }),
-  },};
+  },
+  '/api/auth/sso/providers': {
+    get: operation({
+      tag: 'SSO',
+      summary: 'Discover identity providers by email, domain, or workspaceId',
+      publicAccess: true,
+      parameters: [
+        { name: 'email', in: 'query', required: false, schema: { type: 'string' }, description: 'User corporate email' },
+        { name: 'domain', in: 'query', required: false, schema: { type: 'string' }, description: 'Corporate domain' },
+        { name: 'workspaceId', in: 'query', required: false, schema: { type: 'string' }, description: 'Workspace ID' },
+      ],
+      responses: {
+        '200': jsonResponse('Matching active identity providers', [
+          { id: '652f1f77bcf86cd799439030', name: 'Okta SSO', type: 'OIDC', domains: ['acme.com'] },
+        ]),
+        '400': invalidRequest['400'],
+      },
+    }),
+  },
+  '/api/auth/sso/{providerId}/start': {
+    parameters: [idParameter('providerId', 'Identity Provider identifier')],
+    post: operation({
+      tag: 'SSO',
+      summary: 'Initiate SSO login flow, returning authorization URL and state',
+      publicAccess: true,
+      requestBody: jsonBody({ redirectUri: 'https://app.example.com/callback' }, false),
+      responses: {
+        '200': jsonResponse('Authorization URL and state', {
+          authorizationUrl: 'https://acme.okta.com/oauth2/v1/authorize?client_id=...&state=...',
+          state: 'state_random_token',
+        }),
+        '400': invalidRequest['400'],
+        '404': notFound('SSO_PROVIDER_NOT_FOUND', 'SSO provider was not found')['404'],
+      },
+    }),
+  },
+  '/api/auth/sso/{providerId}/callback': {
+    parameters: [
+      idParameter('providerId', 'Identity Provider identifier'),
+      { name: 'code', in: 'query', required: true, schema: { type: 'string' } },
+      { name: 'state', in: 'query', required: true, schema: { type: 'string' } },
+    ],
+    get: operation({
+      tag: 'SSO',
+      summary: 'Exchange authorization code and validate state for session tokens',
+      publicAccess: true,
+      responses: {
+        '200': jsonResponse('Session tokens and identity linking status', {
+          accessToken: 'jwt.token.here',
+          refreshToken: 'jwt.refresh.here',
+          userId: '652f1f77bcf86cd799439011',
+          email: 'alice@acme.com',
+          workspaceId: '652f1f77bcf86cd799439012',
+          isNewUser: false,
+          isNewIdentityLink: false,
+        }),
+        '400': invalidRequest['400'],
+        '404': notFound('SSO_PROVIDER_NOT_FOUND', 'SSO provider was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/admin/workspaces/{workspaceId}/identity-providers': {
+    parameters: [idParameter('workspaceId', 'Workspace identifier')],
+    get: operation({
+      tag: 'SSO',
+      summary: 'List identity providers configured for workspace',
+      permission: 'MEMBER_MANAGE',
+      responses: {
+        '200': jsonResponse('List of identity providers'),
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+      },
+    }),
+    post: operation({
+      tag: 'SSO',
+      summary: 'Configure a new OIDC or SAML identity provider',
+      permission: 'MEMBER_MANAGE',
+      requestBody: jsonBody({
+        type: 'OIDC',
+        name: 'Corporate Okta',
+        issuer: 'https://acme.okta.com',
+        clientId: 'client-id-123',
+        clientSecret: 'secret-xyz',
+        domains: ['acme.com'],
+        enforceSSO: true,
+        allowPasswordFallback: false,
+      }),
+      responses: {
+        '201': jsonResponse('Identity provider created'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+      },
+    }),
+  },
+  '/api/v1/admin/workspaces/{workspaceId}/identity-providers/{providerId}': {
+    parameters: [
+      idParameter('workspaceId', 'Workspace identifier'),
+      idParameter('providerId', 'Identity Provider identifier'),
+    ],
+    get: operation({
+      tag: 'SSO',
+      summary: 'Get identity provider details',
+      permission: 'MEMBER_MANAGE',
+      responses: {
+        '200': jsonResponse('Identity provider configuration'),
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('SSO_PROVIDER_NOT_FOUND', 'SSO provider was not found')['404'],
+      },
+    }),
+    patch: operation({
+      tag: 'SSO',
+      summary: 'Update identity provider configuration',
+      permission: 'MEMBER_MANAGE',
+      requestBody: jsonBody({ enforceSSO: true, domains: ['acme.com', 'acmecorp.com'] }),
+      responses: {
+        '200': jsonResponse('Identity provider updated'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('SSO_PROVIDER_NOT_FOUND', 'SSO provider was not found')['404'],
+      },
+    }),
+    delete: operation({
+      tag: 'SSO',
+      summary: 'Disable identity provider',
+      permission: 'MEMBER_MANAGE',
+      responses: {
+        '200': jsonResponse('Identity provider disabled'),
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('SSO_PROVIDER_NOT_FOUND', 'SSO provider was not found')['404'],
+      },
+    }),
+  },
+  '/api/v1/admin/workspaces/{workspaceId}/scim-tokens': {
+    parameters: [idParameter('workspaceId', 'Workspace identifier')],
+    post: operation({
+      tag: 'SCIM',
+      summary: 'Generate a new SCIM 2.0 bearer token for IdP inbound provisioning',
+      permission: 'MEMBER_MANAGE',
+      requestBody: jsonBody({ description: 'Okta SCIM Integration', expiresInDays: 180 }),
+      responses: {
+        '201': jsonResponse('SCIM token generated (token shown only once)', {
+          token: 'scim_abc123...',
+          prefix: 'scim_abc12',
+          expiresAt: '2027-03-15T08:00:00.000Z',
+        }),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+      },
+    }),
+    get: operation({
+      tag: 'SCIM',
+      summary: 'List active SCIM tokens for workspace',
+      permission: 'MEMBER_MANAGE',
+      responses: {
+        '200': jsonResponse('List of SCIM tokens'),
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+      },
+    }),
+  },
+  '/api/v1/admin/workspaces/{workspaceId}/scim-tokens/{tokenId}': {
+    parameters: [
+      idParameter('workspaceId', 'Workspace identifier'),
+      idParameter('tokenId', 'SCIM Token identifier'),
+    ],
+    delete: operation({
+      tag: 'SCIM',
+      summary: 'Revoke a SCIM token',
+      permission: 'MEMBER_MANAGE',
+      responses: {
+        '200': jsonResponse('SCIM token revoked'),
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('SCIM_TOKEN_NOT_FOUND', 'SCIM token was not found')['404'],
+      },
+    }),
+  },
+  '/scim/v2/ServiceProviderConfig': {
+    get: operation({
+      tag: 'SCIM',
+      summary: 'SCIM 2.0 Service Provider Configuration specification',
+      publicAccess: true,
+      responses: {
+        '200': jsonResponse('SCIM 2.0 Service Provider Config', {
+          schemas: ['urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig'],
+          patch: { supported: true },
+          bulk: { supported: false },
+          filter: { supported: true, maxResults: 100 },
+        }),
+      },
+    }),
+  },
+  '/scim/v2/Users': {
+    get: {
+      tags: ['SCIM'],
+      summary: 'List/filter provisioned users in workspace',
+      description: 'Requires SCIM Bearer token authentication in Authorization header',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        '200': jsonResponse('SCIM ListResponse with user resources'),
+        '401': unauthorized['401'],
+      },
+    },
+    post: {
+      tags: ['SCIM'],
+      summary: 'Provision a new user in workspace',
+      description: 'Requires SCIM Bearer token authentication in Authorization header',
+      security: [{ bearerAuth: [] }],
+      requestBody: jsonBody({
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+        userName: 'john.doe@enterprise.io',
+        emails: [{ value: 'john.doe@enterprise.io', primary: true }],
+        name: { givenName: 'John', familyName: 'Doe' },
+        active: true,
+        roles: [{ value: 'EDITOR', primary: true }],
+      }),
+      responses: {
+        '201': jsonResponse('Provisioned SCIM User resource'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '409': errorResponse('User already exists in workspace'),
+      },
+    },
+  },
+  '/scim/v2/Users/{id}': {
+    parameters: [idParameter('id', 'User identifier')],
+    get: {
+      tags: ['SCIM'],
+      summary: 'Get provisioned user details by ID',
+      description: 'Requires SCIM Bearer token authentication in Authorization header',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        '200': jsonResponse('SCIM User resource'),
+        '401': unauthorized['401'],
+        '404': notFound('SCIM_USER_NOT_FOUND', 'SCIM user was not found')['404'],
+      },
+    },
+    patch: {
+      tags: ['SCIM'],
+      summary: 'Update user attributes or status via SCIM PatchOp',
+      description: 'Requires SCIM Bearer token authentication in Authorization header',
+      security: [{ bearerAuth: [] }],
+      requestBody: jsonBody({
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+        Operations: [
+          { op: 'replace', path: 'roles', value: [{ value: 'ADMIN' }] },
+          { op: 'replace', path: 'active', value: false },
+        ],
+      }),
+      responses: {
+        '200': jsonResponse('Updated SCIM User resource'),
+        '400': invalidRequest['400'],
+        '401': unauthorized['401'],
+        '404': notFound('SCIM_USER_NOT_FOUND', 'SCIM user was not found')['404'],
+      },
+    },
+    delete: {
+      tags: ['SCIM'],
+      summary: 'Deprovision user from workspace',
+      description: 'Requires SCIM Bearer token authentication in Authorization header',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        '204': { description: 'User successfully deprovisioned' },
+        '401': unauthorized['401'],
+        '403': forbidden['403'],
+        '404': notFound('SCIM_USER_NOT_FOUND', 'SCIM user was not found')['404'],
+      },
+    },
+  },
+};

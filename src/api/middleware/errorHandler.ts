@@ -61,6 +61,18 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   INVALID_PLAN: { status: 400, code: 'INVALID_PLAN', message: 'Invalid plan specified' },
   SUBSCRIPTION_ALREADY_CANCELLED: { status: 400, code: 'SUBSCRIPTION_ALREADY_CANCELLED', message: 'Subscription is already cancelled or expired' },
   PLAN_LIMIT_EXCEEDED: { status: 403, code: 'PLAN_LIMIT_EXCEEDED', message: 'Plan limit exceeded' },
+  SSO_PROVIDER_NOT_FOUND: { status: 404, code: 'SSO_PROVIDER_NOT_FOUND', message: 'SSO provider was not found' },
+  SSO_PROVIDER_DISABLED: { status: 400, code: 'SSO_PROVIDER_DISABLED', message: 'SSO provider is disabled' },
+  SSO_STATE_INVALID: { status: 400, code: 'SSO_STATE_INVALID', message: 'SSO state is invalid or expired' },
+  SSO_CALLBACK_INVALID: { status: 400, code: 'SSO_CALLBACK_INVALID', message: 'SSO callback is invalid' },
+  SSO_IDENTITY_CONFLICT: { status: 409, code: 'SSO_IDENTITY_CONFLICT', message: 'SSO identity is already linked to another user' },
+  SSO_DOMAIN_NOT_VERIFIED: { status: 403, code: 'SSO_DOMAIN_NOT_VERIFIED', message: 'Domain is not verified for SSO' },
+  SSO_REQUIRED: { status: 403, code: 'SSO_REQUIRED', message: 'SSO authentication is required for this workspace' },
+  SCIM_UNAUTHORIZED: { status: 401, code: 'SCIM_UNAUTHORIZED', message: 'SCIM authentication failed' },
+  SCIM_USER_NOT_FOUND: { status: 404, code: 'SCIM_USER_NOT_FOUND', message: 'SCIM user was not found' },
+  SCIM_CONFLICT: { status: 409, code: 'SCIM_CONFLICT', message: 'SCIM user already exists' },
+  SCIM_TOKEN_NOT_FOUND: { status: 404, code: 'SCIM_TOKEN_NOT_FOUND', message: 'SCIM token was not found' },
+  INVALID_PROVIDER_ID: { status: 400, code: 'INVALID_PROVIDER_ID', message: 'Invalid identity provider ID' },
 };
 
 type JsonSyntaxError = SyntaxError & {
