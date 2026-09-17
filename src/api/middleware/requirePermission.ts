@@ -100,6 +100,7 @@ export async function authorizeRequest(
   if (check.outcome !== 'allow' || !check.membership) return check.outcome;
   const context: WorkspaceContext = {
     workspaceId: check.membership.workspaceId,
+    userId,
     role: check.membership.role,
     permissions: check.membership.permissions,
   };

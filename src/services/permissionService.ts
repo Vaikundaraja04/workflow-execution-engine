@@ -15,6 +15,7 @@ export interface MembershipSnapshot {
 
 export interface WorkspaceContext {
   workspaceId: string;
+  userId: string;
   role: WorkspaceRole;
   permissions: Permission[];
 }
