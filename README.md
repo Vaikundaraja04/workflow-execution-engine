@@ -166,7 +166,7 @@ frontend/
 2. **Environment Variables**:
    Create a `.env.local` file in the frontend directory:
    ```
-   NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+   NEXT_PUBLIC_API_URL=http://localhost:3000
    NEXT_PUBLIC_APP_URL=http://localhost:3001
    ```
 
@@ -384,6 +384,309 @@ Phase 7B introduces an enterprise visual workflow designer powered by `@xyflow/r
    - Enforces `WORKFLOW_READ`, `WORKFLOW_UPDATE`, and `WORKFLOW_CREATE` permissions across builder toolbar, saving, and publishing actions.
    - Automatic read-only canvas mode for unauthorized or published historic versions.
 
+## Execution Monitoring & Debug Console (Phase 7C)
+
+### Overview
+
+Phase 7C introduces a comprehensive execution monitoring and debug console that provides enterprise-grade visibility into workflow executions. Users can monitor execution states, debug failed workflows, inspect node-level execution, view logs, retry failed executions, replay executions, and manage dead letter queues.
+
+### Key Features
+
+#### 1. Execution List Page (`/executions`)
+- Tabular view of all workflow executions with essential metadata
+- Filtering by execution status (QUEUING, QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, RETRYING)
+- Date range filtering, workflow selection, and text search
+- Pagination for large result sets
+- Click-to-navigate to execution detail view
+
+#### 2. Execution Detail Page (`/executions/:id`)
+- **Header**: Workflow name, status badge, duration, and action controls
+- **Live Status Tracker**: Real-time execution status with polling and WebSocket-ready hooks
+- **Execution Timeline & Graph**: Interactive React Flow visualization showing node progression
+- **Node Inspector**: Tabbed inspection of selected node inputs, outputs, errors, and metadata
+- **Log Viewer**: Real-time terminal-style log display with filtering, timestamps, and export capabilities
+- **Input/Output Viewer**: JSON payload inspection for initial triggers and final results
+- **AI Failure Analysis Panel**: Root cause analysis for failed executions (permission-gated)
+- **Execution Action Controls**: Retry, replay, and cancel operations with confirmation modals
+- **Worker Status Drawer**: System-wide worker fleet metrics and queue depths
+
+#### 3. Dead Letter Queue Management (`/dead-letters`)
+- Listing of failed executions moved to the dead letter queue
+- Failure reason, attempt counts, and timestamp information
+- Retry functionality for DLQ executions
+- Filtering and search capabilities
+
+#### 4. Worker Monitoring Panel
+- Real-time worker pool metrics (active/total workers)
+- Queue depths for executions and webhooks
+- Heartbeat latency monitoring
+- Scaling recommendations based on workload
+
+#### 5. State Management & Services
+- **Zustand Store** (`executionStore.ts`): Centralized state for selected execution, filters, and UI state
+- **API Service Layer** (`executionConsoleApi.ts`): Encapsulates all execution console API interactions
+- **TypeScript Types**: Comprehensive typing for all execution console entities
+
+### Technical Implementation
+
+#### Frameworks & Libraries
+- **Next.js 16** (App Router) with React 19 and TypeScript 5
+- **Tailwind CSS 4** for styling
+- **Zustand 5** for client-side state management
+- **@tanstack/react-query** v5 for server state, caching, and background updates
+- **@xyflow/react** v12 for interactive execution timeline visualization
+- **Lucide React** for consistent iconography
+
+#### Key Components
+- `ExecutionTable`: Paginated, filterable execution list
+- `ExecutionStatusTracker`: Live status updates with polling
+- `ExecutionTimeline`: Interactive React Flow graph showing node progression
+- `NodeInspector`: Tabbed inspector for node details (inputs/outputs/errors)
+- `ExecutionLogs`: Terminal-style log viewer with filtering and export
+- `FailureAnalysisPanel`: AI-powered failure diagnosis (requires `AI_ANALYSIS_READ`)
+- `ExecutionActions`: Action toolbar with retry/replay/cancel (requires `WORKFLOW_EXECUTE`)
+- `WorkerStatus`: Worker fleet monitoring dashboard
+- `ExecutionFilters`: Reusable filter component for status, date range, workflow, and search
+
+#### API Integrations
+All execution console features reuse existing backend APIs:
+- `GET /api/executions/:executionId` - Get execution details
+- `GET /api/executions/:executionId/logs` - Retrieve execution logs
+- `GET /api/workflows/:workflowId/executions` - List workflow executions
+- `POST /api/executions/:executionId/retry` - Retry failed execution
+- `POST /api/executions/:executionId/replay` - Replay completed execution
+- `POST /api/executions/:executionId/cancel` - Cancel running execution
+- `GET /api/workflows/:workflowId/dead-letters` - Get DLQ for workflow
+- `GET /api/v1/ai/executions/:id/analyze` - AI failure analysis (Phase 6D)
+- `GET /api/v1/admin/system/workers/metrics` - Worker fleet metrics
+
+#### RBAC Integration
+The execution console implements granular permission checking:
+- **OWNER**: Full access to all features
+- **ADMIN**: Workspace execution management and worker monitoring
+- **EDITOR**: Execution control (retry/replay/cancel for permitted executions)
+- **VIEWER**: Read-only access to execution traces and AI diagnostic insights
+
+Specific permission gates:
+- `WORKFLOW_EXECUTE`: Required for execution actions (retry, replay, cancel)
+- `AI_ANALYSIS_READ`: Required for AI failure analysis panel
+- Standard workflow permissions apply for execution listing and viewing
+
+#### Testing
+Comprehensive test suite covering:
+- Execution list rendering and filtering functionality
+- Execution detail status display and timeline rendering
+- Execution action buttons and permission gating
+- Log display and level filtering
+- AI analysis panel RBAC permission enforcement
+- Dead letter queue listing and retry operations
+- Worker status panel rendering and metric display
+
+### Component Architecture
+```
+frontend/
+├── app/
+│   ├── executions/                 # Execution list page
+│   │   └── page.tsx
+│   ├── executions/[id]/            # Execution detail page
+│   │   └── page.tsx
+│   └── dead-letters/               # Dead letter queue page
+│       └── page.tsx
+├── features/
+│   └── execution-console/          # Execution console feature module
+│       ├── components/             # Shared components
+│       │   ├── ExecutionTable.tsx
+│       │   ├── ExecutionStatusTracker.tsx
+│       │   ├── ExecutionActions.tsx
+│       │   └── FailureAnalysisPanel.tsx
+│       ├── dashboard/              # Dashboard widgets
+│       │   └── WorkerStatus.tsx
+│       ├── inspector/              # Node inspection
+│       │   └── NodeInspector.tsx
+│       ├── logs/                   # Log viewing
+│       │   └── ExecutionLogs.tsx
+│       ├── timeline/               # Execution visualization
+│       │   └── ExecutionTimeline.tsx
+│       ├── stores/                 # State management
+│       │   └── executionStore.ts
+│       ├── types/                  # TypeScript definitions
+│       │   └── types.ts
+│       └── tests/                  # Component tests
+│           └── executionConsole.test.tsx
+├── services/
+│   └── executionConsoleApi.ts      # API service layer
+└── types/
+    └── execution.ts                # Shared execution types
+```
+
+### Development & Usage
+1. **Prerequisites**:
+   - Node.js >= 18
+   - npm or yarn
+   - Running backend server (on http://localhost:3000 by default)
+
+2. **Environment Variables**:
+   Create a `.env.local` file in the frontend directory:
+   ```
+   NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+   NEXT_PUBLIC_APP_URL=http://localhost:3001
+   ```
+
+3. **Installation**:
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+4. **Development Server**:
+   ```bash
+   npm run dev
+   ```
+   The frontend will be available at http://localhost:3001
+
+5. **Production Build**:
+   ```bash
+   npm run build
+   npm run start
+   ```
+
+### Key Features Summary
+- **Monitoring**: Real-time execution status tracking with historical views
+- **Debugging**: Node-level inspection, log viewing, and AI-powered failure analysis
+- **Operations**: Retry failed executions, replay completed executions, cancel running executions
+- **Management**: Dead letter queue handling and worker fleet monitoring
+- **Insights**: Execution metrics, performance tracking, and optimization recommendations
+- **Security**: Role-based access control protecting sensitive operations and data
+
+### Monitoring Features
+- Live execution status with automatic polling
+- Execution duration tracking and timing metrics
+- Retry count and attempt monitoring
+- Trigger source and execution metadata
+- Worker pool utilization and queue depths
+- Heartbeat latency and system health indicators
+
+### Debug Capabilities
+- Interactive execution timeline visualization
+- Node-by-node input/output inspection
+- Error details and stack trace analysis
+- Terminal-style log viewer with filtering and export
+- AI-powered root cause analysis and resolution suggestions
+- Payload comparison between initial input and final output
+
+### API Integration Points
+All features integrate with existing backend services:
+- Execution CRUD operations via execution API
+- Log retrieval and management
+- Retry/replay/cancel workflow operations
+- Dead letter queue management
+- AI failure analysis (leveraging Phase 6D)
+- Worker metrics and system monitoring (admin API)
+
+### Performance Considerations
+- Efficient data fetching with React Query caching
+- Pagination for large execution lists
+- Optimized React Flow rendering for complex workflows
+- Selective log loading and virtual scrolling
+- Memory-efficient state management with Zustand
+
+
+## AI Copilot & Intelligence Console (Phase 7D)
+
+### Overview
+
+Phase 7D surfaces the Phase 6D AI Workflow Intelligence Platform in the frontend: natural language workflow generation, template generation with suggested metadata, workflow optimization, execution failure analysis, a builder-integrated copilot, and workspace AI usage reporting. Every AI surface is permission-gated, and generated artifacts stay in DRAFT state until they are explicitly saved.
+
+### Key Features
+
+#### 1. AI Workflow Generator (`/ai/workflow-generator`)
+- Prompt input with example prompts and a 4000 character client-side limit
+- Validated DRAFT preview with node, connection, category, and variable statistics
+- Validation checklist covering graph validity, trigger presence, cycles, required fields, trigger count, and permissions
+- "Create Draft" persists the workflow unpublished; "Edit in Builder" loads the graph into the visual builder without persisting
+
+#### 2. AI Template Generator (`/ai/template-generator`)
+- Generates a validated DRAFT workflow plus suggested template metadata (category, tags, visibility)
+- Creates a PRIVATE template through the template API; publishing stays in the marketplace flow
+
+#### 3. AI Workflow Optimization (`/ai/optimization`)
+- Workspace workflow selector driving analysis per workflow
+- Detected issues list with severity badges and affected node references
+- Recommendation cards with impact estimates and suggested actions
+
+#### 4. AI Failure Analysis (execution detail `/executions/[id]`)
+- Root cause, affected nodes, error pattern, recommended fix, and a confidence badge
+- Auto-runs for executions opened in the console; gated by `AI_ANALYSIS_READ`
+
+#### 5. AI Copilot (workflow builder toolbar)
+- Slide-over copilot panel launched from the visual workflow builder
+- Prompt-driven generation with a chat transcript, DRAFT preview, and create-draft, regenerate, and discard controls
+- One-click "Open Builder" loads the generated graph onto the canvas
+
+#### 6. AI Usage & Configuration (`/ai/usage`)
+- Request, token, and estimated cost rollups with a per-feature breakdown and recent records table
+- Gated by `AI_CONFIGURATION_MANAGE` (OWNER and ADMIN)
+
+### Technical Implementation
+
+#### Frameworks & Libraries
+- Next.js App Router with React 19 and TypeScript 5
+- Zustand (`aiStore.ts`) for chat, generation, template, analysis, and optimization state
+- `@xyflow/react` for read-only generated-graph previews
+- Lucide React iconography with Tailwind CSS 4 styling
+
+#### Key Components
+- `WorkflowGenerator` / `TemplateGenerator`: prompt-driven generation flows
+- `AICopilotPanel` / `AICopilotLauncher`: builder-integrated copilot drawer
+- `ExecutionAIAnalysis`: failure diagnosis panel (execution console and detail pages)
+- `WorkflowOptimizer`: optimization issues and recommendations
+- `AIUsageDashboard`: usage rollups and records
+- `WorkflowPreviewCard`, `WorkflowValidationChecklist`, `GeneratedWorkflowPreview`: DRAFT preview and validation
+- `PromptInput`, `GenerationLoader`, `ConfidenceBadge`, `RecommendationCard`, `UsageCard`, `AIErrorState`, `AIChatMessage`: shared AI UI primitives
+
+#### API Integrations
+- `POST /api/v1/ai/workflows/generate` - generate a workflow draft from a prompt
+- `POST /api/v1/ai/templates/generate` - generate a template draft with suggested metadata
+- `GET /api/v1/ai/executions/:id/analyze` - failure analysis for an execution
+- `POST /api/v1/ai/workflows/:id/optimize` - optimization issues and recommendations
+- `GET /api/v1/ai/usage` - workspace AI usage records
+- `POST /api/v1/templates` - persist a generated template
+- `GET /api/v1/admin/ai/config`, `PATCH /api/v1/admin/ai/config` - workspace AI provider configuration
+
+#### RBAC Integration
+- `AI_WORKFLOW_CREATE`: workflow and template generation (OWNER, ADMIN, EDITOR)
+- `AI_ANALYSIS_READ`: failure analysis (all workspace roles)
+- `AI_OPTIMIZATION_CREATE`: optimization runs (OWNER, ADMIN, EDITOR)
+- `AI_CONFIGURATION_MANAGE`: usage reporting and provider configuration (OWNER, ADMIN)
+
+#### Testing
+- `frontend/tests/aiFeatures.test.tsx` covers prompt submission, generation flows, validation checklist states, optimization rendering, failure analysis, usage reporting, permission gates, and usage aggregation (18 tests)
+- `tests/aiRoutes.test.ts` covers the mounted AI endpoints end to end: authentication, RBAC allow and deny paths, DRAFT generation, hidden execution errors, usage listing, and configuration create and read (11 tests)
+
+### Component Architecture
+```
+frontend/
+├── app/ai/
+│   ├── workflow-generator/page.tsx
+│   ├── template-generator/page.tsx
+│   ├── optimization/page.tsx
+│   └── usage/page.tsx
+├── features/ai/
+│   ├── analysis/ExecutionAIAnalysis.tsx
+│   ├── copilot/AICopilotPanel.tsx
+│   ├── components/                 # Shared AI primitives (chat, prompt, badges, cards)
+│   ├── hooks/                      # Generation, analysis, optimization, usage, permissions
+│   ├── optimization/WorkflowOptimizer.tsx
+│   ├── stores/aiStore.ts
+│   ├── template-generation/TemplateGenerator.tsx
+│   ├── types/types.ts
+│   ├── usage/AIUsageDashboard.tsx
+│   └── workflow-generation/        # Generator, preview, validation checklist
+└── services/
+    ├── aiApi.ts                    # AI endpoint service layer
+    └── templateApi.ts              # Template creation service
+```
+
 ## License
 
-parameter>
+ISC

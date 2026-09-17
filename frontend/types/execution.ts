@@ -1,6 +1,9 @@
 export type ExecutionStatus =
   | 'PENDING'
+  | 'QUEUED'
+  | 'QUEUING'
   | 'RUNNING'
+  | 'SUCCEEDED'
   | 'COMPLETED'
   | 'FAILED'
   | 'CANCELLED'
@@ -17,11 +20,13 @@ export interface WorkflowExecution {
   initialInput?: Record<string, unknown>;
   output?: Record<string, unknown>;
   error?: string;
-  startedAt?: string;
-  finishedAt?: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   replayed?: boolean;
+  attemptsMade?: number;
+  retryCount?: number;
 }
 
 export interface DeadLetter {
@@ -33,6 +38,8 @@ export interface DeadLetter {
   error: string;
   payload?: Record<string, unknown>;
   createdAt: string;
+  attemptsMade?: number;
+  retryCount?: number;
 }
 
 export interface CreateExecutionPayload {
@@ -40,3 +47,12 @@ export interface CreateExecutionPayload {
   triggerType?: string;
   version?: number;
 }
+
+export type {
+  ExecutionTableRow,
+  ExecutionLog,
+  ExecutionNode,
+  FailureAnalysisResult,
+  WorkerMetrics,
+} from '@/features/execution-console/types/types';
+

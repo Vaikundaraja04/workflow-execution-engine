@@ -186,10 +186,12 @@ router.get(
   }
 );
 
-// Admin routes for AI configuration
+// Admin routes for AI configuration (mounted at /api/v1/admin/ai)
+export const aiConfigRouter = Router();
+
 // GET /api/v1/admin/ai/config
-router.get(
-  '/admin/ai/config',
+aiConfigRouter.get(
+  '/config',
   requirePermission('AI_CONFIGURATION_MANAGE', {}),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -217,8 +219,8 @@ router.get(
 );
 
 // PATCH /api/v1/admin/ai/config
-router.patch(
-  '/admin/ai/config',
+aiConfigRouter.patch(
+  '/config',
   requirePermission('AI_CONFIGURATION_MANAGE', {}),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
