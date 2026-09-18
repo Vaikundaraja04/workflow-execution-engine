@@ -6,6 +6,10 @@ import workflowRouter from './routes/workflowRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { getRequestId } from './middleware/requestLogger.js';
 import { createExecutionRouter } from './routes/executionRoutes.js';
+import { createCommentRoutes } from './routes/commentRoutes.js';
+import { createLockRoutes } from './routes/lockRoutes.js';
+import { createNotificationRoutes } from './routes/notificationRoutes.js';
+import { createActivityRouter } from './routes/activityRoutes.js';
 import type { ExecutionQueue } from '../queues/executionQueue.js';
 import { UnavailableExecutionQueue } from '../queues/executionQueue.js';
 import type { ExecutionCreationOptions } from '../services/executionService.js';
@@ -128,6 +132,12 @@ export function createApp(options: AppOptions) {
   app.use('/api/audit', requireAuth, createAuditRouter());
   app.use('/api/v1/workspaces/:workspaceId/audit', requireAuth, createAuditRouter());
   app.use('/api/workspaces/:workspaceId/audit', requireAuth, createAuditRouter());
+
+  // Collaboration routes
+  app.use('/api/v1/comments', requireAuth, createCommentRoutes(requireAuth));
+  app.use('/api/v1/locks', requireAuth, createLockRoutes(requireAuth));
+  app.use('/api/v1/notifications', requireAuth, createNotificationRoutes(requireAuth));
+  app.use('/api/v1/activity', requireAuth, createActivityRouter(requireAuth));
 
   // SSO & SCIM Workspace Admin Routes
   app.use('/api/v1/admin/workspaces/:workspaceId', requireAuth, createSSOAdminRouter());

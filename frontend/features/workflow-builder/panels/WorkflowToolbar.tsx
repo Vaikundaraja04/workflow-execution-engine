@@ -13,14 +13,22 @@ import {
   Lock,
   ArrowLeft,
   Share2,
+  Users,
+  AlertTriangle,
+  MessageSquare,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useWorkflowBuilderStore } from '../stores/workflowBuilderStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { hasPermission } from '@/types/permissions';
 import { workflowApi } from '@/services/workflowApi';
+import { collaborationApi } from '@/services/collaborationApi';
 import { ExportImportModal } from './ExportImportModal';
 import { Modal } from '@/components/ui/Modal';
+import { PresenceTracker } from '@/features/collaboration/components/PresenceTracker';
+import { ConflictResolver } from '@/features/collaboration/components/ConflictResolver';
+import { CommentsPanel } from '@/features/collaboration/components/CommentsPanel';
 
 interface WorkflowToolbarProps {
   onSave?: () => Promise<void>;

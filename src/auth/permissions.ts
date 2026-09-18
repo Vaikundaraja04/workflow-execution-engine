@@ -8,6 +8,9 @@ export const PERMISSIONS = [
   'WORKFLOW_EXECUTE',
   'MEMBER_MANAGE',
   'AUDIT_READ',
+  'COLLABORATION_READ',
+  'COLLABORATION_COMMENT',
+  'COLLABORATION_MANAGE',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -47,6 +50,8 @@ const EDITOR_PERMISSIONS: readonly Permission[] = [
   'WORKFLOW_READ',
   'WORKFLOW_UPDATE',
   'WORKFLOW_EXECUTE',
+  'COLLABORATION_READ',
+  'COLLABORATION_COMMENT',
 ];
 
 const VIEWER_PERMISSIONS: readonly Permission[] = ['WORKFLOW_READ'];

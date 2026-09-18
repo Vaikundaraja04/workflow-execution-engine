@@ -687,6 +687,152 @@ frontend/
     └── templateApi.ts              # Template creation service
 ```
 
+## Phase 7E: Enterprise Collaboration & Real-Time Workspace Platform
+
+### Overview
+
+Phase 7E introduces a comprehensive real-time collaboration platform that enables multiple users to work together on workflows simultaneously with awareness of each other's activities. The platform includes real-time WebSocket infrastructure, threaded comments with mentions, workflow locking for concurrency control, notifications, activity feeds, and enhanced RBAC permissions.
+
+### Key Features
+
+#### 1. Real-Time Collaboration Infrastructure
+- **Socket.IO with Redis Adapter**: Scalable real-time communication for workspace presence, cursor movements, and live updates
+- **Presence Tracking**: Real-time visibility of online users, their avatars, cursor positions, and active node selections
+- **Workspace Isolation**: Presence and collaboration data isolated by workspace for security and performance
+
+#### 2. Workflow Comments & Discussions
+- **Threaded Comments**: Hierarchical comment structure with parent-child relationships for discussions
+- **@Mentions**: Notify specific users by mentioning them with @username syntax
+- **Comment Resolution**: Mark comments as resolved/reopened to track discussion outcomes
+- **Real-Time Updates**: Comments appear instantly for all collaborators via WebSocket
+- **Edit/Delete**: Full CRUD operations on comments with audit logging
+
+#### 3. Real-Time Workflow Editing Protection
+- **Distributed Locking**: Prevent concurrent overwrites with automatic lock expiration
+- **Heartbeat Mechanism**: Automatic lock renewal to prevent accidental release during active editing
+- **Conflict Detection**: Visual indicators when another user has locked a workflow
+- **Conflict Resolution Modal**: Options to view read-only, reload, or force takeover of locks
+- **TTL-Based Expiry**: Automatic cleanup of stale locks to prevent deadlocks
+
+#### 4. Notification Platform
+- **Multi-Channel Delivery**: Real-time notifications via WebSocket and REST API
+- **Notification Types**: Mentions, lock events, workflow shares, execution results, and system events
+- **Read/Unread Tracking**: Visual indicators and unread counts for notification management
+- **Real-Time Updates**: Instant notification delivery through WebSocket connections
+- **Bulk Operations**: Mark all as read, delete, and filtering capabilities
+
+#### 5. Enterprise Activity Feed
+- **Comprehensive Timeline**: Chronological feed of all workspace activities
+- **Rich Filtering**: Filter by resource type, action, user, and date range
+- **Execution Tracking**: Workflow starts, completions, failures, and retries
+- **Collaboration Events**: Comment creation, mentions, lock acquisitions, and shares
+- **Security Events**: Permission changes, API key usage, and administrative actions
+- **Audit Integration**: Reuses existing audit logging infrastructure where applicable
+
+#### 6. RBAC Security Enhancements
+- **New Collaboration Permissions**:
+  - `COLLABORATION_READ`: View comments, presence, and activity feed
+  - `COLLABORATION_COMMENT`: Create and edit comments, @mention users
+  - `COLLABORATION_MANAGE`: Manage locks, delete comments, moderate discussions
+- **Role Mapping**:
+  - **OWNER**: Full access to all collaboration features
+  - **ADMIN**: Manage collaboration features and moderate discussions
+  - **EDITOR**: Create comments, participate in discussions, acquire locks
+  - **VIEWER**: Read-only access to comments, presence, and activity feed
+- **Workspace Isolation**: All collaboration data scoped to workspace for multi-tenancy
+
+### Technical Implementation
+
+#### Frameworks & Libraries
+- **Socket.IO**: Real-time bidirectional communication between client and server
+- **@socket.io/redis-adapter**: Redis-backed adapter for multi-instance scaling
+- **Zustand**: Client-state management for collaboration state (online users, comments, notifications)
+- **React Query/TanStack Query**: Server-state synchronization for REST APIs
+- **Lucide React**: Consistent iconography for UI components
+
+#### Key Components
+- **PresenceTracker**: Displays online users and avatar stacks in workflow builder toolbar
+- **CommentsPanel**: Threaded comment interface with @mention support and resolution controls
+- **NotificationCenter**: Bell dropdown showing real-time notifications with mark-as-read/delete
+- **ActivityFeed**: Filterable workspace activity timeline with pagination
+- **ConflictResolver**: Modal dialog for handling lock conflicts with view/reload/force takeover options
+- **UserAvatarStack**: Visual representation of multiple users' avatars with overlap handling
+- **PresenceIndicator**: Visual indicator for user's own online/offline status
+
+#### API Integrations
+All collaboration features integrate with backend services:
+- **Socket.IO Events**: Real-time presence, cursor, selection, comment, lock, and notification events
+- **Comment REST API**: CRUD operations for workflow comments (`/api/v1/comments/*`)
+- **Lock REST API**: Workflow locking mechanism (`/api/v1/locks/workflows/*`)
+- **Notification REST API**: Notification management (`/api/v1/notifications/*`)
+- **Activity REST API**: Activity feed retrieval (`/api/v1/activity/*`)
+- **Presence REST API**: Workspace and workflow presence (`/api/v1/presence/*`)
+
+#### RBAC Integration
+The collaboration platform implements granular permission checking:
+- **Comment Operations**: Require `COLLABORATION_COMMENT` for creation/editing, `COLLABORATION_READ` for viewing
+- **Lock Operations**: Require `WORKFLOW_UPDATE` for acquisition/release, `COLLABORATION_MANAGE` for force takeover
+- **Notification Access**: Require `COLLABORATION_READ` for viewing notifications
+- **Activity Feed**: Require `COLLABORATION_READ` for accessing activity timeline
+- **Presence Data**: Require `COLLABORATION_READ` for viewing user presence and cursors
+
+### Component Architecture
+```
+frontend/
+├── features/
+│   └── collaboration/              # Collaboration feature module
+│       ├── components/             # Shared UI components
+│       │   ├── ActivityFeed.tsx
+│       │   ├── CommentThread.tsx
+│       │   ├── CommentsPanel.tsx
+│       │   ├── ConflictResolver.tsx
+│       │   ├── MentionInput.tsx
+│       │   ├── NotificationCenter.tsx
+│       │   ├── NotificationItem.tsx
+│       │   ├── PresenceIndicator.tsx
+│       │   ├── PresenceTracker.tsx
+│       │   └── UserAvatarStack.tsx
+│       ├── hooks/                  # Custom hooks for collaboration features
+│       │   └── useCollaboration.ts
+│       ├── stores/                 # Zustand stores
+│       │   └── collaborationStore.ts
+│       ├── types/                  # TypeScript definitions
+│       │   └── collaboration.ts
+│       └── tests/                  # Component tests
+│           ├── activityFeed.test.tsx
+│           ├── collaborationPresence.test.ts
+│           ├── notificationPlatform.test.ts
+│           ├── workflowComments.test.ts
+│           └── workflowLocks.test.ts
+├── services/
+│   └── collaborationApi.ts         # API service layer for collaboration features
+├── types/
+│   └── collaboration.ts            # Shared collaboration types
+└── src/
+    ├── api/
+    │   ├── routes/                 # API route handlers
+    │   │   ├── activityRoutes.ts
+    │   │   ├── commentRoutes.ts
+    │   │   ├── lockRoutes.ts
+    │   │   └── notificationRoutes.ts
+    │   └── services/               # Business logic services
+    │       ├── activityService.ts
+    │       ├── commentService.ts
+    │       ├── lockService.ts
+    │       └── notificationService.ts
+    ├── models/                     # Database models
+    │   ├── ActivityLogModel.ts
+    │   ├── NotificationModel.ts
+    │   ├── WorkflowCommentModel.ts
+    │   └── WorkflowLockModel.ts
+    └── realtime/                   # Socket.IO real-time infrastructure
+        ├── collaborationEvents.ts  # Event name constants and interfaces
+        ├── socketAuth.ts           # Socket.IO authentication middleware
+        ├── socketServer.ts         # Main Socket.IO server with Redis adapter
+        ├── workspacePresence.ts    # Presence tracking and management
+        └── socketUtils.ts          # Socket.IO utility functions
+```
+
 ## License
 
 ISC
