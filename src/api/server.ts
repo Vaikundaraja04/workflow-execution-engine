@@ -3,6 +3,7 @@ import { connectDB, disconnectDB } from '../db/connection.js';
 import { loadEnv } from '../config/env.js';
 import { BullMqExecutionQueue } from '../queues/bullMqExecutionQueue.js';
 import { recoverPendingExecutions } from '../services/executionService.js';
+import { initializeSocketIO, closeSocketIO } from '../realtime/socketServer.js';
 
 const env = loadEnv();
 
@@ -45,12 +46,24 @@ async function startServer() {
       console.log(`Server running on port ${env.PORT}`);
     });
 
+    // Initialize Socket.IO server
+    initializeSocketIO(server, {
+      auth: {
+        jwtSecret: env.AUTH_JWT_SECRET,
+        accessTtl: env.AUTH_ACCESS_TTL,
+        refreshTtl: env.AUTH_REFRESH_TTL,
+      },
+      redisUrl: env.REDIS_URL,
+      corsOrigins: (env.CORS_ORIGINS ?? '').split(',').map(origin => origin.trim()).filter(origin => origin.length > 0),
+    });
+
     const shutdown = (signal: string) => {
       if (isShuttingDown) return;
       isShuttingDown = true;
       console.log(`Received ${signal}, shutting down gracefully...`);
       server.close(async () => {
         await queue?.close();
+        await closeSocketIO();
         await disconnectDB();
         process.exit(0);
       });

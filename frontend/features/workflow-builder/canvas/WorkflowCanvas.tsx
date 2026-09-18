@@ -20,8 +20,14 @@ import { PropertiesPanel } from '../panels/PropertiesPanel';
 import { ValidationPanel } from '../panels/ValidationPanel';
 import { WorkflowToolbar } from '../panels/WorkflowToolbar';
 import { workflowApi } from '@/services/workflowApi';
+import { collaborationApi } from '@/services/collaborationApi';
 import type { BuilderNodeType } from '../types/workflowBuilder';
-import { Sliders, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Sliders, ShieldCheck, AlertCircle, CheckCircle2, MessageSquare } from 'lucide-react';
+import { useCollaborationStore } from '@/stores/collaborationStore';
+import { useAuthStore } from '@/stores/authStore';
+import { PresenceTracker } from '@/features/collaboration/components/PresenceTracker';
+import { CommentsPanel } from '@/features/collaboration/components/CommentsPanel';
+import { ConflictResolver } from '@/features/collaboration/components/ConflictResolver';
 
 interface WorkflowCanvasProps {
   workflowId?: string;
@@ -61,11 +67,27 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
     loadFromBackendDefinition,
   } = useWorkflowBuilderStore();
 
-  const [activeRightTab, setActiveRightTab] = React.useState<'properties' | 'validation'>('properties');
+  const {
+    workflowPresences,
+    fetchWorkflowPresences,
+    workflowComments,
+    commentLoading,
+    fetchWorkflowComments,
+    workflowLocks,
+    fetchWorkflowLock,
+    acquireWorkflowLock,
+    heartbeatWorkflowLock,
+    releaseWorkflowLock,
+  } = useCollaborationStore();
+
+  const [activeRightTab, setActiveRightTab] = React.useState<'properties' | 'validation' | 'comments'>('properties');
   const [isSaving, setIsSaving] = React.useState(false);
   const [isValidating, setIsValidating] = React.useState(false);
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [notification, setNotification] = React.useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [conflictLock, setConflictLock] = React.useState<any>(null);
+  const [isProcessingConflict, setIsProcessingConflict] = React.useState(false);
+  const [isCommentPanelOpen, setIsCommentPanelOpen] = React.useState(true);
 
   // Auto clear notification after 4s
   React.useEffect(() => {
@@ -81,6 +103,52 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
       addNode('manual_trigger', { x: 250, y: 80 }, { description: 'Start workflow execution' });
     }
   }, [propWorkflowId, nodes.length, addNode]);
+
+  // Handle workflow presence and collaboration features
+  const workflowId = propWorkflowId || storeWorkflowId;
+  React.useEffect(() => {
+    if (workflowId) {
+      fetchWorkflowPresences(workflowId);
+      fetchWorkflowComments(workflowId, { limit: 50, offset: 0, includeResolved: true });
+      fetchWorkflowLock(workflowId).then(lock => {
+        if (lock && lock.userId !== useAuthStore.getState().user?.id) {
+          setConflictLock(lock);
+        }
+      });
+    }
+  }, [workflowId, fetchWorkflowPresences, fetchWorkflowComments, fetchWorkflowLock]);
+
+  // Heartbeat mechanism for workflow lock
+  const heartbeatIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  React.useEffect(() => {
+    const lock = workflowId ? workflowLocks[workflowId] : null;
+    if (lock && workflowId) {
+      // Clear existing interval
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+      }
+
+      // Set up heartbeat to renew lock every 20 seconds (before 30s expiry)
+      heartbeatIntervalRef.current = setInterval(async () => {
+        try {
+          await heartbeatWorkflowLock(workflowId, lock.lockToken, 30);
+        } catch (error) {
+          console.warn('Failed to heartbeat workflow lock:', error);
+          // Clear interval if heartbeat fails
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+          }
+        }
+      }, 20000);
+    }
+
+    return () => {
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+      }
+    };
+  }, [workflowId, workflowLocks, heartbeatWorkflowLock]);
 
   // Drag and Drop handlers
   const onDragOver = React.useCallback((event: React.DragEvent) => {
@@ -297,10 +365,16 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
                 return '#3b82f6';
               }}
             />
+            {/* Collaboration Presence Overlay */}
+            {!isReadOnly && workflowId && (
+              <div className="absolute top-4 left-4 z-10 pointer-events-none">
+                <PresenceTracker workspaceId={workflowId} />
+              </div>
+            )}
           </ReactFlow>
         </div>
 
-        {/* Right: Properties & Validation Panel */}
+        {/* Right: Properties & Validation Panel & Comments */}
         <div className="w-80 h-full shrink-0 flex flex-col bg-white border-l border-gray-200">
           {/* Tab Header */}
           <div className="flex border-b border-gray-200 bg-gray-50/50 shrink-0">
@@ -331,14 +405,105 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
                 </span>
               )}
             </button>
+            <button
+              onClick={() => {
+                setActiveRightTab('comments');
+                setIsCommentPanelOpen(true);
+              }}
+              className={`flex-1 py-2 px-3 text-xs font-semibold flex items-center justify-center space-x-1.5 border-b-2 transition-colors ${
+                activeRightTab === 'comments'
+                  ? 'border-primary text-primary bg-white'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100/50'
+              }`}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span>Comments</span>
+            </button>
           </div>
 
           {/* Tab Content */}
           <div className="flex-1 min-h-0 overflow-y-auto">
-            {activeRightTab === 'properties' ? <PropertiesPanel /> : <ValidationPanel />}
+            {activeRightTab === 'properties' ? (
+              <PropertiesPanel />
+            ) : activeRightTab === 'validation' ? (
+              <ValidationPanel />
+            ) : (
+              <CommentsPanel workflowId={workflowId || ''} />
+            )}
           </div>
         </div>
       </div>
+
+      {/* Conflict Resolver Modal */}
+      {conflictLock && !isReadOnly && (
+        <ConflictResolver
+          isOpen={!!conflictLock}
+          lockConflict={conflictLock}
+          onViewReadOnly={() => {
+            setIsReadOnly(true);
+            setConflictLock(null);
+          }}
+          onForceTakeover={async () => {
+            if (!workflowId) return;
+            setIsProcessingConflict(true);
+            try {
+              // Release existing lock if any
+              const currentLock = workflowLocks[workflowId];
+              if (currentLock?.lockToken) {
+                await releaseWorkflowLock(workflowId, { lockToken: currentLock.lockToken });
+              }
+
+              // Acquire new lock
+              const result = await acquireWorkflowLock(workflowId, 30);
+              if (result.acquired && result.lock) {
+                setConflictLock(null);
+                setNotification({
+                  type: 'success',
+                  message: 'Successfully taken over workflow editing lock'
+                });
+              } else {
+                setNotification({
+                  type: 'error',
+                  message: 'Failed to acquire lock - another user may have taken it'
+                });
+              }
+            } catch (error) {
+              setNotification({
+                type: 'error',
+                message: 'Failed to take over workflow editing lock'
+              });
+            } finally {
+              setIsProcessingConflict(false);
+            }
+          }}
+          onReloadWorkflow={async () => {
+            if (!workflowId) {
+              setConflictLock(null);
+              return;
+            }
+            try {
+              const workflow = await workflowApi.getWorkflow(workflowId);
+              loadFromBackendDefinition(
+                workflow.name,
+                workflow.draft?.definition || workflow.definition,
+                workflow.id || workflow._id,
+                workflow.currentVersion ?? currentVersion,
+                workflow.publishedVersion ?? publishedVersion,
+                isReadOnly
+              );
+              setConflictLock(null);
+            } catch (error) {
+              console.error('Failed to reload workflow:', error);
+              setNotification({
+                type: 'error',
+                message: 'Failed to reload workflow from backend'
+              });
+            }
+          }}
+          onClose={() => setConflictLock(null)}
+          isTakingOver={isProcessingConflict}
+        />
+      )}
     </div>
   );
 };
