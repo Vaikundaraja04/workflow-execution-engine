@@ -40,6 +40,7 @@ import type { ExecutionQueue } from '../../queues/executionQueue.js';
 import { UnavailableExecutionQueue } from '../../queues/executionQueue.js';
 import type { WebhookQueue } from '../../queues/webhookQueue.js';
 import { UnavailableWebhookQueue } from '../../queues/webhookQueue.js';
+import { tenantManagementService } from '../../services/tenantManagementService.js';
 import {
   cancelWorkflowExecution,
   retryWorkflowExecution,
@@ -652,6 +653,57 @@ export function createAdminRouter(options: HealthOptions | AdminRouterOptions = 
 
       const subscriptions = await getAdminBillingSubscriptions(user.userId, filters);
       res.json(subscriptions);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // =============================================================
+  // 11. Tenant Administration API
+  // =============================================================
+
+  // GET /tenant - Get tenant settings and overview
+  router.get('/tenant', requirePermission('TENANT_MANAGE', { useBodyWorkspace: true }), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaceId = getWorkspaceContext(req).workspaceId;
+      const settings = await tenantManagementService.getTenantSettings(workspaceId);
+      res.json(settings);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // PATCH /tenant/settings - Update tenant branding & security settings
+  router.patch('/tenant/settings', requirePermission('TENANT_MANAGE', { useBodyWorkspace: true }), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaceId = getWorkspaceContext(req).workspaceId;
+      const user = getAuthUser(req);
+      const updated = await tenantManagementService.updateTenantSettings(workspaceId, req.body, user.userId);
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // POST /tenant/export - Export tenant data (workflows, templates, users)
+  router.post('/tenant/export', requirePermission('TENANT_MANAGE', { useBodyWorkspace: true }), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaceId = getWorkspaceContext(req).workspaceId;
+      const format = req.body?.format === 'csv' ? 'csv' : 'json';
+      const result = await tenantManagementService.exportTenantData(workspaceId, format);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // DELETE /tenant - Delete / terminate tenant workspace
+  router.delete('/tenant', requirePermission('TENANT_MANAGE', { useBodyWorkspace: true }), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaceId = getWorkspaceContext(req).workspaceId;
+      const user = getAuthUser(req);
+      const result = await tenantManagementService.deleteTenant(workspaceId, user.userId);
+      res.json(result);
     } catch (error) {
       next(error);
     }

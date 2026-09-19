@@ -6,6 +6,7 @@ import { AIWorkflowService } from '../../services/aiWorkflowService.js';
 import { AIFailureAnalysisService } from '../../services/aiFailureAnalysisService.js';
 import { AIOptimizationService } from '../../services/aiOptimizationService.js';
 import { AIOperationsAssistantService } from '../../services/aiOperationsAssistantService.js';
+import { AIBusinessAssistantService } from '../../services/aiBusinessAssistantService.js';
 import { AIUsageModel } from '../../models/AIUsageModel.js';
 import { AIConfigurationModel } from '../../models/AIConfigurationModel.js';
 import { createAuditLog } from '../../services/auditService.js';
@@ -292,6 +293,152 @@ router.get(
 );
 
 // Admin routes for AI configuration (mounted at /api/v1/admin/ai)
+// POST /api/v1/ai/business/cost-optimization
+router.post(
+  '/business/cost-optimization',
+  requirePermission('AI_BUSINESS_READ'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const result = await AIBusinessAssistantService.costOptimizationRecommendations(
+        workspaceContext.workspaceId,
+        workspaceContext.userId?.toString()
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/v1/ai/business/workflow-roi
+router.post(
+  '/business/workflow-roi',
+  requirePermission('AI_BUSINESS_READ'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const { workflowId } = req.body;
+      const result = await AIBusinessAssistantService.workflowRoiAnalysis(
+        workspaceContext.workspaceId,
+        workflowId,
+        workspaceContext.userId?.toString()
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/v1/ai/business/usage-forecast
+router.post(
+  '/business/usage-forecast',
+  requirePermission('AI_BUSINESS_READ'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const result = await AIBusinessAssistantService.usageForecasting(
+        workspaceContext.workspaceId,
+        workspaceContext.userId?.toString()
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/v1/ai/business/capacity-prediction
+router.post(
+  '/business/capacity-prediction',
+  requirePermission('AI_BUSINESS_READ'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const result = await AIBusinessAssistantService.capacityPrediction(
+        workspaceContext.workspaceId,
+        workspaceContext.userId?.toString()
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/v1/ai/business/subscription-recommendations
+router.post(
+  '/business/subscription-recommendations',
+  requirePermission('AI_BUSINESS_READ'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const result = await AIBusinessAssistantService.subscriptionRecommendations(
+        workspaceContext.workspaceId,
+        workspaceContext.userId?.toString()
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/v1/ai/business/governance-suggestions
+router.post(
+  '/business/governance-suggestions',
+  requirePermission('AI_BUSINESS_READ'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const result = await AIBusinessAssistantService.governanceSuggestions(
+        workspaceContext.workspaceId,
+        workspaceContext.userId?.toString()
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export const aiConfigRouter = Router();
 
 // GET /api/v1/admin/ai/config

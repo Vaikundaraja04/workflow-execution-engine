@@ -18,6 +18,17 @@ export const PERMISSIONS = [
   'SECRETS_MANAGE',
   'OPERATIONS_READ',
   'OPERATIONS_MANAGE',
+  // Marketplace
+  'TEMPLATE_PUBLISH',
+  'TEMPLATE_MANAGE',
+  // Governance
+  'GOVERNANCE_READ',
+  'GOVERNANCE_MANAGE',
+  // Tenant Management
+  'TENANT_MANAGE',
+  // AI Business Intelligence
+  'AI_BUSINESS_READ',
+  'AI_BUSINESS_EXECUTE',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -48,6 +59,8 @@ export const AI_PERMISSIONS = [
   'AI_CONFIGURATION_MANAGE',
   'AI_OPERATIONS_READ',
   'AI_OPERATIONS_EXECUTE',
+  'AI_BUSINESS_READ',
+  'AI_BUSINESS_EXECUTE',
 ] as const;
 
 export type AIPermission = (typeof AI_PERMISSIONS)[number];
@@ -72,6 +85,9 @@ const EDITOR_PERMISSIONS: readonly Permission[] = [
   'COLLABORATION_READ',
   'COLLABORATION_COMMENT',
   'OPERATIONS_READ',
+  'TEMPLATE_PUBLISH',
+  'GOVERNANCE_READ',
+  'AI_BUSINESS_READ',
 ];
 
 const VIEWER_PERMISSIONS: readonly Permission[] = ['WORKFLOW_READ'];
@@ -86,15 +102,23 @@ export const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly Permission[]> = {
 export const ROLE_TEMPLATE_PERMISSIONS: Record<WorkspaceRole, readonly TemplatePermission[]> = {
   OWNER: TEMPLATE_PERMISSIONS,
   ADMIN: TEMPLATE_PERMISSIONS,
-  EDITOR: ['TEMPLATE_CREATE', 'TEMPLATE_INSTALL'],
+  EDITOR: ['TEMPLATE_CREATE', 'TEMPLATE_INSTALL', 'TEMPLATE_PUBLISH'],
   VIEWER: ['TEMPLATE_INSTALL'],
 };
 
 export const ROLE_AI_PERMISSIONS: Record<WorkspaceRole, readonly AIPermission[]> = {
   OWNER: AI_PERMISSIONS,
   ADMIN: AI_PERMISSIONS,
-  EDITOR: ['AI_WORKFLOW_CREATE', 'AI_OPTIMIZATION_CREATE', 'AI_ANALYSIS_READ', 'AI_OPERATIONS_READ', 'AI_OPERATIONS_EXECUTE'],
-  VIEWER: ['AI_ANALYSIS_READ', 'AI_OPERATIONS_READ'],
+  EDITOR: [
+    'AI_WORKFLOW_CREATE',
+    'AI_OPTIMIZATION_CREATE',
+    'AI_ANALYSIS_READ',
+    'AI_OPERATIONS_READ',
+    'AI_OPERATIONS_EXECUTE',
+    'AI_BUSINESS_READ',
+    'AI_BUSINESS_EXECUTE',
+  ],
+  VIEWER: ['AI_ANALYSIS_READ', 'AI_OPERATIONS_READ', 'AI_BUSINESS_READ'],
 };
 
 export function roleHasTemplatePermission(role: WorkspaceRole, permission: TemplatePermission): boolean {

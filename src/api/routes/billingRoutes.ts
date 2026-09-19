@@ -6,6 +6,10 @@ import { Types } from 'mongoose';
 import { PlanModel } from '../../models/PlanModel.js';
 import type { SubscriptionStatus } from '../../models/SubscriptionModel.js';
 import type { SubscriptionPlan } from '../../models/SubscriptionModel.js';
+import { billingService } from '../../services/billingService.js';
+import { getAuthUser } from '../../auth/auth.middleware.js';
+import { requirePermission, requireMembership, getWorkspaceContext } from '../middleware/requirePermission.js';
+import { z } from 'zod';
 
 /**
  * Billing webhook endpoint
@@ -226,5 +230,336 @@ function mapBillingStatusToInternal(billingStatus: string): SubscriptionStatus |
 }
 
 export function createBillingRouter() {
-  return billingWebhookRouter;
+  const router = Router();
+
+  // Subscribe workspace to a plan
+  router.post(
+    '/subscribe',
+    requirePermission('WORKFLOW_CREATE', { useBodyWorkspace: true }),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const userId = getAuthUser(req).userId;
+
+        // Validate request body
+        const subscribeSchema = z.object({
+          plan: z.enum(['FREE', 'STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
+          billingProvider: z.string().optional().default('mock'),
+        });
+
+        const parsed = subscribeSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+        }
+
+        const { plan, billingProvider } = parsed.data;
+
+        // Subscribe the workspace
+        const subscription = await billingService.subscribeWorkspace(workspaceId, plan, billingProvider);
+
+        // Create audit log
+        await createAuditLog({
+          action: 'SUBSCRIPTION_CREATED',
+          userId,
+          workspaceId,
+          resource: 'subscription',
+          resourceId: subscription._id.toString(),
+          metadata: {
+            plan: subscription.plan,
+            status: subscription.status,
+            billingProvider: subscription.billingProvider
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+
+        res.json({
+          message: 'Workspace subscribed successfully',
+          subscription: {
+            id: subscription._id.toString(),
+            plan: subscription.plan,
+            status: subscription.status,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+            trialEndsAt: subscription.trialEndsAt
+          }
+        });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  // Get current subscription
+  router.get(
+    '/subscription',
+    requirePermission('WORKFLOW_READ', { useBodyWorkspace: true }),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const subscription = await billingService.getSubscription(workspaceId);
+
+        if (!subscription) {
+          return res.status(404).json({
+            error: { code: 'SUBSCRIPTION_NOT_FOUND', message: 'Subscription not found' },
+          });
+        }
+
+        let plan = await PlanModel.findOne({ id: subscription.plan });
+        if (!plan) {
+          // Ensure default plans exist
+          await PlanModel.insertMany(Object.values(require('../../models/PlanModel.js').DEFAULT_PLANS));
+          plan = await PlanModel.findOne({ id: subscription.plan });
+        }
+
+        res.json({
+          plan: subscription.plan,
+          status: subscription.status,
+          currentPeriodStart: subscription.currentPeriodStart,
+          currentPeriodEnd: subscription.currentPeriodEnd,
+          trialEndsAt: subscription.trialEndsAt,
+          planDetails: plan ? {
+            id: plan.id,
+            name: plan.name,
+            description: plan.description,
+            priceMonthly: plan.priceMonthly,
+            currency: plan.currency,
+            limits: plan.limits,
+            features: plan.features,
+          } : null
+        });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  // Upgrade subscription
+  router.post(
+    '/upgrade',
+    requirePermission('WORKFLOW_CREATE', { useBodyWorkspace: true }),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const userId = getAuthUser(req).userId;
+
+        // Validate request body
+        const upgradeSchema = z.object({
+          plan: z.enum(['FREE', 'STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
+        });
+
+        const parsed = upgradeSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+        }
+
+        const { plan: newPlan } = parsed.data;
+
+        // Upgrade the subscription
+        const subscription = await billingService.upgradeSubscription(workspaceId, newPlan);
+        if (!subscription) {
+          return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Subscription not found' } });
+        }
+
+        // Create audit log
+        await createAuditLog({
+          action: 'SUBSCRIPTION_UPGRADED',
+          userId,
+          workspaceId,
+          resource: 'subscription',
+          resourceId: subscription._id.toString(),
+          metadata: {
+            newPlan: subscription.plan
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+
+        res.json({
+          message: 'Subscription upgraded successfully',
+          subscription: {
+            id: subscription._id.toString(),
+            plan: subscription.plan,
+            status: subscription.status,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd
+          }
+        });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  // Downgrade subscription
+  router.post(
+    '/downgrade',
+    requirePermission('WORKFLOW_CREATE', { useBodyWorkspace: true }),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const userId = getAuthUser(req).userId;
+
+        // Validate request body
+        const downgradeSchema = z.object({
+          plan: z.enum(['FREE', 'STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
+        });
+
+        const parsed = downgradeSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+        }
+
+        const { plan: newPlan } = parsed.data;
+
+        // Downgrade the subscription
+        const subscription = await billingService.downgradeSubscription(workspaceId, newPlan);
+        if (!subscription) {
+          return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Subscription not found' } });
+        }
+
+        // Create audit log
+        await createAuditLog({
+          action: 'SUBSCRIPTION_DOWNGRADED',
+          userId,
+          workspaceId,
+          resource: 'subscription',
+          resourceId: subscription._id.toString(),
+          metadata: {
+            newPlan: subscription.plan
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+
+        res.json({
+          message: 'Subscription downgraded successfully',
+          subscription: {
+            id: subscription._id.toString(),
+            plan: subscription.plan,
+            status: subscription.status,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd
+          }
+        });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  // Cancel subscription
+  router.post(
+    '/cancel',
+    requirePermission('WORKFLOW_CREATE', { useBodyWorkspace: true }),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const userId = getAuthUser(req).userId;
+
+        // Validate request body
+        const cancelSchema = z.object({
+          immediate: z.boolean().optional().default(false),
+        });
+
+        const parsed = cancelSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+        }
+
+        const { immediate } = parsed.data;
+
+        // Cancel the subscription
+        const subscription = await billingService.cancelSubscription(workspaceId, immediate);
+
+        // Create audit log
+        await createAuditLog({
+          action: 'SUBSCRIPTION_CANCELLED',
+          userId,
+          workspaceId,
+          resource: 'subscription',
+          resourceId: subscription._id.toString(),
+          metadata: {
+            immediate
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+
+        res.json({
+          message: 'Subscription cancelled successfully',
+          subscription: {
+            id: subscription._id.toString(),
+            plan: subscription.plan,
+            status: subscription.status,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd
+          }
+        });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  // Get current usage
+  router.get(
+    '/usage',
+    requirePermission('WORKFLOW_READ', { useBodyWorkspace: true }),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const usage = await billingService.getUsage(workspaceId);
+
+        if (!usage) {
+          return res.status(404).json({
+            error: { code: 'USAGE_NOT_FOUND', message: 'Usage data not found' },
+          });
+        }
+
+        res.json({
+          usage
+        });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  // Check feature entitlement
+  router.post(
+    '/check-feature',
+    requirePermission('WORKFLOW_READ', { useBodyWorkspace: true }),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+
+        // Validate request body
+        const featureSchema = z.object({
+          feature: z.string(),
+        });
+
+        const parsed = featureSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+        }
+
+        const { feature } = parsed.data;
+
+        const entitled = await billingService.checkFeatureEntitlement(workspaceId, feature);
+
+        res.json({
+          feature,
+          entitled
+        });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  router.use(billingWebhookRouter);
+
+  return router;
 }
+

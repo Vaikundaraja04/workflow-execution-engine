@@ -5,6 +5,7 @@ import { WEBHOOK_EVENTS } from '../../models/WebhookModel.js';
 import { PERMISSIONS } from '../../auth/permissions.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
 import { createAuditLog } from '../../services/auditService.js';
+import { developerPortalService } from '../../services/developerPortalService.js';
 
 const API_VERSION = '1.0.0';
 
@@ -295,6 +296,75 @@ export function createDeveloperRouter(): Router {
     } catch (error) {
       next(error);
     }
+  });
+
+  // GET /api/v1/developer - Developer portal landing / overview
+  router.get('/', requireMembership(), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ctx = getWorkspaceContext(req);
+      const analytics = await developerPortalService.getApiKeyAnalytics(ctx.workspaceId);
+      const docs = developerPortalService.getApiDocumentation();
+      const sdks = developerPortalService.getSdkDownloads();
+
+      res.json({
+        portal: {
+          title: 'Workflow Engine Developer Portal',
+          version: '1.0.0',
+          workspaceId: ctx.workspaceId,
+        },
+        analytics,
+        sdks,
+        docs,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /api/v1/developer/analytics - API key analytics & latency metrics
+  router.get('/analytics', requireMembership(), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ctx = getWorkspaceContext(req);
+      const analytics = await developerPortalService.getApiKeyAnalytics(ctx.workspaceId);
+      res.json(analytics);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /api/v1/developer/usage - Developer usage & telemetry dashboard
+  router.get('/usage', requireMembership(), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ctx = getWorkspaceContext(req);
+      const usage = await developerPortalService.getUsageDashboard(ctx.workspaceId);
+      res.json(usage);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /api/v1/developer/history - Recent SDK & API request history
+  router.get('/history', requireMembership(), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ctx = getWorkspaceContext(req);
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+      const history = await developerPortalService.getRequestHistory(ctx.workspaceId, limit);
+      res.json({ history });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /api/v1/developer/sdks - Official SDK downloads and quickstart snippets
+  router.get('/sdks', requireMembership(), async (_req: Request, res: Response) => {
+    const sdks = developerPortalService.getSdkDownloads();
+    res.json({ sdks });
+  });
+
+  // GET /api/v1/developer/docs - Developer API documentation overview
+  router.get('/docs', requireMembership(), async (_req: Request, res: Response) => {
+    const docs = developerPortalService.getApiDocumentation();
+    res.json(docs);
   });
 
   return router;
