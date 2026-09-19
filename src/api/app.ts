@@ -50,6 +50,10 @@ import complianceRoutes from './routes/complianceRoutes.js';
 import privacyRoutes from './routes/privacyRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import secretsRoutes from './routes/secretsRoutes.js';
+// Phase 9: Enterprise Operations, Analytics & Production Intelligence Platform
+import analyticsEnterpriseRoutes from './routes/analyticsEnterpriseRoutes.js';
+import reportRoutes from './routes/reportRoutes.js';
+import operationsRoutes from './routes/operationsRoutes.js';
 
 const OPENAPI_DOCUMENT = buildOpenApiDocument();
 
@@ -145,6 +149,11 @@ export function createApp(options: AppOptions) {
   app.use('/api/v1/privacy', privacyRoutes());
   app.use('/api/v1/sessions', sessionRoutes());
   app.use('/api/v1/secrets', secretsRoutes());
+
+  // Phase 9: Enterprise Operations, Analytics & Production Intelligence Platform
+  app.use('/api/v1/analytics', analyticsEnterpriseRoutes());
+  app.use('/api/v1/reports', reportRoutes());
+  app.use('/api/v1/operations', operationsRoutes());
 
   // Collaboration routes
   app.use('/api/v1/comments', requireAuth, createCommentRoutes(requireAuth));

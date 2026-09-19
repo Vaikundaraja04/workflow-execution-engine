@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { securityCenterService } from '../../services/securityCenterService.js';
+import { auditIntelligenceService } from '../../services/auditIntelligenceService.js';
 import { requirePermission, getWorkspaceContext } from '../middleware/requirePermission.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
 import type { Request, Response, NextFunction } from 'express';
@@ -123,6 +124,45 @@ export function createSecurityRouter(): Router {
         const { workspaceId } = getWorkspaceContext(req);
         await securityCenterService.runThreatDetection(workspaceId);
         res.json({ message: 'Threat detection completed successfully' });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @route GET /api/v1/security/intelligence
+   * @desc Get security intelligence and anomaly detection
+   * @access Private (requires SECURITY_READ)
+   */
+  router.get(
+    '/intelligence',
+    requirePermission('SECURITY_READ'),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { workspaceId } = getWorkspaceContext(req);
+        const intelligence = await auditIntelligenceService.getSecurityIntelligence(workspaceId);
+        res.json(intelligence);
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @route POST /api/v1/security/intelligence/scan
+   * @desc Trigger on-demand security intelligence scan
+   * @access Private (requires SECURITY_MANAGE)
+   */
+  router.post(
+    '/intelligence/scan',
+    requirePermission('SECURITY_MANAGE'),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { workspaceId } = getWorkspaceContext(req);
+        const { userId } = getAuthUser(req);
+        const intelligence = await auditIntelligenceService.scanWorkspace(workspaceId, userId);
+        res.json(intelligence);
       } catch (error) {
         next(error);
       }

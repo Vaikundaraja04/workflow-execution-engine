@@ -16,6 +16,8 @@ export const PERMISSIONS = [
   'COMPLIANCE_EXPORT',
   'PRIVACY_MANAGE',
   'SECRETS_MANAGE',
+  'OPERATIONS_READ',
+  'OPERATIONS_MANAGE',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -44,6 +46,8 @@ export const AI_PERMISSIONS = [
   'AI_ANALYSIS_READ',
   'AI_OPTIMIZATION_CREATE',
   'AI_CONFIGURATION_MANAGE',
+  'AI_OPERATIONS_READ',
+  'AI_OPERATIONS_EXECUTE',
 ] as const;
 
 export type AIPermission = (typeof AI_PERMISSIONS)[number];
@@ -67,6 +71,7 @@ const EDITOR_PERMISSIONS: readonly Permission[] = [
   'WORKFLOW_EXECUTE',
   'COLLABORATION_READ',
   'COLLABORATION_COMMENT',
+  'OPERATIONS_READ',
 ];
 
 const VIEWER_PERMISSIONS: readonly Permission[] = ['WORKFLOW_READ'];
@@ -88,8 +93,8 @@ export const ROLE_TEMPLATE_PERMISSIONS: Record<WorkspaceRole, readonly TemplateP
 export const ROLE_AI_PERMISSIONS: Record<WorkspaceRole, readonly AIPermission[]> = {
   OWNER: AI_PERMISSIONS,
   ADMIN: AI_PERMISSIONS,
-  EDITOR: ['AI_WORKFLOW_CREATE', 'AI_OPTIMIZATION_CREATE', 'AI_ANALYSIS_READ'],
-  VIEWER: ['AI_ANALYSIS_READ'],
+  EDITOR: ['AI_WORKFLOW_CREATE', 'AI_OPTIMIZATION_CREATE', 'AI_ANALYSIS_READ', 'AI_OPERATIONS_READ', 'AI_OPERATIONS_EXECUTE'],
+  VIEWER: ['AI_ANALYSIS_READ', 'AI_OPERATIONS_READ'],
 };
 
 export function roleHasTemplatePermission(role: WorkspaceRole, permission: TemplatePermission): boolean {

@@ -5,6 +5,7 @@ import { Types } from 'mongoose';
 import { AIWorkflowService } from '../../services/aiWorkflowService.js';
 import { AIFailureAnalysisService } from '../../services/aiFailureAnalysisService.js';
 import { AIOptimizationService } from '../../services/aiOptimizationService.js';
+import { AIOperationsAssistantService } from '../../services/aiOperationsAssistantService.js';
 import { AIUsageModel } from '../../models/AIUsageModel.js';
 import { AIConfigurationModel } from '../../models/AIConfigurationModel.js';
 import { createAuditLog } from '../../services/auditService.js';
@@ -150,6 +151,110 @@ router.post(
         prompt,
         workspaceContext.workspaceId,
         workspaceContext.userId
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/v1/ai/operations/explain-failure
+router.post(
+  '/operations/explain-failure',
+  requirePermission('AI_OPERATIONS_EXECUTE'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { executionId } = req.body;
+      if (!executionId) {
+        return res.status(400).json({ error: 'Execution ID is required' });
+      }
+
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const aiService = AIOperationsAssistantService;
+      const result = await aiService.explainWorkflowFailure(
+        executionId,
+        workspaceContext.workspaceId,
+        workspaceContext.userId
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/v1/ai/operations/system-summary
+router.post(
+  '/operations/system-summary',
+  requirePermission('AI_OPERATIONS_EXECUTE'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const aiService = AIOperationsAssistantService;
+      const result = await aiService.summarizeSystemHealth(
+        workspaceContext.workspaceId,
+        workspaceContext.userId
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/v1/ai/operations/anomalies
+router.post(
+  '/operations/anomalies',
+  requirePermission('AI_OPERATIONS_EXECUTE'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const aiService = AIOperationsAssistantService;
+      const result = await aiService.detectSystemAnomalies(
+        workspaceContext.workspaceId
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/v1/ai/operations/scaling-recommendations
+router.post(
+  '/operations/scaling-recommendations',
+  requirePermission('AI_OPERATIONS_EXECUTE'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const aiService = AIOperationsAssistantService;
+      const result = await aiService.recommendScalingActions(
+        workspaceContext.workspaceId
       );
 
       res.json(result);

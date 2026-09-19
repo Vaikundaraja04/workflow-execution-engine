@@ -29,6 +29,7 @@ export interface IWorkflowExecution extends Document<Types.ObjectId> {
   timeoutMs?: number;
   parentExecutionId?: Types.ObjectId;
   statusHistory: ExecutionStatusEvent[];
+  stepStatuses?: Record<string, unknown>;
   queuedAt?: Date;
   startedAt?: Date;
   finishedAt?: Date;
@@ -69,6 +70,7 @@ const WorkflowExecutionSchema = new Schema<IWorkflowExecution>({
   timeoutMs: { type: Number, min: 1 },
   parentExecutionId: { type: Schema.Types.ObjectId, ref: 'WorkflowExecution' },
   statusHistory: { type: [ExecutionStatusEventSchema], required: true, default: [] },
+  stepStatuses: { type: Schema.Types.Mixed },
   queuedAt: { type: Date },
   startedAt: { type: Date },
   finishedAt: { type: Date },

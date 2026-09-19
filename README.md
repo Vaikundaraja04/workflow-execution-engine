@@ -957,6 +957,110 @@ frontend/
     └── security.types.ts           # Enterprise security type definitions
 ```
 
+## Phase 9: Enterprise Operations, Analytics & Production Intelligence Platform
+
+### Overview
+
+Phase 9 transforms the Workflow Execution Engine into a full-scale enterprise operations system. It provides comprehensive observability telemetry, automated multi-format scheduled reporting, historical workspace analytics, audit log security intelligence, and an AI Operations Assistant for automated troubleshooting and capacity planning.
+
+### Key Capabilities
+
+#### 1. Enterprise Analytics Platform (Phase 9A)
+- **High-Performance Aggregations**: Aggregated analytics across workflows, executions, usage, costs, and team activity with custom timeframes (`24h`, `7d`, `30d`, `90d`).
+- **Execution & Latency Percentiles**: Granular calculation of median (p50), p90, p95, and p99 execution duration percentiles alongside hourly/daily throughput trends.
+- **Node Failure Diagnostics**: Identifies top failing node types and specific node IDs with aggregated failure counts and error samples.
+- **Cost Attribution**: Granular cost breakdown covering compute duration, AI token usage, and storage estimates with per-workflow cost attribution.
+- **Multi-Format Export**: Asynchronous export of raw and aggregated analytics datasets in JSON and CSV formats.
+
+#### 2. Advanced Reporting System (Phase 9B)
+- **Multi-Domain Report Generation**: On-demand and scheduled reports across six enterprise domains: `EXECUTION`, `WORKFLOW_HEALTH`, `SECURITY`, `COMPLIANCE`, `USAGE`, and `COST`.
+- **Flexible Format Support**: Native generation and export in `JSON`, `CSV`, and structured `PDF` formats.
+- **Automated Scheduling**: Cron-compatible recurring execution schedules (`DAILY`, `WEEKLY`, `MONTHLY`) with recipient routing and next-run calculation.
+- **Lifecycle Management**: Full report archiving, filtering, metadata tracking, and secure artifact download endpoints.
+
+#### 3. Production Observability Dashboard (Phase 9C)
+- **Real-Time Service Health**: Instant status and latency metrics for core infrastructure components: API gateway, MongoDB connection pools, Redis memory/clients, BullMQ queues, worker pool concurrency, and WebSockets.
+- **Queue & Worker Telemetry**: Active, waiting, completed, and failed job counts with worker pool utilization tracking.
+- **System Metrics Monitoring**: CPU usage, memory allocation, API request throughput (RPM), error rates, and p95 API response times.
+
+#### 4. Enterprise Audit Intelligence (Phase 9D)
+- **Automated Anomaly Scoring**: Calculates dynamic risk and anomaly scores (0–100) using pattern analysis over audit logs and session activity.
+- **Threat Vector Detection**: Scans for credential stuffing / brute force login clusters, unauthorized privilege escalation spikes, and suspicious access anomalies.
+- **Actionable Remediation**: Produces severity-graded security insights (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) paired with concrete remediation recommendations.
+
+#### 5. Frontend Enterprise Operations Console (Phase 9E)
+- **Executive Overview**: High-level KPI summary, SLA adherence, execution volume trends, and cost summary cards.
+- **Workflow & Execution Analytics**: Interactive drill-downs for hourly throughput, latency distribution, retry statistics, and node failure breakdown.
+- **Operations & Security Center**: Real-time system health cards, queue metrics, risk score indicators, and threat intelligence streams.
+- **Report Studio**: Interactive report creator with schedule configuration, report catalog, and direct artifact downloads.
+
+#### 6. AI Operations Assistant (Phase 9F)
+- **Failure Diagnostics (`explainWorkflowFailure`)**: AI-powered root-cause analysis of failed execution runs with confidence scoring and step-by-step fix recommendations.
+- **System Health Summary (`summarizeSystemHealth`)**: Generates executive health grades (`A` through `F`) with operational observations, immediate actions, and scaling advice.
+- **Proactive Anomaly Detection (`detectSystemAnomalies`)**: Flags unusual queue buildups, error rate anomalies, and latency regressions.
+- **Capacity & Scaling Advisory (`recommendScalingActions`)**: Recommends optimal worker concurrency and autoscaling targets based on active load.
+- **Workflow Optimization (`suggestOptimizations`)**: Identifies parallelization, caching, retry policy, and timeout tuning opportunities.
+
+### API Endpoints
+
+#### Analytics (`/api/v1/analytics`)
+- `GET /api/v1/analytics/overview` — High-level workspace overview metrics (`OPERATIONS_READ`)
+- `GET /api/v1/analytics/workflows` — Workflow execution and node failure analytics (`OPERATIONS_READ`)
+- `GET /api/v1/analytics/executions` — Execution throughput, latency percentiles, and retry stats (`OPERATIONS_READ`)
+- `GET /api/v1/analytics/users` — User productivity and execution trigger volume (`AUDIT_READ`)
+- `GET /api/v1/analytics/performance` — Response times and slowest workflow profiles (`OPERATIONS_READ`)
+- `GET /api/v1/analytics/cost` — Compute, token, and storage cost breakdown (`AUDIT_READ`)
+- `GET /api/v1/analytics/export` — Export analytics data in JSON or CSV format (`AUDIT_READ`)
+
+#### Reports (`/api/v1/reports`)
+- `POST /api/v1/reports` — Create or schedule a new report (`AUDIT_READ`)
+- `GET /api/v1/reports` — List generated reports with status/type filters (`AUDIT_READ`)
+- `GET /api/v1/reports/:id` — Get report details and data (`AUDIT_READ`)
+- `DELETE /api/v1/reports/:id` — Delete a report (`AUDIT_READ`)
+- `GET /api/v1/reports/:id/export` — Download report artifact (`AUDIT_READ`)
+
+#### Operations & Observability (`/api/v1/operations`)
+- `GET /api/v1/operations/health` — Service health and latency diagnostics (`OPERATIONS_READ`)
+- `GET /api/v1/operations/metrics` — CPU, memory, API throughput, and queue depth telemetry (`OPERATIONS_READ`)
+- `GET /api/v1/operations/system` — Comprehensive system status and environment summary (`OPERATIONS_READ`)
+
+#### Audit Intelligence (`/api/v1/security`)
+- `GET /api/v1/security/intelligence` — Retrieve threat level, risk score, and suspicious activity insights (`SECURITY_READ`)
+- `POST /api/v1/security/intelligence/scan` — Run on-demand audit log security intelligence scan (`SECURITY_MANAGE`)
+
+#### AI Operations Assistant (`/api/v1/ai/operations`)
+- `POST /api/v1/ai/operations/explain-failure` — AI failure explanation and remediation (`AI_OPERATIONS_READ`)
+- `POST /api/v1/ai/operations/system-summary` — AI system summary and health grade (`AI_OPERATIONS_READ`)
+- `POST /api/v1/ai/operations/anomalies` — AI anomaly detection scan (`AI_OPERATIONS_READ`)
+- `POST /api/v1/ai/operations/scaling-recommendations` — AI worker concurrency advisory (`AI_OPERATIONS_EXECUTE`)
+- `POST /api/v1/ai/operations/suggest-optimizations` — AI workflow performance optimization suggestions (`AI_OPERATIONS_READ`)
+
+### Frontend Architecture
+
+```
+frontend/
+├── app/
+│   └── operations/
+│       ├── page.tsx                    # Operations Console & Executive Overview
+│       ├── analytics/page.tsx          # Deep-Dive Analytics (Workflows, Executions, Cost)
+│       ├── reports/page.tsx            # Report Studio & Schedule Manager
+│       └── security/page.tsx           # Audit Intelligence & Risk Monitoring
+├── features/
+│   └── enterprise-operations/
+│       ├── ExecutiveOverview.tsx       # Executive KPI summary cards
+│       ├── ExecutionAnalytics.tsx      # Throughput, latency percentiles & retry stats
+│       ├── WorkflowAnalytics.tsx       # Workflow performance & node failure breakdown
+│       ├── CostAnalytics.tsx           # Compute & AI token cost breakdown
+│       ├── SystemHealth.tsx            # Service connectivity & queue health cards
+│       └── SecurityRiskWidget.tsx      # Risk score breakdown & suspicious activities
+├── services/
+│   └── operationsApi.ts                # Operations, Analytics, Report & AI API client
+├── stores/
+│   └── operationsStore.ts              # Zustand operations & analytics state store
+└── types/
+    └── operations.types.ts             # TypeScript definitions for Operations console
+```
+
 ## License
 
 ISC
