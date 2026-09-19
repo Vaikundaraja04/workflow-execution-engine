@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
+import { Types } from 'mongoose';
 import { z } from 'zod';
 import { requirePermission, getWorkspaceContext } from '../middleware/requirePermission.js';
+import { getAuthUser } from '../../auth/auth.middleware.js';
 import { AUDIT_ACTIONS } from '../../models/AuditLogModel.js';
 import type { AuditAction } from '../../models/AuditLogModel.js';
 import {
@@ -11,6 +13,8 @@ import {
   getAuditSummary,
 } from '../../services/auditQueryService.js';
 import type { AuditFilter, AuditQueryOptions } from '../../services/auditQueryService.js';
+import { auditExportService } from '../../services/auditExportService.js';
+import { verifyAuditChain } from '../../services/auditService.js';
 
 const auditFilterQuerySchema = z.object({
   userId: z.string().trim().optional(),
@@ -136,6 +140,74 @@ export function createAuditRouter(): Router {
   // GET / and /logs - Query audit logs
   router.get('/', requireAuditRead, handleQueryLogs);
   router.get('/logs', requireAuditRead, handleQueryLogs);
+
+  // GET /export - Export audit logs in CSV or JSON format
+  router.get('/export', requireAuditRead, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaceId = getWorkspaceContext(req).workspaceId;
+      const query = auditFilterQuerySchema.parse(req.query);
+
+      const startDate = query.startDate ?? query.from;
+      const endDate = query.endDate ?? query.to;
+
+      const offset = query.page !== undefined
+        ? (query.page - 1) * query.limit
+        : query.offset;
+
+      const result = await queryAuditLogs(
+        workspaceId,
+        {
+          userId: query.userId,
+          action: query.action as AuditAction | undefined,
+          resource: query.resource,
+          resourceId: query.resourceId,
+          startDate: startDate ? new Date(startDate) : undefined,
+          endDate: endDate ? new Date(endDate) : undefined,
+          ipAddress: query.ipAddress,
+          search: query.search,
+        } as AuditFilter,
+        {
+          limit: query.limit,
+          offset,
+          sortBy: query.sortBy,
+          sortOrder: query.sortOrder,
+        } as AuditQueryOptions,
+      );
+
+      // Export as CSV or JSON based on query parameter
+      const format = (req.query.format as 'CSV' | 'JSON')?.toUpperCase() === 'CSV' ? 'CSV' : 'JSON';
+      const exportResult = await auditExportService.exportAuditLogs(
+        {
+          workspaceId,
+          startDate: startDate ? new Date(startDate) : undefined,
+          endDate: endDate ? new Date(endDate) : undefined,
+          actionTypes: query.action ? [query.action] : undefined,
+          userId: query.userId,
+          format,
+        },
+        getAuthUser(req).userId
+      );
+
+      res.set({
+        'Content-Type': exportResult.mimeType,
+        'Content-Disposition': `attachment; filename="${exportResult.filename}"`,
+      });
+      res.send(exportResult.data);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /verify-chain - Verify audit log hash chain integrity
+  router.get('/verify-chain', requireAuditRead, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaceId = getWorkspaceContext(req).workspaceId;
+      const verificationResult = await verifyAuditChain(workspaceId ? new Types.ObjectId(workspaceId) : undefined);
+      res.json(verificationResult);
+    } catch (error) {
+      next(error);
+    }
+  });
 
   // GET /logs/:id and /:id - Get specific audit log
   router.get('/logs/:id', requireAuditRead, handleGetLogById);

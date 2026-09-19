@@ -11,9 +11,24 @@ export const PERMISSIONS = [
   'COLLABORATION_READ',
   'COLLABORATION_COMMENT',
   'COLLABORATION_MANAGE',
+  'SECURITY_READ',
+  'SECURITY_MANAGE',
+  'COMPLIANCE_EXPORT',
+  'PRIVACY_MANAGE',
+  'SECRETS_MANAGE',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
+
+export const SECURITY_PERMISSIONS = [
+  'SECURITY_READ',
+  'SECURITY_MANAGE',
+  'COMPLIANCE_EXPORT',
+  'PRIVACY_MANAGE',
+  'SECRETS_MANAGE',
+] as const;
+
+export type SecurityPermission = (typeof SECURITY_PERMISSIONS)[number];
 
 export const TEMPLATE_PERMISSIONS = [
   'TEMPLATE_CREATE',
@@ -95,6 +110,10 @@ export function isTemplatePermission(value: unknown): value is TemplatePermissio
 
 export function isAiPermission(value: unknown): value is AIPermission {
   return typeof value === 'string' && (AI_PERMISSIONS as readonly string[]).includes(value as AIPermission);
+}
+
+export function isSecurityPermission(value: unknown): value is SecurityPermission {
+  return typeof value === 'string' && (SECURITY_PERMISSIONS as readonly string[]).includes(value as SecurityPermission);
 }
 
 export function isWorkspaceRole(value: unknown): value is WorkspaceRole {

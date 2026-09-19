@@ -76,6 +76,31 @@ export const AUDIT_ACTIONS = [
   'WORKFLOW_UNLOCKED',
   'NOTIFICATION_CREATED',
   'NOTIFICATION_READ',
+  'SECURITY_THREAT_DETECTED',
+  'SECURITY_EVENT_RESOLVED',
+  'SECURITY_POLICY_UPDATED',
+  'IP_ALLOWLIST_UPDATED',
+  'SESSION_CREATED',
+  'SESSION_REVOKED',
+  'SESSION_REVOKED_ALL',
+  'COMPLIANCE_REPORT_GENERATED',
+  'AUDIT_LOGS_EXPORTED',
+  'AUDIT_EXPORT_REQUESTED',
+  'AUDIT_CHAIN_VERIFIED',
+  'RETENTION_POLICY_UPDATED',
+  'RETENTION_POLICY_DELETED',
+  'RETENTION_POLICY_APPLIED',
+  'PRIVACY_EXPORT_REQUESTED',
+  'PRIVACY_EXPORT_DOWNLOADED',
+  'PRIVACY_DELETE_REQUESTED',
+  'PRIVACY_PREFERENCES_UPDATED',
+  'SECRET_CREATED',
+  'SECRET_ACCESSED',
+  'SECRET_ROTATED',
+  'SECRET_DELETED',
+  'MFA_SETUP_INITIATED',
+  'MFA_ENABLED',
+  'MFA_DISABLED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -89,6 +114,9 @@ export interface IAuditLog extends Document<Types.ObjectId> {
   metadata?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
+  prevHash?: string;
+  recordHash?: string;
+  signature?: string;
   createdAt: Date;
 }
 
@@ -101,6 +129,9 @@ const AuditLogSchema = new Schema<IAuditLog>({
   metadata: { type: Schema.Types.Mixed },
   ipAddress: { type: String, maxlength: 64 },
   userAgent: { type: String, maxlength: 512 },
+  prevHash: { type: String, maxlength: 64 },
+  recordHash: { type: String, maxlength: 64 },
+  signature: { type: String, maxlength: 128 },
 }, { timestamps: { createdAt: true, updatedAt: false }, minimize: false });
 
 AuditLogSchema.index({ userId: 1 });

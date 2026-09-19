@@ -833,6 +833,130 @@ frontend/
         └── socketUtils.ts          # Socket.IO utility functions
 ```
 
+## Phase 8: Enterprise Security & Compliance Platform
+
+### Overview
+
+Phase 8 introduces an enterprise-grade security, data privacy, and compliance platform that equips the Workflow Execution Engine with real-time threat intelligence, cryptographic audit chains, automated compliance reporting, secrets management with envelope encryption, GDPR data subject rights workflows, and active session controls.
+
+### Key Capabilities
+
+#### 1. Security Center & Threat Detection
+- **Dynamic Risk Scoring (0–100)**: Evaluates security posture across four weighted domains: Authentication (35%), Access Control (25%), Data Protection (20%), and Network Security (20%).
+- **Automated Threat Detection Engine**: Scans for failed login brute-force attacks, suspicious privilege escalations, API rate limit abuse, and geo/anomalous access patterns.
+- **Security Event Lifecycle**: Triaging and resolving security events with audit trails (`OPEN`, `INVESTIGATING`, `RESOLVED`, `FALSE_POSITIVE`).
+
+#### 2. Cryptographic Immutable Audit Logging & Verification
+- **SHA-256 Hash Chaining**: Every audit entry is cryptographically linked to the previous log entry (`prevHash` → `recordHash`).
+- **HMAC-SHA256 Signatures**: Tamper-evident verification guaranteeing audit log integrity and chain validation.
+- **Compliance Audit Exports**: Export audit trails in CSV and JSON formats with filters by user, action, and date range.
+
+#### 3. GDPR Privacy & Data Subject Rights (Articles 17 & 20)
+- **Data Portability (Article 20)**: User-initiated data export packaging personal data, workflow definitions, and execution history.
+- **Right to be Forgotten (Article 17)**: Deletion request pipeline with configurable grace periods, PII anonymization, and workspace asset cleanup.
+- **Consent & Retention Preferences**: Granular consent toggles for analytics, marketing, and crash diagnostics with retention period controls (indefinite, 3–36 months).
+
+#### 4. Advanced Access Control & Session Management
+- **Device & Session Tracking**: Browser, OS, IP address, device type, last active timestamp, and active status tracking.
+- **Remote Revocation & Force Logout**: Single-session and bulk remote logout (`revoke-others`) with reason logging.
+- **Workspace IP Allowlisting**: Enforce CIDR/IP allowlists with workspace-level policy toggles.
+- **Two-Factor Authentication (MFA/TOTP)**: Built-in TOTP secret generation, QR/URI parameters, and token verification.
+
+#### 5. Central Secrets Vault with Envelope Encryption
+- **AES-256-GCM Encryption**: Secure at-rest encryption with initialization vectors (IV) and authentication tags.
+- **Environment Isolation**: Separate secret namespaces across `development`, `staging`, and `production`.
+- **Secret Lifecycle & Rotation**: Zero-downtime secret rotation with automatic versioning and access audit logging.
+- **Sanitized Metadata Responses**: Plaintext values are never returned during listing operations.
+
+#### 6. Compliance Reporting & Automated Evidence Collection
+- **Multi-Framework Reporting**: Automated compliance evaluations for **SOC2 Type II**, **GDPR**, and **ISO27001**.
+- **Automated Control Checks**: Validates MFA enforcement, IP allowlisting, encryption policies, audit log integrity, and retention rules.
+- **Evidence Bundling & Export**: Structured compliance report generation and export in PDF and JSON formats.
+
+#### 7. Hardened RBAC Security Matrix
+Enterprise security permissions are strictly reserved for **OWNER** and **ADMIN** roles:
+- `SECURITY_READ`: Access security dashboard, threat events, risk scores, and sessions
+- `SECURITY_MANAGE`: Resolve security incidents, update security policies, trigger threat sweeps, manage retention
+- `COMPLIANCE_EXPORT`: Generate and download SOC2, GDPR, and ISO27001 reports and policies
+- `PRIVACY_MANAGE`: Initiate data exports, handle account deletion requests, manage privacy preferences
+- `SECRETS_MANAGE`: Read, create, rotate, and delete encrypted secrets in the vault
+
+### API Endpoints
+
+#### Security Center (`/api/v1/security`)
+- `GET /api/v1/security/dashboard` — Security center overview metrics (`SECURITY_READ`)
+- `GET /api/v1/security/events` — Paginated security events (`SECURITY_READ`)
+- `GET /api/v1/security/risk-score` — Dynamic risk score calculation (`SECURITY_READ`)
+- `POST /api/v1/security/events/:id/resolve` — Resolve a security event (`SECURITY_MANAGE`)
+- `POST /api/v1/security/threat-detection/run` — Trigger threat detection sweep (`SECURITY_MANAGE`)
+
+#### Sessions & Policy (`/api/v1/sessions` & `/api/v1/security/policy`)
+- `GET /api/v1/sessions` — List user's active sessions (`SECURITY_READ`)
+- `POST /api/v1/sessions/:id/revoke` — Revoke a specific session (`SECURITY_MANAGE` / `PRIVACY_MANAGE`)
+- `POST /api/v1/sessions/revoke-others` — Revoke all other active sessions (`SECURITY_MANAGE` / `PRIVACY_MANAGE`)
+- `GET /api/v1/security/policy` — Get workspace security policy (`SECURITY_READ`)
+- `PUT /api/v1/security/policy` — Update workspace security policy (`SECURITY_MANAGE`)
+- `POST /api/v1/auth/mfa/setup` — Generate TOTP MFA setup credentials (`PRIVACY_MANAGE`)
+- `POST /api/v1/auth/mfa/verify` — Verify TOTP MFA code (`PRIVACY_MANAGE`)
+
+#### Privacy & GDPR (`/api/v1/privacy`)
+- `POST /api/v1/privacy/export` — Request data export (`PRIVACY_MANAGE`)
+- `POST /api/v1/privacy/delete-request` — Request account deletion (`PRIVACY_MANAGE`)
+- `GET /api/v1/privacy/status` — Get privacy request status history (`PRIVACY_MANAGE`)
+- `GET /api/v1/privacy/preferences` — Get privacy preferences (`PRIVACY_MANAGE`)
+- `PUT /api/v1/privacy/preferences` — Update privacy preferences (`PRIVACY_MANAGE`)
+
+#### Secrets Vault (`/api/v1/secrets`)
+- `GET /api/v1/secrets` — List secrets metadata (`SECRETS_MANAGE`)
+- `POST /api/v1/secrets` — Create encrypted secret (`SECRETS_MANAGE`)
+- `GET /api/v1/secrets/:id` — Retrieve decrypted secret (`SECRETS_MANAGE`)
+- `POST /api/v1/secrets/:id/rotate` — Rotate secret value (`SECRETS_MANAGE`)
+- `DELETE /api/v1/secrets/:id` — Delete secret (`SECRETS_MANAGE`)
+
+#### Compliance Reports (`/api/v1/compliance`)
+- `GET /api/v1/compliance/reports/soc2` — Generate SOC2 report (`COMPLIANCE_EXPORT`)
+- `GET /api/v1/compliance/reports/gdpr` — Generate GDPR report (`COMPLIANCE_EXPORT`)
+- `GET /api/v1/compliance/reports/iso27001` — Generate ISO27001 report (`COMPLIANCE_EXPORT`)
+- `GET /api/v1/compliance/retention-policies` — List retention policies (`COMPLIANCE_EXPORT`)
+- `PUT /api/v1/compliance/retention-policies` — Set retention policy (`SECURITY_MANAGE`)
+- `DELETE /api/v1/compliance/retention-policies/:resourceType` — Delete retention policy (`SECURITY_MANAGE`)
+
+#### Audit Log Exports & Verification (`/api/v1/audit`)
+- `GET /api/v1/audit/export` — Export audit logs as CSV/JSON (`AUDIT_READ`)
+- `GET /api/v1/audit/verify-chain` — Verify cryptographic audit hash chain (`AUDIT_READ`)
+
+### Frontend Architecture
+
+```
+frontend/
+├── app/
+│   ├── security/                   # Security Center routes
+│   │   ├── page.tsx                # Security Dashboard
+│   │   ├── audit/page.tsx          # Audit Log Explorer & Verification
+│   │   ├── compliance/page.tsx     # Compliance Reports (SOC2, GDPR, ISO27001)
+│   │   ├── policy/page.tsx         # Workspace Security Policy
+│   │   ├── secrets/page.tsx        # Secrets Vault
+│   │   └── sessions/page.tsx       # Session Manager
+│   └── privacy/page.tsx            # GDPR Privacy Center
+├── features/
+│   └── security/
+│       └── components/
+│           ├── AuditExplorer.tsx
+│           ├── ComplianceReport.tsx
+│           ├── IpAllowlistSettings.tsx
+│           ├── PrivacyCenter.tsx
+│           ├── RiskScoreCard.tsx
+│           ├── SecretsVaultView.tsx
+│           ├── SecurityDashboard.tsx
+│           └── SessionManager.tsx
+├── services/
+│   └── securityApi.ts              # Centralized Security API client
+├── stores/
+│   └── securityStore.ts            # Zustand security state store
+└── types/
+    └── security.types.ts           # Enterprise security type definitions
+```
+
 ## License
 
 ISC

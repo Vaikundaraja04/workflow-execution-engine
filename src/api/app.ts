@@ -44,6 +44,12 @@ import { requestLogger } from './middleware/requestLogger.js';
 import { buildOpenApiDocument } from './openapi.js';
 import type { WebhookQueue } from '../queues/webhookQueue.js';
 import { UnavailableWebhookQueue } from '../queues/webhookQueue.js';
+// Phase 8: Enterprise Security & Compliance Platform
+import securityRoutes from './routes/securityRoutes.js';
+import complianceRoutes from './routes/complianceRoutes.js';
+import privacyRoutes from './routes/privacyRoutes.js';
+import sessionRoutes from './routes/sessionRoutes.js';
+import secretsRoutes from './routes/secretsRoutes.js';
 
 const OPENAPI_DOCUMENT = buildOpenApiDocument();
 
@@ -132,6 +138,13 @@ export function createApp(options: AppOptions) {
   app.use('/api/audit', requireAuth, createAuditRouter());
   app.use('/api/v1/workspaces/:workspaceId/audit', requireAuth, createAuditRouter());
   app.use('/api/workspaces/:workspaceId/audit', requireAuth, createAuditRouter());
+
+  // Phase 8: Enterprise Security & Compliance Platform
+  app.use('/api/v1/security', securityRoutes());
+  app.use('/api/v1/compliance', complianceRoutes());
+  app.use('/api/v1/privacy', privacyRoutes());
+  app.use('/api/v1/sessions', sessionRoutes());
+  app.use('/api/v1/secrets', secretsRoutes());
 
   // Collaboration routes
   app.use('/api/v1/comments', requireAuth, createCommentRoutes(requireAuth));
