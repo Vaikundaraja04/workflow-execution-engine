@@ -61,6 +61,8 @@ import { tracingMiddleware } from '../observability/tracing.js';
 import { createRegionMiddleware } from '../middleware/regionMiddleware.js';
 import { RegionService } from '../services/regionService.js';
 import platformRoutes from './routes/platformRoutes.js';
+// Phase 12: AI-Native Automation & Autonomous Operations
+import selfHealingRoutes from './routes/selfHealingRoutes.js';
 
 const OPENAPI_DOCUMENT = buildOpenApiDocument();
 
@@ -176,6 +178,9 @@ export function createApp(options: AppOptions) {
   // Phase 11: Global Scale, Multi-Region & Cloud Platform
   app.use('/api/v1/platform', requireAuth, platformRoutes());
   app.use('/api/platform', requireAuth, platformRoutes());
+
+// Phase 12: Enterprise AI-Native Automation & Autonomous Operations Platform
+  app.use('/api/v1/self-healing', requireAuth, selfHealingRoutes);
 
   // Collaboration routes
   app.use('/api/v1/comments', requireAuth, createCommentRoutes(requireAuth));

@@ -29,6 +29,9 @@ export const PERMISSIONS = [
   // AI Business Intelligence
   'AI_BUSINESS_READ',
   'AI_BUSINESS_EXECUTE',
+  // Self-Healing
+  'SELF_HEALING_READ',
+  'SELF_HEALING_MANAGE',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
