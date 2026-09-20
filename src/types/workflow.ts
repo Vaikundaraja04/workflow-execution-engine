@@ -1,4 +1,6 @@
-export type NodeType = 'webhook' | 'condition' | 'log';
+import type { AgentNodeConfig } from './agent.types.js';
+
+export type NodeType = 'webhook' | 'condition' | 'log' | 'agent';
 
 export type StepStatus = 'PENDING' | 'READY' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'SKIPPED';
 
@@ -33,7 +35,7 @@ export interface LogConfig {
 
 export interface WebhookConfig {}
 
-export type NodeConfig = ConditionConfig | LogConfig | WebhookConfig;
+export type NodeConfig = ConditionConfig | LogConfig | WebhookConfig | AgentNodeConfig;
 
 export interface WorkflowNode {
   id: string;

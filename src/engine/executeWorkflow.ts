@@ -1,4 +1,6 @@
 import type { WorkflowDefinition, ExecutionResult, ExecutionHistoryEvent, StepStatus, WorkflowNode, ExecutionError } from '../types/workflow.js';
+import type { AgentNodeConfig } from '../types/agent.types.js';
+import { AgentRunnerService } from '../services/agent/agentRunnerService.js';
 import { validateGraph } from './validateGraph.js';
 import type { ReadyContext } from './getReadyNodes.js';
 import { getReadyNodes } from './getReadyNodes.js';
@@ -114,6 +116,26 @@ export async function executeWorkflow(
         } else if (node.type === 'log') {
           const message = (node.config.message as string) || 'log';
           outputs[node.id] = { message };
+          stepStatuses[node.id] = 'SUCCEEDED';
+          recordEvent(executionHistory, node.id, 'RUNNING', 'SUCCEEDED');
+        } else if (node.type === 'agent') {
+          const agentService = AgentRunnerService.getInstance();
+          const agentConfig = node.config as unknown as AgentNodeConfig;
+          const agentRes = await agentService.runAgentNode({
+            workspaceId: (context.workspaceId as string) || 'default-workspace',
+            userId: (context.userId as string) || 'system',
+            ...(context.executionId ? { executionId: context.executionId as string } : {}),
+            input: context,
+            config: agentConfig,
+            contextVariables: context,
+          });
+          outputs[node.id] = {
+            output: agentRes.output,
+            trace: agentRes.trace,
+            tokenUsage: agentRes.tokenUsage,
+            delegatedTo: agentRes.delegatedTo,
+            consensusVote: agentRes.consensusVote,
+          };
           stepStatuses[node.id] = 'SUCCEEDED';
           recordEvent(executionHistory, node.id, 'RUNNING', 'SUCCEEDED');
         } else {

@@ -63,6 +63,7 @@ import { RegionService } from '../services/regionService.js';
 import platformRoutes from './routes/platformRoutes.js';
 // Phase 12: AI-Native Automation & Autonomous Operations
 import selfHealingRoutes from './routes/selfHealingRoutes.js';
+import agentRoutes from './routes/agentRoutes.js';
 
 const OPENAPI_DOCUMENT = buildOpenApiDocument();
 
@@ -181,6 +182,7 @@ export function createApp(options: AppOptions) {
 
 // Phase 12: Enterprise AI-Native Automation & Autonomous Operations Platform
   app.use('/api/v1/self-healing', requireAuth, selfHealingRoutes);
+  app.use('/api/v1/agent', requireAuth, agentRoutes);
 
   // Collaboration routes
   app.use('/api/v1/comments', requireAuth, createCommentRoutes(requireAuth));

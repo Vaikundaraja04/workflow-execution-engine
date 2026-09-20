@@ -32,6 +32,9 @@ export const PERMISSIONS = [
   // Self-Healing
   'SELF_HEALING_READ',
   'SELF_HEALING_MANAGE',
+  // Agent Framework
+  'AGENT_READ',
+  'AGENT_EXECUTE',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -91,6 +94,8 @@ const EDITOR_PERMISSIONS: readonly Permission[] = [
   'TEMPLATE_PUBLISH',
   'GOVERNANCE_READ',
   'AI_BUSINESS_READ',
+  'AGENT_READ',
+  'AGENT_EXECUTE',
 ];
 
 const VIEWER_PERMISSIONS: readonly Permission[] = ['WORKFLOW_READ'];

@@ -14,6 +14,18 @@ const logConfigSchema = z.object({
   message: nonEmptyString,
 }).strict();
 
+const agentConfigSchema = z.object({
+  systemPrompt: nonEmptyString,
+  model: z.string().optional(),
+  toolsAllowed: z.array(z.string()).optional(),
+  maxTurns: z.number().int().positive().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  memoryEnabled: z.boolean().optional(),
+  delegationAllowed: z.boolean().optional(),
+  orchestrationMode: z.enum(['autonomous', 'sequential', 'parallel', 'consensus', 'supervisor_worker']).optional(),
+  customTools: z.array(z.any()).optional(),
+});
+
 export const WorkflowNodeSchema = z.discriminatedUnion('type', [
   z.object({
     id: nonEmptyString,
@@ -30,6 +42,11 @@ export const WorkflowNodeSchema = z.discriminatedUnion('type', [
     type: z.literal('log'),
     config: logConfigSchema,
   }).strict(),
+  z.object({
+    id: nonEmptyString,
+    type: z.literal('agent'),
+    config: agentConfigSchema,
+  }),
 ]);
 
 export const WorkflowEdgeSchema = z.object({
