@@ -129,7 +129,6 @@ const AIConfigurationSchema = new Schema<IAIConfiguration, mongoose.Model<IAICon
 }, { timestamps: true });
 
 // Index for faster lookups
-AIConfigurationSchema.index({ workspaceId: 1 });
 AIConfigurationSchema.index({ provider: 1 });
 AIConfigurationSchema.index({ enabled: 1 });
 

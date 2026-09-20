@@ -65,6 +65,7 @@ import platformRoutes from './routes/platformRoutes.js';
 import selfHealingRoutes from './routes/selfHealingRoutes.js';
 import agentRoutes from './routes/agentRoutes.js';
 import aiGovernanceRoutes from './routes/aiGovernanceRoutes.js';
+import predictiveOperationsRoutes from './routes/predictiveOperationsRoutes.js';
 
 const OPENAPI_DOCUMENT = buildOpenApiDocument();
 
@@ -185,6 +186,7 @@ export function createApp(options: AppOptions) {
   app.use('/api/v1/self-healing', requireAuth, selfHealingRoutes);
   app.use('/api/v1/agent', requireAuth, agentRoutes);
   app.use('/api/v1/ai/governance', requireAuth, aiGovernanceRoutes);
+  app.use('/api/v1/predictive-operations', requireAuth, predictiveOperationsRoutes);
 
   // Collaboration routes
   app.use('/api/v1/comments', requireAuth, createCommentRoutes(requireAuth));

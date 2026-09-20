@@ -31,7 +31,7 @@ const PrivacyRequestSchema = new Schema<IPrivacyRequest>(
     requestedAt: { type: Date, default: Date.now, index: true },
     processedAt: { type: Date },
     completedAt: { type: Date },
-    expiresAt: { type: Date, index: true },
+    expiresAt: { type: Date },
     metadata: { type: Schema.Types.Mixed },
     filePath: { type: String, maxlength: 512 },
     errorMessage: { type: String, maxlength: 1024 },
