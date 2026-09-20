@@ -19,6 +19,9 @@ export default function PlatformOverview() {
         <Link href="/platform/tenants" className="px-3 py-1 rounded bg-muted hover:bg-muted/80">
           Tenants
         </Link>
+        <Link href="/platform/ai-governance" className="px-3 py-1 rounded bg-muted hover:bg-muted/80">
+          AI Governance
+        </Link>
         <Link href="/platform/deployments" className="px-3 py-1 rounded bg-muted hover:bg-muted/80">
           Deployments
         </Link>

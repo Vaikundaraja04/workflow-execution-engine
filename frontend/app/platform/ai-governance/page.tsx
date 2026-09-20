@@ -1,11 +1,94 @@
 'use client';
 
 import * as React from 'react';
-import { AIGovernanceBudgetCard, AIGovernanceBudget } from '@/features/autonomous-ops/AIGovernanceBudgetCard';
+import { AIGovernanceBudgetCard, type AIGovernanceBudget } from '@/features/autonomous-ops/AIGovernanceBudgetCard';
 import { Cpu, ShieldCheck, DollarSign, Activity, CheckCircle2, Lock, ArrowUpRight, Sliders, ShieldAlert, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
+import { aiGovernanceApi } from '@/services/aiGovernanceApi';
+import {
+  routingStrategyFromConfig,
+  toAIGovernanceBudgetView,
+  toBudgetPolicyPayload,
+  toRouterConfigPayload,
+} from '@/services/aiOperationsMappers';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { hasPermission } from '@/types/permissions';
+import type { AIModelRouterConfigDTO, AIRoutingStrategy } from '@/types/aiOperations';
+
+interface AIProviderRow {
+  id: string;
+  name: string;
+  status: string;
+  avgLatencyMs: number;
+  costPer1kTokens: string;
+  currentTrafficPercent: number;
+  isPrimary: boolean;
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic Claude 3.5 Sonnet & Haiku',
+  openai: 'OpenAI GPT-4o & GPT-4o-mini',
+  mock: 'Mock Provider (Local Sandbox)',
+};
+
+const DEMO_PROVIDERS: AIProviderRow[] = [
+  {
+    id: 'anthropic',
+    name: 'Anthropic Claude 3.5 Sonnet & Haiku',
+    status: 'healthy',
+    avgLatencyMs: 380,
+    costPer1kTokens: '$0.003',
+    currentTrafficPercent: 55,
+    isPrimary: true,
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI GPT-4o & GPT-4o-mini',
+    status: 'healthy',
+    avgLatencyMs: 410,
+    costPer1kTokens: '$0.005',
+    currentTrafficPercent: 30,
+    isPrimary: false,
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini 1.5 Flash',
+    status: 'healthy',
+    avgLatencyMs: 290,
+    costPer1kTokens: '$0.001',
+    currentTrafficPercent: 15,
+    isPrimary: false,
+  },
+];
+
+/**
+ * Derives the provider load-balancing table from the workspace router config.
+ * Traffic share is weighted by provider priority order (first = highest).
+ */
+function buildProviderRows(config: AIModelRouterConfigDTO): AIProviderRow[] {
+  const priority =
+    config.providerPriority && config.providerPriority.length > 0
+      ? config.providerPriority
+      : (['openai', 'anthropic', 'mock'] as AIModelRouterConfigDTO['providerPriority']);
+
+  const weightTotal = priority.reduce((total, _provider, index) => total + (priority.length - index), 0);
+  const modelEntries = Object.values(config.modelConfigs ?? {});
+
+  return priority.map((provider, index) => {
+    const modelEntry = modelEntries.find((entry) => entry.provider === provider);
+    return {
+      id: provider,
+      name: PROVIDER_LABELS[provider] ?? provider,
+      status: 'healthy',
+      avgLatencyMs: modelEntry?.latencyMs ?? 0,
+      costPer1kTokens: modelEntry ? `$${modelEntry.costPer1KTokens}` : '--',
+      currentTrafficPercent: Math.round(((priority.length - index) / weightTotal) * 100),
+      isPrimary: index === 0,
+    };
+  });
+}
 
 export default function AIGovernancePlatformPage() {
   const [budget, setBudget] = React.useState<AIGovernanceBudget>({
@@ -38,37 +121,80 @@ export default function AIGovernancePlatformPage() {
     },
   });
 
-  const [routingStrategy, setRoutingStrategy] = React.useState<'cost_optimized' | 'latency_optimized' | 'quality_optimized' | 'balanced'>('balanced');
+  const [routingStrategy, setRoutingStrategy] = React.useState<AIRoutingStrategy>('balanced');
+  const [dataSource, setDataSource] = React.useState<'live' | 'demo'>('demo');
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const { currentRole } = useWorkspaceStore();
+  const canManageBudget = hasPermission(currentRole, 'AI_GOVERNANCE_MANAGE');
+  const canManageRouter = hasPermission(currentRole, 'AI_MODEL_ROUTER_MANAGE');
 
-  const modelProviders = [
-    {
-      id: 'anthropic',
-      name: 'Anthropic Claude 3.5 Sonnet & Haiku',
-      status: 'healthy',
-      avgLatencyMs: 380,
-      costPer1kTokens: '$0.003',
-      currentTrafficPercent: 55,
-      isPrimary: true,
-    },
-    {
-      id: 'openai',
-      name: 'OpenAI GPT-4o & GPT-4o-mini',
-      status: 'healthy',
-      avgLatencyMs: 410,
-      costPer1kTokens: '$0.005',
-      currentTrafficPercent: 30,
-      isPrimary: false,
-    },
-    {
-      id: 'gemini',
-      name: 'Google Gemini 1.5 Flash',
-      status: 'healthy',
-      avgLatencyMs: 290,
-      costPer1kTokens: '$0.001',
-      currentTrafficPercent: 15,
-      isPrimary: false,
-    },
-  ];
+  const loadGovernanceData = React.useCallback(async () => {
+    setIsSyncing(true);
+    const [budgetResult, routerResult] = await Promise.allSettled([
+      aiGovernanceApi.getBudget(),
+      aiGovernanceApi.getRouterConfig(),
+    ]);
+
+    let hasLiveData = false;
+
+    if (budgetResult.status === 'fulfilled') {
+      setBudget((prev) => toAIGovernanceBudgetView(budgetResult.value, prev));
+      hasLiveData = true;
+    }
+    if (routerResult.status === 'fulfilled') {
+      setRoutingStrategy(routingStrategyFromConfig(routerResult.value));
+      setModelProviders(buildProviderRows(routerResult.value));
+      hasLiveData = true;
+    }
+
+    setDataSource(hasLiveData ? 'live' : 'demo');
+    setIsSyncing(false);
+  }, []);
+
+  React.useEffect(() => {
+    void loadGovernanceData();
+  }, [loadGovernanceData]);
+
+  const handleUpdateCap = async (newCapUSD: number) => {
+    setBudget((prev) => ({ ...prev, monthlyCapUSD: newCapUSD }));
+    if (!canManageBudget) return;
+
+    try {
+      const updated = await aiGovernanceApi.updateBudget({ monthlyCostLimitUSD: newCapUSD });
+      setBudget((prev) => toAIGovernanceBudgetView(updated, prev));
+      setDataSource('live');
+    } catch {
+      // The local cap change is retained when the API is unreachable.
+    }
+  };
+
+  const handleUpdatePolicyAction = async (action: AIGovernanceBudget['policyEnforcement']) => {
+    setBudget((prev) => ({ ...prev, policyEnforcement: action }));
+    if (!canManageBudget) return;
+
+    try {
+      const updated = await aiGovernanceApi.updateBudget(toBudgetPolicyPayload(action));
+      setBudget((prev) => toAIGovernanceBudgetView(updated, prev));
+      setDataSource('live');
+    } catch {
+      // The local enforcement change is retained when the API is unreachable.
+    }
+  };
+
+  const handleSelectRoutingStrategy = async (strategy: AIRoutingStrategy) => {
+    setRoutingStrategy(strategy);
+    if (!canManageRouter) return;
+
+    try {
+      const updated = await aiGovernanceApi.updateRouterConfig(toRouterConfigPayload(strategy));
+      setModelProviders(buildProviderRows(updated));
+      setDataSource('live');
+    } catch {
+      // The local routing preference is retained when the API is unreachable.
+    }
+  };
+
+  const [modelProviders, setModelProviders] = React.useState<AIProviderRow[]>(DEMO_PROVIDERS);
 
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -90,12 +216,27 @@ export default function AIGovernancePlatformPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Badge
+            variant="default"
+            size="sm"
+            className={
+              dataSource === 'live'
+                ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-xs'
+                : 'bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs'
+            }
+          >
+            {dataSource === 'live' ? 'Live API Telemetry' : 'Demo Data'}
+          </Badge>
           <Button
             size="sm"
             variant="outline"
+            onClick={() => {
+              void loadGovernanceData();
+            }}
+            disabled={isSyncing}
             className="h-9 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 text-xs flex items-center gap-2"
           >
-            <Sliders className="w-3.5 h-3.5" />
+            <Sliders className={`w-3.5 h-3.5${isSyncing ? ' animate-spin' : ''}`} />
             Router Config
           </Button>
         </div>
@@ -107,8 +248,12 @@ export default function AIGovernancePlatformPage() {
         <div className="col-span-12 lg:col-span-6">
           <AIGovernanceBudgetCard
             budget={budget}
-            onUpdateCap={(newCap) => setBudget((prev) => ({ ...prev, monthlyCapUSD: newCap }))}
-            onUpdatePolicyAction={(action) => setBudget((prev) => ({ ...prev, policyEnforcement: action }))}
+            onUpdateCap={(newCap) => {
+              void handleUpdateCap(newCap);
+            }}
+            onUpdatePolicyAction={(action) => {
+              void handleUpdatePolicyAction(action);
+            }}
           />
         </div>
 
@@ -129,7 +274,9 @@ export default function AIGovernancePlatformPage() {
               {(['balanced', 'cost_optimized', 'latency_optimized', 'quality_optimized'] as const).map((mode) => (
                 <button
                   key={mode}
-                  onClick={() => setRoutingStrategy(mode)}
+                  onClick={() => {
+                    void handleSelectRoutingStrategy(mode);
+                  }}
                   className={cn(
                     'px-2 py-0.5 rounded capitalize font-medium transition-all cursor-pointer',
                     routingStrategy === mode ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'

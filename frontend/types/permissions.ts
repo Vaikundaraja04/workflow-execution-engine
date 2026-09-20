@@ -30,7 +30,24 @@ export const AI_PERMISSIONS = [
 
 export type AIPermission = (typeof AI_PERMISSIONS)[number];
 
-export type AnyPermission = Permission | TemplatePermission | AIPermission;
+// Phase 12 — AI-Native Automation & Autonomous Operations permissions.
+// Mirrors the backend matrices in `src/auth/permissions.ts`.
+export const AI_OPERATIONS_PERMISSIONS = [
+  'OPERATIONS_READ',
+  'OPERATIONS_MANAGE',
+  'SELF_HEALING_READ',
+  'SELF_HEALING_MANAGE',
+  'AGENT_READ',
+  'AGENT_EXECUTE',
+  'AI_GOVERNANCE_READ',
+  'AI_GOVERNANCE_MANAGE',
+  'AI_MODEL_ROUTER_READ',
+  'AI_MODEL_ROUTER_MANAGE',
+] as const;
+
+export type AIOperationsPermission = (typeof AI_OPERATIONS_PERMISSIONS)[number];
+
+export type AnyPermission = Permission | TemplatePermission | AIPermission | AIOperationsPermission;
 
 export const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly Permission[]> = {
   OWNER: PERMISSIONS,
@@ -58,6 +75,22 @@ export const ROLE_AI_PERMISSIONS: Record<WorkspaceRole, readonly AIPermission[]>
   VIEWER: ['AI_ANALYSIS_READ'],
 };
 
+export const ROLE_AI_OPERATIONS_PERMISSIONS: Record<
+  WorkspaceRole,
+  readonly AIOperationsPermission[]
+> = {
+  OWNER: AI_OPERATIONS_PERMISSIONS,
+  ADMIN: AI_OPERATIONS_PERMISSIONS,
+  EDITOR: [
+    'OPERATIONS_READ',
+    'AGENT_READ',
+    'AGENT_EXECUTE',
+    'AI_GOVERNANCE_READ',
+    'AI_MODEL_ROUTER_READ',
+  ],
+  VIEWER: ['AI_GOVERNANCE_READ', 'AI_MODEL_ROUTER_READ'],
+};
+
 export function hasPermission(role: WorkspaceRole | undefined | null, permission: AnyPermission): boolean {
   if (!role) return false;
 
@@ -69,6 +102,11 @@ export function hasPermission(role: WorkspaceRole | undefined | null, permission
   }
   if ((AI_PERMISSIONS as readonly string[]).includes(permission)) {
     return ROLE_AI_PERMISSIONS[role]?.includes(permission as AIPermission) ?? false;
+  }
+  if ((AI_OPERATIONS_PERMISSIONS as readonly string[]).includes(permission)) {
+    return (
+      ROLE_AI_OPERATIONS_PERMISSIONS[role]?.includes(permission as AIOperationsPermission) ?? false
+    );
   }
   return false;
 }

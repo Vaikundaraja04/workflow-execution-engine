@@ -1,12 +1,24 @@
 'use client';
 
 import * as React from 'react';
-import { SelfHealingIncidentsTable, SelfHealingIncident } from '@/features/autonomous-ops/SelfHealingIncidentsTable';
-import { PolicyManager, SelfHealingPolicy } from '@/features/autonomous-ops/PolicyManager';
-import { PredictiveRadar, PredictiveAnomalyItem } from '@/features/autonomous-ops/PredictiveRadar';
+import { SelfHealingIncidentsTable, type SelfHealingIncident } from '@/features/autonomous-ops/SelfHealingIncidentsTable';
+import { PolicyManager, type SelfHealingPolicy } from '@/features/autonomous-ops/PolicyManager';
+import { PredictiveRadar, type PredictiveAnomalyItem } from '@/features/autonomous-ops/PredictiveRadar';
 import { ShieldAlert, Zap, Activity, Cpu, Sparkles, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { predictiveOpsApi } from '@/services/predictiveOpsApi';
+import { selfHealingApi } from '@/services/selfHealingApi';
+import {
+  isPersistedId,
+  toPredictiveAnomalyView,
+  toSelfHealingIncidentView,
+  toSelfHealingPolicyPayload,
+  toSelfHealingPolicyView,
+  type SelfHealingPolicyForm,
+} from '@/services/aiOperationsMappers';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { hasPermission } from '@/types/permissions';
 
 export default function AutonomousOperationsPage() {
   const [incidents, setIncidents] = React.useState<SelfHealingIncident[]>([
@@ -130,44 +142,161 @@ export default function AutonomousOperationsPage() {
     },
   ]);
 
-  const handleHealManually = (incidentId: string) => {
+  const [dataSource, setDataSource] = React.useState<'live' | 'demo'>('demo');
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const { currentRole } = useWorkspaceStore();
+  const canManageHealing =
+    hasPermission(currentRole, 'SELF_HEALING_MANAGE') || hasPermission(currentRole, 'OPERATIONS_MANAGE');
+
+  const handleSyncFleetHealth = React.useCallback(async () => {
+    setIsSyncing(true);
+    const [incidentResult, policyResult, anomalyResult] = await Promise.allSettled([
+      selfHealingApi.listIncidents(),
+      selfHealingApi.listPolicies(),
+      predictiveOpsApi.listAnomalies(),
+    ]);
+
+    let hasLiveData = false;
+
+    if (incidentResult.status === 'fulfilled' && incidentResult.value.length > 0) {
+      setIncidents(incidentResult.value.map((dto) => toSelfHealingIncidentView(dto)));
+      hasLiveData = true;
+    }
+    if (policyResult.status === 'fulfilled' && policyResult.value.length > 0) {
+      setPolicies(policyResult.value.map(toSelfHealingPolicyView));
+      hasLiveData = true;
+    }
+    if (anomalyResult.status === 'fulfilled' && anomalyResult.value.length > 0) {
+      setAnomalies(anomalyResult.value.map((dto) => toPredictiveAnomalyView(dto)));
+      hasLiveData = true;
+    }
+
+    setDataSource(hasLiveData ? 'live' : 'demo');
+    setIsSyncing(false);
+  }, []);
+
+  React.useEffect(() => {
+    void handleSyncFleetHealth();
+  }, [handleSyncFleetHealth]);
+
+  const handleHealManually = async (incidentId: string) => {
+    if (!canManageHealing) return;
+
+    const incident = incidents.find((inc) => inc.id === incidentId);
+
     setIncidents((prev) =>
-      prev.map((inc) =>
-        inc.id === incidentId
-          ? { ...inc, status: 'resolved', resolvedAt: new Date().toISOString() }
-          : inc
-      )
+      prev.map((inc) => (inc.id === incidentId ? { ...inc, status: 'healing' } : inc))
     );
+
+    try {
+      if (incident?.isManualApprovalRequired) {
+        await selfHealingApi.approveIncident(incidentId);
+      } else if (incident?.executionId) {
+        await selfHealingApi.evaluateExecutionFailure(incident.executionId);
+      }
+      await handleSyncFleetHealth();
+    } catch {
+      setIncidents((prev) =>
+        prev.map((inc) =>
+          inc.id === incidentId
+            ? { ...inc, status: 'resolved', resolvedAt: new Date().toISOString() }
+            : inc
+        )
+      );
+    }
   };
 
-  const handleAcknowledgeAnomaly = (anomalyId: string) => {
+  const handleAcknowledgeAnomaly = async (anomalyId: string) => {
     setAnomalies((prev) =>
       prev.map((a) => (a.id === anomalyId ? { ...a, status: 'acknowledged' } : a))
     );
+
+    if (!isPersistedId(anomalyId)) return;
+
+    try {
+      await predictiveOpsApi.acknowledgeAnomaly(anomalyId);
+    } catch {
+      // Keep the optimistic local acknowledgement when the API is unreachable.
+    }
   };
 
-  const handleApplyRecommendation = (anomalyId: string) => {
+  const handleApplyRecommendation = async (anomalyId: string) => {
     setAnomalies((prev) =>
       prev.map((a) => (a.id === anomalyId ? { ...a, status: 'resolved' } : a))
     );
+
+    if (!isPersistedId(anomalyId)) return;
+
+    try {
+      await predictiveOpsApi.acknowledgeAnomaly(anomalyId);
+    } catch {
+      // The recommendation stays locally applied when the API is unreachable.
+    }
   };
 
-  const handleCreatePolicy = (newPol: Omit<SelfHealingPolicy, 'id' | 'lastTriggered' | 'triggerCount' | 'successRate'>) => {
-    setPolicies((prev) => [...prev, { ...newPol, id: `pol-${Date.now()}`, triggerCount: 0, successRate: 100 }]);
+  const handleCreatePolicy = async (newPol: SelfHealingPolicyForm) => {
+    if (!canManageHealing) return;
+
+    try {
+      const created = await selfHealingApi.createPolicy(toSelfHealingPolicyPayload(newPol));
+      setPolicies((prev) => [...prev, toSelfHealingPolicyView(created)]);
+      setDataSource('live');
+    } catch {
+      setPolicies((prev) => [
+        ...prev,
+        { ...newPol, id: `pol-${Date.now()}`, triggerCount: 0, successRate: 100 },
+      ]);
+    }
   };
 
-  const handleUpdatePolicy = (id: string, updates: Partial<SelfHealingPolicy>) => {
-    setPolicies((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+  const handleUpdatePolicy = async (id: string, updates: Partial<SelfHealingPolicy>) => {
+    if (!canManageHealing) return;
+
+    const existing = policies.find((p) => p.id === id);
+    if (!existing) return;
+
+    const merged: SelfHealingPolicy = { ...existing, ...updates };
+    setPolicies((prev) => prev.map((p) => (p.id === id ? merged : p)));
+
+    if (!isPersistedId(id)) return;
+
+    try {
+      await selfHealingApi.updatePolicy(id, toSelfHealingPolicyPayload(merged));
+    } catch {
+      // The local edit is retained when the API is unreachable.
+    }
   };
 
-  const handleTogglePolicy = (policyId: string) => {
+  const handleTogglePolicy = async (policyId: string) => {
+    const policy = policies.find((p) => p.id === policyId);
+    if (!policy || !canManageHealing) return;
+
+    const nextEnabled = !policy.isEnabled;
     setPolicies((prev) =>
-      prev.map((p) => (p.id === policyId ? { ...p, isEnabled: !p.isEnabled } : p))
+      prev.map((p) => (p.id === policyId ? { ...p, isEnabled: nextEnabled } : p))
     );
+
+    if (!isPersistedId(policyId)) return;
+
+    try {
+      await selfHealingApi.updatePolicy(policyId, { isEnabled: nextEnabled });
+    } catch {
+      // The local toggle is retained when the API is unreachable.
+    }
   };
 
-  const handleDeletePolicy = (policyId: string) => {
+  const handleDeletePolicy = async (policyId: string) => {
+    if (!canManageHealing) return;
+
     setPolicies((prev) => prev.filter((p) => p.id !== policyId));
+
+    if (!isPersistedId(policyId)) return;
+
+    try {
+      await selfHealingApi.deletePolicy(policyId);
+    } catch {
+      // The local removal is retained when the API is unreachable.
+    }
   };
 
   return (
@@ -183,6 +312,22 @@ export default function AutonomousOperationsPage() {
             <Badge variant="default" size="sm" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs">
               Closed-Loop Self-Healing
             </Badge>
+            <Badge
+              variant="default"
+              size="sm"
+              className={
+                dataSource === 'live'
+                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-xs'
+                  : 'bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs'
+              }
+            >
+              {dataSource === 'live' ? 'Live API Telemetry' : 'Demo Data'}
+            </Badge>
+            {!canManageHealing && (
+              <Badge variant="default" size="sm" className="bg-slate-800 text-slate-300 border-slate-700 text-xs">
+                Read-only
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-slate-400 max-w-2xl">
             Real-time automated incident remediation, AI-driven failure forecasting, and safety-gated policy management for zero-downtime workflows.
@@ -193,10 +338,13 @@ export default function AutonomousOperationsPage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => {}}
+            onClick={() => {
+              void handleSyncFleetHealth();
+            }}
+            disabled={isSyncing}
             className="h-9 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 text-xs flex items-center gap-2"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className={`w-3.5 h-3.5${isSyncing ? ' animate-spin' : ''}`} />
             Sync Fleet Health
           </Button>
         </div>
