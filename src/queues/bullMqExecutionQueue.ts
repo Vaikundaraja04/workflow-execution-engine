@@ -12,15 +12,44 @@ import {
 } from './executionQueue.js';
 
 export function createQueueConnection(redisUrl: string): ConnectionOptions {
+  // Support Redis Cluster via environment variable
+  const clusterEnabled = process.env.REDIS_CLUSTER_ENABLED === 'true';
+  if (clusterEnabled) {
+    const nodes = process.env.REDIS_CLUSTER_NODES?.split(',').map(node => node.trim()).filter(Boolean) ?? [];
+    if (nodes.length > 0 && nodes[0]) {
+      const [host, port] = nodes[0].split(':');
+      return {
+        // BullMQ accepts cluster configuration
+        host: host || 'localhost',
+        port: parseInt(port || '6379', 10),
+        maxRetriesPerRequest: 1,
+        connectTimeout: 5_000,
+        retryStrategy: (attempts: number) => attempts > 2 ? null : attempts * 100,
+      };
+    }
+  }
+  // Fallback to single node
   return {
     url: redisUrl,
     maxRetriesPerRequest: 1,
     connectTimeout: 5_000,
-    retryStrategy: attempts => attempts > 2 ? null : attempts * 100,
+    retryStrategy: (attempts: number) => attempts > 2 ? null : attempts * 100,
   };
 }
 
 export function createWorkerConnection(redisUrl: string): ConnectionOptions {
+  const clusterEnabled = process.env.REDIS_CLUSTER_ENABLED === 'true';
+  if (clusterEnabled) {
+    const nodes = process.env.REDIS_CLUSTER_NODES?.split(',').map(node => node.trim()).filter(Boolean) ?? [];
+    if (nodes.length > 0 && nodes[0]) {
+      const [host, port] = nodes[0].split(':');
+      return {
+        host: host || 'localhost',
+        port: parseInt(port || '6379', 10),
+        maxRetriesPerRequest: null,
+      };
+    }
+  }
   return {
     url: redisUrl,
     maxRetriesPerRequest: null,

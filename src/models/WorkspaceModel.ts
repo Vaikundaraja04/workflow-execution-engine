@@ -9,6 +9,8 @@ export interface IWorkspace extends Document<Types.ObjectId> {
   ownerId: Types.ObjectId;
   status: WorkspaceStatus;
   settings?: Record<string, unknown>;
+  region?: string; // e.g., us-east-1, eu-west-1
+  dataResidency?: boolean; // if true, data must reside in the assigned region
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,6 +22,8 @@ const WorkspaceSchema = new Schema<IWorkspace>({
   ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   status: { type: String, enum: ['ACTIVE', 'SUSPENDED', 'DELETED'], default: 'ACTIVE' },
   settings: { type: Schema.Types.Mixed },
+  region: { type: String },
+  dataResidency: { type: Boolean },
 }, { timestamps: true });
 
 

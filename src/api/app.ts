@@ -56,6 +56,11 @@ import secretsRoutes from './routes/secretsRoutes.js';
 import analyticsEnterpriseRoutes from './routes/analyticsEnterpriseRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import operationsRoutes from './routes/operationsRoutes.js';
+// Phase 11: Global Scale, Multi-Region & Cloud Platform
+import { tracingMiddleware } from '../observability/tracing.js';
+import { createRegionMiddleware } from '../middleware/regionMiddleware.js';
+import { RegionService } from '../services/regionService.js';
+import platformRoutes from './routes/platformRoutes.js';
 
 const OPENAPI_DOCUMENT = buildOpenApiDocument();
 
@@ -78,6 +83,8 @@ export interface AppOptions {
   corsOrigins?: string[];
   health?: HealthOptions;
   docs?: boolean;
+  regionService?: RegionService;
+  currentRegion?: string;
 }
 
 export function createApp(options: AppOptions) {
@@ -85,9 +92,14 @@ export function createApp(options: AppOptions) {
   app.disable('x-powered-by');
 
   app.use(helmet());
+  app.use(tracingMiddleware('workflow-execution-engine'));
   app.use(requestLogger());
   app.use(express.json({ limit: '1mb' }));
   app.use(createCorsMiddleware(options.corsOrigins ?? []));
+
+  const regionService = options.regionService ?? new RegionService();
+  const currentRegion = options.currentRegion ?? (process.env.REGION || 'us-east-1');
+  app.use('/api', createRegionMiddleware(regionService, currentRegion));
 
   app.use('/health', createHealthRouter(createHealthChecks(options.health ?? {})));
 
@@ -160,6 +172,10 @@ export function createApp(options: AppOptions) {
   app.use('/api/v1/analytics', analyticsEnterpriseRoutes());
   app.use('/api/v1/reports', reportRoutes());
   app.use('/api/v1/operations', operationsRoutes());
+
+  // Phase 11: Global Scale, Multi-Region & Cloud Platform
+  app.use('/api/v1/platform', requireAuth, platformRoutes());
+  app.use('/api/platform', requireAuth, platformRoutes());
 
   // Collaboration routes
   app.use('/api/v1/comments', requireAuth, createCommentRoutes(requireAuth));
