@@ -9,6 +9,13 @@ export class AIProviderFactory {
   private static mockInstance: AIProvider = new MockAIProvider();
 
   /**
+   * Get the current mock provider instance.
+   */
+  static getMockInstance(): AIProvider {
+    return this.mockInstance;
+  }
+
+  /**
    * Set a custom mock or test provider instance.
    */
   static setMockProvider(provider: AIProvider): void {

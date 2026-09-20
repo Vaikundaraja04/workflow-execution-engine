@@ -35,6 +35,11 @@ export const PERMISSIONS = [
   // Agent Framework
   'AGENT_READ',
   'AGENT_EXECUTE',
+  // AI Governance & Model Router
+  'AI_GOVERNANCE_READ',
+  'AI_GOVERNANCE_MANAGE',
+  'AI_MODEL_ROUTER_READ',
+  'AI_MODEL_ROUTER_MANAGE',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -67,6 +72,10 @@ export const AI_PERMISSIONS = [
   'AI_OPERATIONS_EXECUTE',
   'AI_BUSINESS_READ',
   'AI_BUSINESS_EXECUTE',
+  'AI_GOVERNANCE_READ',
+  'AI_GOVERNANCE_MANAGE',
+  'AI_MODEL_ROUTER_READ',
+  'AI_MODEL_ROUTER_MANAGE',
 ] as const;
 
 export type AIPermission = (typeof AI_PERMISSIONS)[number];
@@ -96,6 +105,8 @@ const EDITOR_PERMISSIONS: readonly Permission[] = [
   'AI_BUSINESS_READ',
   'AGENT_READ',
   'AGENT_EXECUTE',
+  'AI_GOVERNANCE_READ',
+  'AI_MODEL_ROUTER_READ',
 ];
 
 const VIEWER_PERMISSIONS: readonly Permission[] = ['WORKFLOW_READ'];
@@ -125,8 +136,10 @@ export const ROLE_AI_PERMISSIONS: Record<WorkspaceRole, readonly AIPermission[]>
     'AI_OPERATIONS_EXECUTE',
     'AI_BUSINESS_READ',
     'AI_BUSINESS_EXECUTE',
+    'AI_GOVERNANCE_READ',
+    'AI_MODEL_ROUTER_READ',
   ],
-  VIEWER: ['AI_ANALYSIS_READ', 'AI_OPERATIONS_READ', 'AI_BUSINESS_READ'],
+  VIEWER: ['AI_ANALYSIS_READ', 'AI_OPERATIONS_READ', 'AI_BUSINESS_READ', 'AI_GOVERNANCE_READ', 'AI_MODEL_ROUTER_READ'],
 };
 
 export function roleHasTemplatePermission(role: WorkspaceRole, permission: TemplatePermission): boolean {
