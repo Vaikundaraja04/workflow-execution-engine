@@ -1060,6 +1060,81 @@ frontend/
 └── types/
     └── operations.types.ts             # TypeScript definitions for Operations console
 ```
+## Phase 12: Autonomous AI Operations Platform
+
+Phase 12 turns the workflow engine into a self-operating platform: failures are remediated automatically, failures are predicted before they happen, AI spend is centrally governed, and agent nodes can orchestrate multi-step tool use. It spans five backend modules (12A–12D) plus a frontend integration layer (12E–12F).
+
+### Module 12A: Autonomous Self-Healing & Closed-Loop Remediation
+Detects execution failures, matches them against workspace-defined remediation policies, and executes (or proposes) fixes without human intervention.
+
+- **SelfHealingService** — policy CRUD, incident evaluation, approve/reject workflows with an approval-token gate for high-risk actions
+- Policies declare a `triggerCondition` (`ERROR_CODE_MATCH`, `TIMEOUT_PATTERN`, `RATE_LIMIT_EXCEEDED`, `DATA_VALIDATION_ANOMALY`), a `triggerValue`, and an `actionType` (`AUTO_RETRY_WITH_ADAPTED_PARAMS`, `CIRCUIT_BREAKER_TRIP`, `FALLBACK_ROUTE`, `PARAMETER_MUTATION_HEAL`)
+- Incidents move through `DETECTED → PENDING_APPROVAL → EXECUTED | FAILED | REJECTED` and record remediation actions for audit
+- Permissions: `SELF_HEALING_READ`, `SELF_HEALING_MANAGE`
+
+### Module 12B: AI Agent Node & Multi-Agent Orchestration Framework
+Executes LLM-driven agent nodes inside workflows.
+
+- `AgentToolRegistry` — pluggable tool catalog invocable by agents
+- `AgentRunnerService` — runs agent nodes with system prompts, tool-call loops, and execution traces
+- Orchestrator modes: `autonomous`, `sequential`, and parallel fan-out with context-variable sharing
+- Permissions: `AGENT_READ`, `AGENT_EXECUTE`
+
+### Module 12C: Intelligent Multi-Model Router & Enterprise AI Governance
+Central control plane for AI cost, security, and provider selection.
+
+- `AIModelRouter` — per-workspace provider priority (`anthropic`, `openai`, `mock`), per-model config (max tokens, temperature, cost per 1K tokens, latency), and complexity-based routing rules
+- Budget enforcement with alert / throttle / block thresholds on token and USD spend
+- Prompt-injection detection, PII redaction, and prompt sanitization guardrails
+- Permissions: `AI_GOVERNANCE_READ`, `AI_GOVERNANCE_MANAGE`, `AI_MODEL_ROUTER_READ`, `AI_MODEL_ROUTER_MANAGE`
+
+### Module 12D: Predictive Operations & Autonomous Optimization
+Forecasts failures before they occur and applies optimizations autonomously.
+
+- `PredictiveOperationsService` — anomaly records with type (`execution_drift`, `sla_breach_risk`, …), severity, confidence score, predicted failure time, and recommended actions; acknowledge/delete lifecycle
+- `AutonomousOptimizerService` — analyzes a workflow's definition + execution history, produces typed optimization recommendations (`caching_recommendation`, …) and applies them to the workflow draft
+
+### Module 12E–12F: Operations Consoles (Frontend)
+Wires the Phase 12A–12D backend APIs into two consoles with typed services, permission gating, and graceful demo fallback:
+
+- `/operations/autonomous` — Autonomous Operations Console: live incident table, policy manager, and predictive radar with `Promise.allSettled` sync, optimistic updates with API fallback, and a read-only badge for roles without `SELF_HEALING_MANAGE`
+- `/platform/ai-governance` — AI Governance Platform: budget card (cap + policy action updates), multi-model router provider rows, and routing strategy selection (`cost_optimized`, `latency_optimized`, `balanced`, `quality_optimized`)
+- Service clients: `frontend/services/{selfHealingApi,predictiveOpsApi,aiGovernanceApi}.ts` (unwrap the `{ data }` envelope, forward `X-Workspace-Id`), with shared DTO→view-model mappers in `frontend/services/aiOperationsMappers.ts`
+- Both consoles show a **Live API Telemetry** vs **Demo Data** badge depending on whether any API returned rows, so seeded demo data remains usable without a running backend
+
+## Phase 12 API Endpoints
+
+### Self-Healing (`/api/v1/self-healing`)
+- `GET /policies` — list policies (`SELF_HEALING_READ`)
+- `POST /policies` — create policy (`SELF_HEALING_MANAGE`)
+- `GET /policies/:id` / `PUT /policies/:id` / `DELETE /policies/:id` — policy detail (`SELF_HEALING_READ` / `SELF_HEALING_MANAGE`)
+- `GET /incidents` — list incidents, filterable by `status` and `executionId` (`SELF_HEALING_READ`)
+- `GET /incidents/:id` — incident detail (`SELF_HEALING_READ`)
+- `POST /evaluate/:executionId` — evaluate a failed execution against policies (`SELF_HEALING_MANAGE`)
+- `POST /incidents/:id/approve` — approve remediation with `{ token }` (`SELF_HEALING_MANAGE`)
+- `POST /incidents/:id/reject` — reject remediation with `{ reason }` (`SELF_HEALING_MANAGE`)
+
+### Predictive Operations (`/api/v1/predictive-operations`)
+- `GET /anomalies` — list anomalies, filterable by `workflowId`, `anomalyType`, `severity`, `isAcknowledged`, `startTime`, `endTime` (`OPERATIONS_READ`)
+- `POST /anomalies` — create an anomaly record (`OPERATIONS_MANAGE`)
+- `PATCH /anomalies/:id/acknowledge` — acknowledge an anomaly (`OPERATIONS_MANAGE`)
+- `DELETE /anomalies/:id` — delete an anomaly (`OPERATIONS_MANAGE`)
+- `GET /workflows/:workflowId/optimizations` — analyze a workflow for optimizations (`OPERATIONS_READ`)
+- `POST /workflows/:workflowId/optimizations/apply` — apply optimizations (`OPERATIONS_MANAGE`)
+
+### AI Governance (`/api/v1/ai/governance`)
+- `GET /budget` / `PUT /budget` — read/update AI spend limits and threshold policy (`AI_GOVERNANCE_READ` / `AI_GOVERNANCE_MANAGE`)
+- `POST /budget/reset` — reset monthly usage counters (`AI_GOVERNANCE_MANAGE`)
+- `GET /router/config` / `PUT /router/config` — read/update multi-model router configuration (`AI_MODEL_ROUTER_READ` / `AI_MODEL_ROUTER_MANAGE`)
+- `POST /router/route` — resolve the optimal provider/model for a prompt and feature (`AI_MODEL_ROUTER_READ`)
+- `POST /sanitize` — prompt-injection detection, sanitization, and PII redaction (`AI_GOVERNANCE_READ`)
+
+### Agent Framework (`/api/v1/agent`)
+- `GET /tools` — list registered agent tools (`AGENT_READ`)
+- `POST /tools/execute` — execute a tool directly with `{ toolName, input }` (`AGENT_EXECUTE`)
+- `POST /run` — run an agent node or multi-agent orchestration with `{ input, config, executionId, contextVariables }` (`AGENT_EXECUTE`)
+
+All Phase 12 responses use the standard `{ data }` envelope and are scoped via the `X-Workspace-Id` header.
 
 ## License
 
