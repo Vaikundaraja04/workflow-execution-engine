@@ -8,6 +8,9 @@ import { PerformanceCard } from './PerformanceCard';
 import { DeploymentStatus } from './DeploymentStatus';
 import { DatabaseHealth } from './DatabaseHealth';
 import { DRStatus } from './DRStatus';
+import { LiveMetricsPanel } from './LiveMetricsPanel';
+import { ReadinessHistoryChart } from './ReadinessHistoryChart';
+import { AlertCenter } from './AlertCenter';
 import type {
   SecurityAuditReportDTO,
   PerformanceBenchmarkReportDTO,
@@ -16,6 +19,11 @@ import type {
   DeploymentValidationReportDTO,
   ReadinessReportDTO,
 } from '@/types/releaseReadiness';
+import type {
+  LiveMetricsDTO,
+  ReadinessScanDTO,
+  ProductionAlertDTO,
+} from '@/types/continuousMonitoring';
 
 const VERDICT_CLASSES: Record<ReadinessReportDTO['verdict'], string> = {
   READY: 'bg-green-100 text-green-800',
@@ -36,6 +44,10 @@ export function ReadinessConsole() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [live, setLive] = useState<LiveMetricsDTO | null>(null);
+  const [scans, setScans] = useState<ReadinessScanDTO[]>([]);
+  const [alerts, setAlerts] = useState<ProductionAlertDTO[] | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,9 +70,24 @@ export function ReadinessConsole() {
     }
   }, [workspaceId]);
 
+  const loadMonitoring = useCallback(async () => {
+    const [liveResult, historyResult, alertsResult] = await Promise.allSettled([
+      releaseReadinessApi.getLiveMetrics(workspaceId),
+      releaseReadinessApi.getScanHistory(workspaceId, 24),
+      releaseReadinessApi.getAlerts(workspaceId, { limit: 20 }),
+    ]);
+    if (liveResult.status === 'fulfilled') setLive(liveResult.value);
+    if (historyResult.status === 'fulfilled') setScans(historyResult.value);
+    if (alertsResult.status === 'fulfilled') setAlerts(alertsResult.value);
+  }, [workspaceId]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadMonitoring();
+  }, [loadMonitoring]);
 
   const runDrill = async () => {
     setBusy(true);
@@ -81,6 +108,33 @@ export function ReadinessConsole() {
       setError(err instanceof Error ? err.message : 'Failed to run the benchmark');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const refreshLive = useCallback(async () => {
+    const snapshot = await releaseReadinessApi.getLiveMetrics(workspaceId);
+    setLive(snapshot);
+    return snapshot;
+  }, [workspaceId]);
+
+  const triggerScan = async () => {
+    setScanning(true);
+    try {
+      await releaseReadinessApi.runReadinessScan(workspaceId);
+      await loadMonitoring();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to run the readiness scan');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const acknowledge = async (alertId: string) => {
+    try {
+      await releaseReadinessApi.acknowledgeAlert(alertId, workspaceId);
+      setAlerts(await releaseReadinessApi.getAlerts(workspaceId, { limit: 20 }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to acknowledge the alert');
     }
   };
 
@@ -134,6 +188,14 @@ export function ReadinessConsole() {
       <div className="flex gap-2">
         <button
           type="button"
+          onClick={triggerScan}
+          disabled={scanning}
+          className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Run readiness scan
+        </button>
+        <button
+          type="button"
           onClick={runDrill}
           disabled={busy}
           className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
@@ -149,6 +211,10 @@ export function ReadinessConsole() {
           Run benchmark
         </button>
       </div>
+
+      {live ? <LiveMetricsPanel snapshot={live} onRefresh={refreshLive} /> : null}
+      {scans.length > 0 ? <ReadinessHistoryChart scans={scans} /> : null}
+      {alerts ? <AlertCenter alerts={alerts} onAcknowledge={acknowledge} /> : null}
 
       {security ? <SecurityScoreCard report={security} /> : null}
       {deployment ? <DeploymentStatus report={deployment} /> : null}

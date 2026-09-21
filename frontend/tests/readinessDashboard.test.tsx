@@ -323,6 +323,9 @@ describe('Phase 12.9 release readiness route', () => {
     vi.spyOn(releaseReadinessApi, 'getDeployment').mockResolvedValue(deploymentFixture);
     const drill = vi.spyOn(releaseReadinessApi, 'getDisasterRecovery').mockResolvedValue(drFixture);
     const benchmark = vi.spyOn(releaseReadinessApi, 'getPerformance').mockResolvedValue(performanceFixture);
+    vi.spyOn(releaseReadinessApi, 'getLiveMetrics').mockRejectedValue(new Error('LIVE_METRICS_UNAVAILABLE'));
+    vi.spyOn(releaseReadinessApi, 'getScanHistory').mockResolvedValue([]);
+    vi.spyOn(releaseReadinessApi, 'getAlerts').mockResolvedValue([]);
 
     render(<ReadinessPage />);
 

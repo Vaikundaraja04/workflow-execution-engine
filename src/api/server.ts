@@ -4,10 +4,17 @@ import { loadEnv } from '../config/env.js';
 import { BullMqExecutionQueue } from '../queues/bullMqExecutionQueue.js';
 import { recoverPendingExecutions } from '../services/executionService.js';
 import { initializeSocketIO, closeSocketIO } from '../realtime/socketServer.js';
+import { observabilityCollectorService } from '../services/observabilityCollectorService.js';
+import { continuousReadinessService } from '../services/continuousReadinessService.js';
 
 const env = loadEnv();
 
 let isShuttingDown = false;
+
+function readPositiveInt(name: string): number | undefined {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : undefined;
+}
 
 async function startServer() {
   let queue: BullMqExecutionQueue | undefined;
@@ -23,6 +30,8 @@ async function startServer() {
     if (recovery.examined > 0) {
       console.log(`Recovered ${recovery.recovered} pending executions`);
     }
+    const authLoginLimit = readPositiveInt('AUTH_LOGIN_LIMIT');
+    const authRefreshLimit = readPositiveInt('AUTH_REFRESH_LIMIT');
     const app = createApp({
       executionQueue: queue,
       executionCreationOptions: {
@@ -33,6 +42,10 @@ async function startServer() {
       rateLimit: {
         windowMs: env.RATE_LIMIT_WINDOW_MS,
         limit: env.RATE_LIMIT_MAX,
+      },
+      authRateLimit: {
+        ...(authLoginLimit !== undefined ? { loginLimit: authLoginLimit } : {}),
+        ...(authRefreshLimit !== undefined ? { refreshLimit: authRefreshLimit } : {}),
       },
       corsOrigins: (env.CORS_ORIGINS ?? '').split(',').map(origin => origin.trim()).filter(origin => origin.length > 0),
       health: { redisUrl: env.REDIS_URL },
@@ -57,11 +70,32 @@ async function startServer() {
       corsOrigins: (env.CORS_ORIGINS ?? '').split(',').map(origin => origin.trim()).filter(origin => origin.length > 0),
     });
 
+    observabilityCollectorService.configure({ redisUrl: env.REDIS_URL, executionQueue: queue });
+    const configuredIntervalMs = Number(process.env.METRICS_RECORD_INTERVAL_MS);
+    const metricsIntervalMs = Number.isFinite(configuredIntervalMs) && configuredIntervalMs >= 10_000
+      ? Math.floor(configuredIntervalMs)
+      : 60_000;
+    const metricsRecorder = setInterval(() => {
+      void observabilityCollectorService.recordSnapshot().catch((error) => {
+        console.warn('Failed to record observability snapshot', error);
+      });
+    }, metricsIntervalMs);
+    metricsRecorder.unref();
+    await observabilityCollectorService.recordSnapshot().catch((error) => {
+      console.warn('Failed to record initial observability snapshot', error);
+    });
+    const scanScheduler = continuousReadinessService.startScheduler();
+    if (scanScheduler.started) {
+      console.log(`Continuous readiness scans enabled every ${scanScheduler.intervalMs} ms`);
+    }
+
     const shutdown = (signal: string) => {
       if (isShuttingDown) return;
       isShuttingDown = true;
       console.log(`Received ${signal}, shutting down gracefully...`);
       server.close(async () => {
+        clearInterval(metricsRecorder);
+        continuousReadinessService.stopScheduler();
         await queue?.close();
         await closeSocketIO();
         await disconnectDB();

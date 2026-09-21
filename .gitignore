@@ -10,3 +10,6 @@ coverage/
 scripts/write_*.py
 scripts/append_service.py
 scripts/buildDecisionService.js
+# Load-test artifacts
+tests/load/seed-output.json
+tests/load/results/

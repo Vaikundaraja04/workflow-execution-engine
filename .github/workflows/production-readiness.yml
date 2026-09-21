@@ -1,0 +1,39 @@
+name: Production Readiness Gate
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - 'phase-*'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: production-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  readiness-gate:
+    name: Manifests, queue wiring and static security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the production readiness gate
+        run: npx tsx scripts/ci/production-readiness-gate.ts
+        env:
+          AUTH_JWT_SECRET: ci-production-readiness-secret-0123456789abcdef
+          WEBHOOK_SECRET_KEY: ci-webhook-secret-key-0123456789abcdef

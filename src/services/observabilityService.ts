@@ -1,10 +1,14 @@
 import type { SystemObservabilityHealth, SystemMetricsData } from '../types/operations.types.js';
 import { WorkflowExecutionModel } from '../models/WorkflowExecutionModel.js';
-import { Queue } from 'bullmq';
 import mongoose from 'mongoose';
 
 /**
- * Service for calculating real-time system metrics and health status
+ * Service for calculating real-time system metrics and health status.
+ *
+ * Deprecated for new surfaces: Redis, queue, worker, WebSocket and system resource
+ * values in this service are still simulated. The authoritative source for live
+ * production telemetry is observabilityCollectorService (Phase 12.10); these
+ * endpoints remain for backward compatibility only.
  */
 export class ObservabilityService {
   /**

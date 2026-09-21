@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { logger } from '../../observability/logger.js';
+import { recordApiLatency } from '../../observability/apiLatencyRecorder.js';
 
 export const REQUEST_ID_HEADER = 'x-request-id';
 
@@ -52,6 +53,7 @@ export function requestLogger(): RequestHandler {
     const startedAt = process.hrtime.bigint();
     res.on('finish', () => {
       const elapsedNs = Number(process.hrtime.bigint() - startedAt);
+      recordApiLatency(elapsedNs / 1_000_000, res.statusCode);
       logger.info('http_request', {
         ...requestContextFields(req),
         method: req.method,
