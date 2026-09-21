@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import supertest from 'supertest';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import mongoose, { Types } from 'mongoose';
@@ -19,6 +19,8 @@ import { ProductionAlertModel } from '../src/models/ProductionAlertModel.js';
 import { observabilityCollectorService } from '../src/services/observabilityCollectorService.js';
 import type { OperationalSnapshot } from '../src/services/observabilityCollectorService.js';
 import { productionAlertService } from '../src/services/productionAlertService.js';
+import { continuousReadinessService, MIN_READINESS_SCAN_INTERVAL_MS } from '../src/services/continuousReadinessService.js';
+import type { ReadinessScanDTO } from '../src/services/continuousReadinessService.js';
 import { apiLatencyRecorder } from '../src/observability/apiLatencyRecorder.js';
 import type { ExecutionQueue } from '../src/queues/executionQueue.js';
 
@@ -495,5 +497,63 @@ describe('Phase 12.10 - alert acknowledgement and authorization', () => {
 
     const invalidResolution = await getReadiness('/metrics-history?resolution=9x', editorToken);
     expect(invalidResolution.body.data.resolution).toBe('1m');
+  });
+});
+
+describe('Phase 12.10 - readiness scan scheduler', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    continuousReadinessService.stopScheduler();
+    delete process.env.READINESS_SCAN_INTERVAL_MS;
+  });
+
+  it('refuses to start without a valid scan interval', () => {
+    delete process.env.READINESS_SCAN_INTERVAL_MS;
+    expect(continuousReadinessService.startScheduler()).toEqual({ started: false, intervalMs: null });
+
+    process.env.READINESS_SCAN_INTERVAL_MS = String(MIN_READINESS_SCAN_INTERVAL_MS - 1);
+    expect(continuousReadinessService.startScheduler()).toEqual({ started: false, intervalMs: null });
+
+    process.env.READINESS_SCAN_INTERVAL_MS = 'not-a-number';
+    expect(continuousReadinessService.startScheduler()).toEqual({ started: false, intervalMs: null });
+    expect(continuousReadinessService.isSchedulerRunning()).toBe(false);
+  });
+  it('runs scheduled scans on the configured interval and stops cleanly', async () => {
+    vi.useFakeTimers();
+    process.env.READINESS_SCAN_INTERVAL_MS = '15000';
+    const scheduledScan = {
+      id: 'scheduled-scan',
+      score: 92,
+      verdict: 'READY',
+      alerts: { created: [], updated: [] },
+    } as unknown as ReadinessScanDTO;
+    const runScan = vi.spyOn(continuousReadinessService, 'runScan').mockResolvedValue(scheduledScan);
+
+    expect(continuousReadinessService.startScheduler()).toEqual({ started: true, intervalMs: 15000 });
+    expect(continuousReadinessService.isSchedulerRunning()).toBe(true);
+    expect(continuousReadinessService.startScheduler()).toEqual({ started: false, intervalMs: 15000 });
+
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(runScan).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(runScan).toHaveBeenCalledTimes(3);
+
+    continuousReadinessService.stopScheduler();
+    expect(continuousReadinessService.isSchedulerRunning()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(runScan).toHaveBeenCalledTimes(3);
+    expect(continuousReadinessService.startScheduler()).toEqual({ started: true, intervalMs: 15000 });
+  });
+  it('keeps the scheduler alive when a scheduled scan fails', async () => {
+    vi.useFakeTimers();
+    process.env.READINESS_SCAN_INTERVAL_MS = '15000';
+    const runScan = vi.spyOn(continuousReadinessService, 'runScan').mockRejectedValue(new Error('scan failed'));
+
+    continuousReadinessService.startScheduler();
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(runScan).toHaveBeenCalledTimes(2);
   });
 });

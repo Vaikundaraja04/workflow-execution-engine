@@ -2,8 +2,14 @@ import { Types } from 'mongoose';
 import { SubscriptionModel } from '../models/SubscriptionModel.js';
 import { PlanModel, PLAN_LIMITS, DEFAULT_PLANS } from '../models/PlanModel.js';
 import { WorkspaceUsageModel } from '../models/WorkspaceUsageModel.js';
-import { MockBillingProvider } from './billing/mockBillingProvider.js';
-import { getPlan, comparePlanLimits, validateWorkspaceQuota } from './planService.js';
+import { createBillingProvider, resolveBillingProviderName } from './billing/billingProviderRegistry.js';
+import type { BillingProviderName } from './billing/billingProviderRegistry.js';
+import type { BillingProvider } from './billing/billingProvider.js';
+import { usageMeteringService } from './usageMeteringService.js';
+import { TenantAccountModel } from '../models/TenantAccountModel.js';
+import { USAGE_METRICS } from '../models/UsageMeterModel.js';
+import type { UsageMetric } from '../models/UsageMeterModel.js';
+import { getPlan } from './planService.js';
 import { WorkspaceModel } from '../models/WorkspaceModel.js';
 import { createAuditLog } from './auditService.js';
 
@@ -11,11 +17,21 @@ import { createAuditLog } from './auditService.js';
  * Billing Service
  * Encapsulates billing provider logic and subscription management
  */
-export class BillingService {
-  private billingProvider: MockBillingProvider;
+export const DEFAULT_TRIAL_DAYS = 14;
 
-  constructor() {
-    this.billingProvider = new MockBillingProvider();
+export class BillingService {
+  private billingProvider: BillingProvider;
+  private readonly providerName: BillingProviderName;
+
+  constructor(providerName?: string) {
+    this.providerName = resolveBillingProviderName(providerName);
+    this.billingProvider = createBillingProvider(this.providerName);
+  }
+
+  private resolveProvider(name?: string): BillingProvider {
+    if (!name) return this.billingProvider;
+    const resolved = resolveBillingProviderName(name);
+    return resolved === this.providerName ? this.billingProvider : createBillingProvider(resolved);
   }
 
   /**
@@ -28,8 +44,11 @@ export class BillingService {
   async subscribeWorkspace(
     workspaceId: Types.ObjectId | string,
     plan: 'FREE' | 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE',
-    billingProvider: string = 'mock'
+    billingProvider?: string,
+    options: { trialDays?: number } = {}
   ) {
+    const provider = this.resolveProvider(billingProvider);
+    const providerName = billingProvider ? resolveBillingProviderName(billingProvider) : this.providerName;
     const workspaceIdObj = typeof workspaceId === 'string' ? new Types.ObjectId(workspaceId) : workspaceId;
 
     // Check if workspace already has a subscription
@@ -53,18 +72,21 @@ export class BillingService {
       throw new Error('Workspace not found');
     }
 
-    const customer = await this.billingProvider.createCustomer({
+    const customer = await provider.createCustomer({
       email: `workspace-${workspaceIdObj}@example.com`,
       name: workspace.name,
       metadata: { workspaceId: workspaceIdObj.toString() }
     });
 
     // Create subscription in billing system
-    // In a real implementation, we would map our plan to a price ID from the billing provider
-    const priceId = this.getPriceIdForPlan(plan, billingProvider);
-    const subscription = await this.billingProvider.createSubscription({
+    const trialEnd = options.trialDays && options.trialDays > 0
+      ? new Date(Date.now() + options.trialDays * 24 * 60 * 60 * 1000)
+      : null;
+    const priceId = this.getPriceIdForPlan(plan, providerName);
+    const subscription = await provider.createSubscription({
       customerId: customer.id,
       priceId,
+      trialEnd,
       metadata: { workspaceId: workspaceIdObj.toString(), plan }
     });
 
@@ -72,8 +94,8 @@ export class BillingService {
     const newSubscription = await SubscriptionModel.create({
       workspaceId: workspaceIdObj,
       plan,
-      status: 'ACTIVE', // Assuming immediate activation
-      billingProvider,
+      status: trialEnd ? 'TRIALING' : 'ACTIVE',
+      billingProvider: providerName,
       externalCustomerId: customer.id,
       externalSubscriptionId: subscription.id,
       currentPeriodStart: new Date(subscription.currentPeriodStart * 1000),
@@ -168,9 +190,12 @@ export class BillingService {
       }
     }
 
+    const previousPlan = subscription.plan;
+    const provider = this.resolveProvider(subscription.billingProvider);
+
     // Update subscription in billing system
-    const newPriceId = this.getPriceIdForPlan(newPlan, subscription.billingProvider);
-    const updatedSubscription = await this.billingProvider.changeSubscription({
+    const newPriceId = this.getPriceIdForPlan(newPlan, resolveBillingProviderName(subscription.billingProvider));
+    await provider.changeSubscription({
       subscriptionId: subscription.externalSubscriptionId,
       newPriceId,
       prorate
@@ -178,9 +203,10 @@ export class BillingService {
 
     // Update our subscription record
     subscription.plan = newPlan;
-    subscription.status = 'ACTIVE'; // Assuming change keeps it active
-    // Note: In a real implementation, we would update the period dates from the billing provider
+    subscription.status = 'ACTIVE';
     await subscription.save();
+
+    await TenantAccountModel.updateOne({ workspaceId: workspaceIdObj }, { $set: { plan: newPlan } });
 
     // Create audit log
     await createAuditLog({
@@ -189,13 +215,12 @@ export class BillingService {
       resource: 'subscription',
       resourceId: subscription._id.toString(),
       metadata: {
-        previousPlan: subscription.plan, // This is the old plan before save, but we changed it above
-        newPlan: newPlan,
+        previousPlan,
+        newPlan,
         prorate
       }
     });
 
-    // Fetch the subscription again to get the updated plan (since we changed it above)
     const refreshedSubscription = await SubscriptionModel.findById(subscription._id);
     return refreshedSubscription;
   }
@@ -222,7 +247,8 @@ export class BillingService {
     }
 
     // Cancel in billing system
-    const updatedSubscription = await this.billingProvider.cancelSubscription({
+    const provider = this.resolveProvider(subscription.billingProvider);
+    await provider.cancelSubscription({
       subscriptionId: subscription.externalSubscriptionId,
       cancelAtPeriodEnd: !immediate
     });
@@ -321,10 +347,11 @@ export class BillingService {
     metric: string,
     quantity: number = 1
   ) {
-    // In a real implementation, this would send usage data to the billing provider
-    // For now, we'll just log it (or we could store in a separate usage collection)
-    console.log(`Recording usage for workspace ${workspaceId}: ${metric} += ${quantity}`);
-    // TODO: Implement actual usage recording if needed for billing
+    const normalized = metric.trim().toUpperCase() as UsageMetric;
+    if (!(USAGE_METRICS as readonly string[]).includes(normalized)) {
+      return null;
+    }
+    return usageMeteringService.record(workspaceId, normalized, quantity);
   }
 
   /**
@@ -348,19 +375,24 @@ export class BillingService {
     plan: 'FREE' | 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE',
     billingProvider: string
   ): string {
-    // Mock implementation - in reality, we'd have a mapping stored somewhere
-    const priceMap: Record<string, Record<string, string>> = {
-      mock: {
-        FREE: 'price_free_mock',
-        STARTER: 'price_starter_mock',
-        PROFESSIONAL: 'price_professional_mock',
-        ENTERPRISE: 'price_enterprise_mock'
-      }
-      // In production, we'd have actual Stripe/Razorpay price IDs
-    };
+    const envKey = billingProvider === 'stripe'
+      ? `STRIPE_PRICE_${plan}`
+      : billingProvider === 'razorpay'
+        ? `RAZORPAY_PLAN_${plan}`
+        : null;
+    if (envKey) {
+      const configured = process.env[envKey];
+      if (!configured) throw new Error('BILLING_PROVIDER_NOT_CONFIGURED');
+      return configured;
+    }
 
-    const mockMap = priceMap['mock'] ?? {};
-    return priceMap[billingProvider]?.[plan] || mockMap[plan] || 'price_default';
+    const mockPrices: Record<string, string> = {
+      FREE: 'price_free_mock',
+      STARTER: 'price_starter_mock',
+      PROFESSIONAL: 'price_professional_mock',
+      ENTERPRISE: 'price_enterprise_mock'
+    };
+    return mockPrices[plan] ?? 'price_default';
   }
 
   /**
@@ -381,6 +413,56 @@ export class BillingService {
     };
 
     return planOrder[oldPlan] > planOrder[newPlan];
+  }
+
+  /**
+   * Start a trial on the workspace subscription
+   * @param workspaceId - The workspace ID
+   * @param days - Length of the trial in days
+   * @returns The updated subscription
+   */
+  async startTrial(
+    workspaceId: Types.ObjectId | string,
+    days: number = DEFAULT_TRIAL_DAYS
+  ) {
+    const workspaceIdObj = typeof workspaceId === 'string' ? new Types.ObjectId(workspaceId) : workspaceId;
+    if (!Number.isFinite(days) || days <= 0 || days > 365) {
+      throw new Error('INVALID_TRIAL_DAYS');
+    }
+
+    const subscription = await SubscriptionModel.findOne({ workspaceId: workspaceIdObj });
+    if (!subscription) throw new Error('SUBSCRIPTION_NOT_FOUND');
+    if (subscription.status === 'CANCELLED' || subscription.status === 'EXPIRED') {
+      throw new Error('SUBSCRIPTION_ALREADY_CANCELLED');
+    }
+    if (subscription.status === 'TRIALING') throw new Error('TRIAL_ALREADY_STARTED');
+
+    const provider = this.resolveProvider(subscription.billingProvider);
+    const trialEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    await provider.changeSubscription({
+      subscriptionId: subscription.externalSubscriptionId,
+      newPriceId: this.getPriceIdForPlan(subscription.plan, resolveBillingProviderName(subscription.billingProvider)),
+      trialEnd
+    });
+
+    subscription.status = 'TRIALING';
+    subscription.trialEndsAt = trialEnd;
+    await subscription.save();
+
+    await TenantAccountModel.updateOne(
+      { workspaceId: workspaceIdObj },
+      { $set: { status: 'TRIALING', trialEndsAt: trialEnd } }
+    );
+
+    await createAuditLog({
+      action: 'SUBSCRIPTION_TRIAL_STARTED',
+      workspaceId: workspaceIdObj,
+      resource: 'subscription',
+      resourceId: subscription._id.toString(),
+      metadata: { plan: subscription.plan, days, trialEndsAt: trialEnd.toISOString() }
+    });
+
+    return subscription;
   }
 }
 

@@ -1,7 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 import workflowRouter from './routes/workflowRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { getRequestId } from './middleware/requestLogger.js';
@@ -21,7 +21,11 @@ import { createExternalWorkflowRouter } from './routes/externalWorkflowRoutes.js
 import { createWebhookRouter } from './routes/webhookRoutes.js';
 import { createDeveloperRouter } from './routes/developerRoutes.js';
 import { createSubscriptionRouter } from './routes/subscriptionRoutes.js';
-import { createBillingRouter } from './routes/billingRoutes.js';
+import { createBillingRouter, createBillingCatalogRouter, createBillingWebhookRouter } from './routes/billingRoutes.js';
+// Phase 13: Commercial SaaS Launch & Revenue Platform
+import { createSaasRouter } from './routes/saasRoutes.js';
+import { createUsageRouter } from './routes/usageRoutes.js';
+import { createDemoRouter } from './routes/demoRoutes.js';
 import { createHealthChecks, createHealthRouter } from './routes/healthRoutes.js';
 import { createTemplateRouter } from './routes/templateRoutes.js';
 import { createMarketplaceRouter } from './routes/marketplaceRoutes.js';
@@ -37,6 +41,7 @@ import type { AuthConfig } from '../auth/jwt.service.js';
 import {
   createAuthRateLimiters,
   createGlobalRateLimiter,
+  createSignupRateLimiter,
   DEFAULT_AUTH_RATE_LIMIT,
   DEFAULT_GLOBAL_RATE_LIMIT,
 } from './middleware/rateLimiter.js';
@@ -104,7 +109,12 @@ export function createApp(options: AppOptions) {
   app.use(helmet());
   app.use(tracingMiddleware('workflow-execution-engine'));
   app.use(requestLogger());
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({
+    limit: '1mb',
+    verify: (req, _res, buffer) => {
+      (req as Request & { rawBody?: string }).rawBody = buffer.toString('utf8');
+    },
+  }));
   app.use(createCorsMiddleware(options.corsOrigins ?? []));
 
   const regionService = options.regionService ?? new RegionService();
@@ -146,7 +156,14 @@ export function createApp(options: AppOptions) {
     options.executionQueue ?? new UnavailableExecutionQueue(),
     options.executionCreationOptions ?? {},
   ));
-  app.use('/api/v1/billing', createBillingRouter());
+  app.use('/api/v1/billing', createBillingWebhookRouter());
+  app.use('/api/v1/billing', createBillingCatalogRouter());
+  app.use('/api/v1/billing', requireAuth, createBillingRouter());
+  // Phase 13: Commercial SaaS Launch & Revenue Platform
+  const signupLimiter = createSignupRateLimiter();
+  app.use('/api/v1/saas', createSaasRouter(options.auth, requireAuth, signupLimiter));
+  app.use('/api/v1/usage', requireAuth, createUsageRouter());
+  app.use('/api/v1/demo', createDemoRouter(options.auth, requireAuth, signupLimiter));
   app.use('/api/v1', requireAuth, createAPIKeyRouter());
   app.use('/api/v1/subscription', requireAuth, createSubscriptionRouter());
   app.use(

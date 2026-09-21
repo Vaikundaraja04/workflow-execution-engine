@@ -20,6 +20,52 @@ function now(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+const DEFAULT_PERIOD_SECONDS = 30 * 24 * 60 * 60;
+
+// Adopt subscriptions that exist in the application database but were not
+// created through this in-process mock (for example, seeded workspaces), so
+// local development can manage them without losing the mock's statefulness.
+function adoptInvoice(id: string): BillingInvoice {
+  const current = now();
+  const invoice: BillingInvoice = {
+    id,
+    customerId: 'cus_adopted_mock',
+    status: 'paid',
+    amountDue: 0,
+    amountPaid: 2900,
+    currency: 'usd',
+    created: current,
+    dueDate: null,
+    paid: true,
+    attemptCount: 1,
+    nextPaymentAttempt: null,
+  };
+  invoices.set(id, invoice);
+  return invoice;
+}
+
+function adoptSubscription(id: string): BillingSubscription {
+  const current = now();
+  const subscription: BillingSubscription = {
+    id,
+    customerId: 'cus_adopted_mock',
+    status: 'active',
+    currentPeriodStart: current,
+    currentPeriodEnd: current + DEFAULT_PERIOD_SECONDS,
+    trialEnd: null,
+    cancelAtPeriodEnd: false,
+    items: {
+      data: [{
+        id: `si_adopted_${id}`,
+        price: { id: 'price_adopted_mock' },
+        quantity: 1,
+      }],
+    },
+  };
+  subscriptions.set(id, subscription);
+  return subscription;
+}
+
 export class MockBillingProvider implements BillingProvider {
   async createCustomer(params: {
     email: string;
@@ -76,10 +122,8 @@ export class MockBillingProvider implements BillingProvider {
     subscriptionId: string;
     cancelAtPeriodEnd?: boolean;
   }): Promise<BillingSubscription> {
-    const subscription = subscriptions.get(params.subscriptionId);
-    if (!subscription) {
-      throw new Error('Subscription not found');
-    }
+    const subscription = subscriptions.get(params.subscriptionId)
+      ?? adoptSubscription(params.subscriptionId);
 
     // Update subscription
     subscription.cancelAtPeriodEnd = params.cancelAtPeriodEnd ?? false;
@@ -97,10 +141,8 @@ export class MockBillingProvider implements BillingProvider {
     prorate?: boolean;
     trialEnd?: Date | null;
   }): Promise<BillingSubscription> {
-    const subscription = subscriptions.get(params.subscriptionId);
-    if (!subscription) {
-      throw new Error('Subscription not found');
-    }
+    const subscription = subscriptions.get(params.subscriptionId)
+      ?? adoptSubscription(params.subscriptionId);
 
     // Update the subscription's price and possibly trial end
     const firstItem = subscription.items.data[0];
@@ -125,11 +167,11 @@ export class MockBillingProvider implements BillingProvider {
     try {
       parsed = JSON.parse(requestBody);
     } catch {
-      throw new Error('Invalid JSON in webhook body');
+      throw new Error('INVALID_WEBHOOK_PAYLOAD');
     }
 
     if (!parsed || typeof parsed.type !== 'string') {
-      throw new Error('Invalid webhook event: missing type');
+      throw new Error('INVALID_WEBHOOK_PAYLOAD');
     }
 
     const dataObj = (parsed.data && typeof parsed.data === 'object') ? (parsed.data as Record<string, unknown>) : {};
@@ -141,19 +183,38 @@ export class MockBillingProvider implements BillingProvider {
   }
 
   async getSubscription(subscriptionId: string): Promise<BillingSubscription> {
-    const subscription = subscriptions.get(subscriptionId);
-    if (!subscription) {
-      throw new Error('Subscription not found');
-    }
-    return subscription;
+    return subscriptions.get(subscriptionId) ?? adoptSubscription(subscriptionId);
   }
 
   async getInvoice(invoiceId: string): Promise<BillingInvoice> {
-    const invoice = invoices.get(invoiceId);
-    if (!invoice) {
-      throw new Error('Invoice not found');
-    }
+    const invoice = invoices.get(invoiceId)
+      ?? adoptInvoice(invoiceId);
     return invoice;
+  }
+
+  async listInvoices(params: { customerId: string; limit?: number }): Promise<BillingInvoice[]> {
+    const limit = Number.isFinite(params.limit) && params.limit && params.limit > 0
+      ? Math.min(100, Math.floor(params.limit))
+      : 12;
+    const current = now();
+    return Array.from({ length: limit }, (_, index) => {
+      const periodStart = current - (limit - index) * DEFAULT_PERIOD_SECONDS;
+      const invoice: BillingInvoice = {
+        id: `in_mock_${params.customerId}_${index + 1}`,
+        customerId: params.customerId,
+        status: 'paid',
+        amountDue: 0,
+        amountPaid: 2900,
+        currency: 'usd',
+        created: periodStart + 5 * 24 * 60 * 60,
+        dueDate: periodStart + 12 * 24 * 60 * 60,
+        paid: true,
+        attemptCount: 1,
+        nextPaymentAttempt: null,
+      };
+      invoices.set(invoice.id, invoice);
+      return invoice;
+    }).reverse();
   }
 
   async createPaymentIntent(params: {

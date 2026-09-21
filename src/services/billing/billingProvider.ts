@@ -106,6 +106,14 @@ export interface BillingProvider {
   getInvoice(invoiceId: string): Promise<BillingInvoice>;
 
   /**
+   * List invoices for a customer (most recent first)
+   */
+  listInvoices(params: {
+    customerId: string;
+    limit?: number;
+  }): Promise<BillingInvoice[]>;
+
+  /**
    * Create a one-time payment (if needed for add-ons, etc.)
    */
   createPaymentIntent(params: {

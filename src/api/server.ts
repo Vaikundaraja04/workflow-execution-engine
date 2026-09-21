@@ -6,6 +6,8 @@ import { recoverPendingExecutions } from '../services/executionService.js';
 import { initializeSocketIO, closeSocketIO } from '../realtime/socketServer.js';
 import { observabilityCollectorService } from '../services/observabilityCollectorService.js';
 import { continuousReadinessService } from '../services/continuousReadinessService.js';
+import { subscriptionLifecycleService } from '../services/subscriptionLifecycleService.js';
+import { demoWorkspaceService } from '../services/demoWorkspaceService.js';
 
 const env = loadEnv();
 
@@ -88,6 +90,14 @@ async function startServer() {
     if (scanScheduler.started) {
       console.log(`Continuous readiness scans enabled every ${scanScheduler.intervalMs} ms`);
     }
+    const subscriptionSweepScheduler = subscriptionLifecycleService.startScheduler();
+    if (subscriptionSweepScheduler.started) {
+      console.log(`Subscription lifecycle sweeps enabled every ${subscriptionSweepScheduler.intervalMs} ms`);
+    }
+    const demoExpiryScheduler = demoWorkspaceService.startScheduler();
+    if (demoExpiryScheduler.started) {
+      console.log(`Demo sandbox expiry sweeps enabled every ${demoExpiryScheduler.intervalMs} ms`);
+    }
 
     const shutdown = (signal: string) => {
       if (isShuttingDown) return;
@@ -96,6 +106,8 @@ async function startServer() {
       server.close(async () => {
         clearInterval(metricsRecorder);
         continuousReadinessService.stopScheduler();
+        subscriptionLifecycleService.stopScheduler();
+        demoWorkspaceService.stopScheduler();
         await queue?.close();
         await closeSocketIO();
         await disconnectDB();

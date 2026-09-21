@@ -52,3 +52,19 @@ export function createAuthRateLimiters(
     refresh: createLimiter(options.refreshLimit, options.windowMs),
   };
 }
+
+export interface SignupRateLimitOptions {
+  windowMs: number;
+  limit: number;
+}
+
+export const DEFAULT_SIGNUP_RATE_LIMIT: SignupRateLimitOptions = {
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+};
+
+export function createSignupRateLimiter(
+  options: SignupRateLimitOptions = DEFAULT_SIGNUP_RATE_LIMIT,
+): RequestHandler {
+  return createLimiter(options.limit, options.windowMs);
+}
