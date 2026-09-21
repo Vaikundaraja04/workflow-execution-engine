@@ -137,7 +137,10 @@ export const AUDIT_ACTIONS = [
   'AGENT_VERSION_CREATED',
   'AGENT_REVIEW_CREATED',
   'AGENT_MARKETPLACE_POLICY_BLOCKED',
-  // Phase 12.1: AI Copilot Platform
+  // Phase 12.8: Marketplace Intelligence & Operations
+  'MARKETPLACE_RECOMMENDATIONS_VIEWED',
+  'AGENT_HEALTH_EVALUATED',
+  'AGENT_LIFECYCLE_EVENT_TRIGGERED',  // Phase 12.1: AI Copilot Platform
   'AI_COPILOT_SESSION_CREATED',
   'AI_COPILOT_MESSAGE_SENT',
   // Phase 10: SaaS Marketplace, Governance & Tenant Management

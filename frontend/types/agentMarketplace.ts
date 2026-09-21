@@ -135,3 +135,119 @@ export interface InstallAgentResultDTO {
   install: InstalledAgentDTO;
   agent: { _id: string; name: string; workspaceId: string; status: string };
 }
+export interface MarketplaceTimeSeriesPointDTO {
+  date: string;
+  count: number;
+}
+
+export interface PublisherListingAnalyticsDTO {
+  listingId: string;
+  name: string;
+  status: AgentMarketplaceStatus;
+  visibility: AgentMarketplaceVisibility;
+  installs: number;
+  activeInstalls: number;
+  executions: number;
+  rating: { average: number; count: number };
+  versionCount: number;
+}
+
+export interface MarketplaceAnalyticsDTO {
+  timeframe: string;
+  generatedAt: string;
+  workspace: {
+    activeInstallations: number;
+    totalInstallations: number;
+    executionsInWindow: number;
+    failuresInWindow: number;
+    executionsOverTime: MarketplaceTimeSeriesPointDTO[];
+    unusedAgents: Array<{ listingId: string; agentId: string; name: string }>;
+    topAgentsByExecutions: Array<{ agentId: string; name: string; runs: number; failures: number }>;
+  };
+  publisher: {
+    publishedListings: number;
+    draftListings: number;
+    archivedListings: number;
+    lifetimeInstalls: number;
+    installsInWindow: number;
+    installsOverTime: MarketplaceTimeSeriesPointDTO[];
+    activeInstalls: number;
+    executionsInWindow: number;
+    adoptionRate: number;
+    averageRating: number;
+    perListing: PublisherListingAnalyticsDTO[];
+    topListings: PublisherListingAnalyticsDTO[];
+  };
+}
+export interface AgentHealthReportDTO {
+  listingId: string;
+  name: string;
+  score: number;
+  band: 'HEALTHY' | 'WATCH' | 'AT_RISK';
+  confidence: 'HIGH' | 'LOW';
+  runsAnalyzed: number;
+  signals: {
+    versionAdoption: number;
+    failureRate: number;
+    toolErrorRate: number;
+    policyViolations: number;
+    reviewTrend: number;
+    recentAverageRating: number | null;
+  };
+}
+
+export interface AgentHealthResponseDTO {
+  generatedAt: string;
+  reports: AgentHealthReportDTO[];
+}
+
+export interface MarketplaceRecommendationDTO {
+  listingId: string;
+  name: string;
+  description: string;
+  category: string;
+  tags: string[];
+  visibility: AgentMarketplaceVisibility;
+  rating: { average: number; count: number };
+  installCount: number;
+  versionCount: number;
+  model: string | null;
+  score: number;
+  reasons: string[];
+  installable: boolean;
+}
+
+export interface MarketplaceRecommendationsDTO {
+  generatedAt: string;
+  featurePolicy: { decision: string; reasonCodes: string[] };
+  installable: boolean;
+  items: MarketplaceRecommendationDTO[];
+  blockedByGovernance: Array<{ listingId: string; name: string; model: string | null; reasonCodes: string[] }>;
+}
+
+export interface MarketplaceLifecycleEventDTO {
+  listingId: string;
+  listingName: string;
+  type: string;
+  severity: 'INFO' | 'WARNING';
+  message: string;
+  localAgentId?: string;
+  installedVersion?: number;
+  latestVersion?: number;
+}
+
+export interface MarketplaceLifecycleDTO {
+  generatedAt: string;
+  installer: { events: MarketplaceLifecycleEventDTO[] };
+  publisher: { events: MarketplaceLifecycleEventDTO[]; notificationsCreated: number };
+  summary: {
+    totalEvents: number;
+    updates: number;
+    deprecated: number;
+    inactiveAgents: number;
+    archivedListings: number;
+    inactiveListings: number;
+    stalePublications: number;
+    notificationsCreated: number;
+  };
+}

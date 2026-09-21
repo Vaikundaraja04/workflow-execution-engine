@@ -7,8 +7,12 @@ import type {
   AgentMarketplaceStatsDTO,
   AgentReviewListDTO,
   AgentReviewDTO,
+  AgentHealthResponseDTO,
   AgentVersionComparisonDTO,
   AgentVersionDTO,
+  MarketplaceAnalyticsDTO,
+  MarketplaceLifecycleDTO,
+  MarketplaceRecommendationsDTO,
   InstallAgentConfigurationDTO,
   InstallAgentResultDTO,
 } from '@/types/agentMarketplace';
@@ -172,6 +176,44 @@ export const agentMarketplaceApi = {
   getStats: async (listingId: string, workspaceId?: string): Promise<AgentMarketplaceStatsDTO> => {
     const response = await apiClient.get<{ data: AgentMarketplaceStatsDTO }>(
       `/api/v1/agent-marketplace/agents/${listingId}/stats`,
+      workspaceConfig(workspaceId)
+    );
+    return response.data.data;
+  },
+
+  getAnalytics: async (workspaceId?: string, timeframe = '30d'): Promise<MarketplaceAnalyticsDTO> => {
+    const response = await apiClient.get<{ data: MarketplaceAnalyticsDTO }>(
+      '/api/v1/agent-marketplace/analytics',
+      { ...(workspaceConfig(workspaceId) ?? {}), params: { timeframe } }
+    );
+    return response.data.data;
+  },
+
+  getHealth: async (
+    workspaceId?: string,
+    listingId?: string
+  ): Promise<AgentHealthResponseDTO> => {
+    const response = await apiClient.get<{ data: AgentHealthResponseDTO }>(
+      '/api/v1/agent-marketplace/health',
+      { ...(workspaceConfig(workspaceId) ?? {}), params: listingId ? { listingId } : {} }
+    );
+    return response.data.data;
+  },
+
+  getRecommendations: async (
+    workspaceId?: string,
+    limit = 5
+  ): Promise<MarketplaceRecommendationsDTO> => {
+    const response = await apiClient.get<{ data: MarketplaceRecommendationsDTO }>(
+      '/api/v1/agent-marketplace/recommendations',
+      { ...(workspaceConfig(workspaceId) ?? {}), params: { limit } }
+    );
+    return response.data.data;
+  },
+
+  getLifecycle: async (workspaceId?: string): Promise<MarketplaceLifecycleDTO> => {
+    const response = await apiClient.get<{ data: MarketplaceLifecycleDTO }>(
+      '/api/v1/agent-marketplace/lifecycle',
       workspaceConfig(workspaceId)
     );
     return response.data.data;

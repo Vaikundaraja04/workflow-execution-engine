@@ -11,7 +11,15 @@ import { agentMarketplaceApi } from '@/services/agentMarketplaceApi';
 import { AgentCard } from './AgentCard';
 import { AgentDetailsPanel } from './AgentDetailsPanel';
 import { AgentInstallModal } from './AgentInstallModal';
+import { AgentHealthIndicator } from './AgentHealthIndicator';
+import { LifecycleNotifications } from './LifecycleNotifications';
+import { MarketplaceAnalyticsPanel } from './MarketplaceAnalyticsPanel';
+import { RecommendationFeed } from './RecommendationFeed';
 import type {
+  AgentHealthResponseDTO,
+  MarketplaceAnalyticsDTO,
+  MarketplaceLifecycleDTO,
+  MarketplaceRecommendationsDTO,
   AgentMarketplaceDetailsDTO,
   AgentMarketplaceSearchParams,
   AgentMarketplaceListingDTO,
@@ -66,6 +74,11 @@ export function AgentMarketplaceDashboard() {
   const [comparison, setComparison] = React.useState<AgentVersionComparisonDTO | null>(null);
   const [installedIds, setInstalledIds] = React.useState<Record<string, boolean>>({});
   const [installTarget, setInstallTarget] = React.useState<AgentMarketplaceListingDTO | null>(null);
+  const [activeTab, setActiveTab] = React.useState<'discover' | 'intelligence'>('discover');
+  const [analytics, setAnalytics] = React.useState<MarketplaceAnalyticsDTO | null>(null);
+  const [recommendations, setRecommendations] = React.useState<MarketplaceRecommendationsDTO | null>(null);
+  const [lifecycle, setLifecycle] = React.useState<MarketplaceLifecycleDTO | null>(null);
+  const [health, setHealth] = React.useState<AgentHealthResponseDTO | null>(null);
   const loadListings = React.useCallback(async () => {
     if (!workspaceId) return;
     setLoading(true);
@@ -89,6 +102,29 @@ export function AgentMarketplaceDashboard() {
   React.useEffect(() => {
     void loadListings();
   }, [loadListings]);
+
+  const loadIntelligence = React.useCallback(async () => {
+    if (!workspaceId) return;
+    const [analyticsResult, recommendationsResult, lifecycleResult, healthResult] = await Promise.allSettled([
+      agentMarketplaceApi.getAnalytics(workspaceId, '30d'),
+      agentMarketplaceApi.getRecommendations(workspaceId, 5),
+      agentMarketplaceApi.getLifecycle(workspaceId),
+      agentMarketplaceApi.getHealth(workspaceId),
+    ]);
+    if (analyticsResult.status === 'fulfilled') setAnalytics(analyticsResult.value);
+    if (recommendationsResult.status === 'fulfilled') setRecommendations(recommendationsResult.value);
+    if (lifecycleResult.status === 'fulfilled') setLifecycle(lifecycleResult.value);
+    if (healthResult.status === 'fulfilled') setHealth(healthResult.value);
+    setError(
+      analyticsResult.status === 'rejected' && recommendationsResult.status === 'rejected'
+        ? 'Unable to load marketplace intelligence'
+        : null,
+    );
+  }, [workspaceId]);
+
+  React.useEffect(() => {
+    if (activeTab === 'intelligence') void loadIntelligence();
+  }, [activeTab, loadIntelligence]);
 
   const openDetails = React.useCallback(async (listingId: string) => {
     if (!workspaceId) return;
@@ -187,7 +223,24 @@ export function AgentMarketplaceDashboard() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-1.5 rounded-lg border p-1 text-[11px] w-fit">
+        {(['discover', 'intelligence'] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={
+              activeTab === tab
+                ? 'rounded bg-indigo-600 px-3 py-1 font-medium text-white'
+                : 'rounded px-3 py-1 font-medium text-muted-foreground hover:text-foreground'
+            }
+          >
+            {tab === 'discover' ? 'Discover' : 'Intelligence'}
+          </button>
+        ))}
+      </div>
+
+      <div className={activeTab === 'discover' ? 'flex flex-wrap items-center gap-2' : 'hidden'}>
         <div className="relative">
           <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
           <input
@@ -229,6 +282,7 @@ export function AgentMarketplaceDashboard() {
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{notice}</div>
       ) : null}
 
+      <div className={activeTab === 'discover' ? 'space-y-4' : 'hidden'}>
       {listings.length === 0 && !loading ? (
         <EmptyState
           title="No agents match this search"
@@ -278,6 +332,47 @@ export function AgentMarketplaceDashboard() {
         }}
         onConfirm={confirmInstall}
       />
+      </div>
+
+      {activeTab === 'intelligence' ? (
+        <div className="space-y-4">
+          <MarketplaceAnalyticsPanel analytics={analytics} />
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">Recommended for this workspace</p>
+              <RecommendationFeed
+                data={recommendations}
+                canInstall={canInstall}
+                onInstall={(listingId) => {
+                  void openDetails(listingId);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">Lifecycle and update notifications</p>
+              <LifecycleNotifications data={lifecycle} />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">Agent health</p>
+            {health && health.reports.length > 0 ? (
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {health.reports.map((report) => (
+                  <div key={report.listingId} className="space-y-1 rounded-lg border p-3 text-xs">
+                    <p className="font-medium">{report.name}</p>
+                    <AgentHealthIndicator report={report} showSignals />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No published listings to evaluate yet.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

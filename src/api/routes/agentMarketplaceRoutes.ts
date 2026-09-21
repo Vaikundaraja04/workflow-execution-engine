@@ -5,6 +5,7 @@ import {
   agentMarketplaceService,
   type AgentMarketplaceSearchFilters,
 } from '../../services/agentMarketplaceService.js';
+import { marketplaceIntelligenceService } from '../../services/marketplaceIntelligenceService.js';
 import type { WorkspaceRole } from '../../models/WorkspaceMemberModel.js';
 
 const router = Router();
@@ -210,6 +211,46 @@ router.get('/agents/:id/stats', requirePermission('AGENT_MARKETPLACE_READ'), asy
   try {
     const stats = await agentMarketplaceService.getStats(req.params.id as string, ctx(req).workspaceId);
     res.json({ data: serialize(stats) });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.get('/analytics', requirePermission('AGENT_MARKETPLACE_READ'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { workspaceId, userId } = ctx(req);
+    const timeframe = req.query.timeframe === '7d' || req.query.timeframe === '90d' ? req.query.timeframe : '30d';
+    const analytics = await marketplaceIntelligenceService.getAnalytics(workspaceId, userId, timeframe);
+    res.json({ data: serialize(analytics) });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.get('/recommendations', requirePermission('AGENT_MARKETPLACE_READ'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { workspaceId, userId, role } = ctx(req);
+    const limit = Number(req.query.limit);
+    const recommendations = await marketplaceIntelligenceService.getRecommendations(
+      workspaceId,
+      userId,
+      role,
+      Number.isFinite(limit) && limit > 0 ? limit : 5,
+    );
+    res.json({ data: serialize(recommendations) });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.get('/health', requirePermission('AGENT_MARKETPLACE_READ'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { workspaceId, userId } = ctx(req);
+    const listingId = typeof req.query.listingId === 'string' ? req.query.listingId : undefined;
+    const health = await marketplaceIntelligenceService.getHealth(workspaceId, userId, listingId);
+    res.json({ data: serialize(health) });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.get('/lifecycle', requirePermission('AGENT_MARKETPLACE_READ'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { workspaceId, userId } = ctx(req);
+    const lifecycle = await marketplaceIntelligenceService.getLifecycle(workspaceId, userId);
+    res.json({ data: serialize(lifecycle) });
   } catch (err) { handleError(err, res, next); }
 });
 
