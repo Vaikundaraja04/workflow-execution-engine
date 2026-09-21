@@ -213,14 +213,20 @@ describe('Phase 12.8 Marketplace Intelligence - analytics', () => {
   it('reports installs over time, active installations and adoption with workspace scoping', async () => {
     const listing = await seedListing(workspaceId, ownerId, { installCount: 3 });
     const { install: installA, clone: cloneA } = await seedInstall(listing._id.toString(), otherWorkspaceId, ownerId);
-    const { install: installB, clone: cloneB } = await seedInstall(listing._id.toString(), otherWorkspaceId, ownerId);
+    const thirdWorkspace = await WorkspaceModel.create({
+      name: 'Third Consumer WS',
+      slug: `intel3-${new Types.ObjectId().toString()}`,
+      ownerId: new Types.ObjectId(ownerId),
+    });
+    const thirdWorkspaceId = thirdWorkspace._id.toString();
+    const { install: installB, clone: cloneB } = await seedInstall(listing._id.toString(), thirdWorkspaceId, ownerId);
     const { clone: cloneC } = await seedInstall(listing._id.toString(), workspaceId, ownerId);
 
     await backdate(InstalledAgentModel, installA._id, new Date(Date.now() - 2 * DAY_MS));
     await backdate(InstalledAgentModel, installB._id, new Date(Date.now() - 40 * DAY_MS));
 
     await seedRun(cloneA._id, otherWorkspaceId, { status: 'SUCCEEDED' });
-    await seedRun(cloneB._id, otherWorkspaceId, { status: 'FAILED' });
+    await seedRun(cloneB._id, thirdWorkspaceId, { status: 'FAILED' });
     await seedRun(cloneC._id, workspaceId, { status: 'SUCCEEDED' });
 
     const response = await request

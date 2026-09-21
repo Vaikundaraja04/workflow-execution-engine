@@ -140,7 +140,14 @@ export const AUDIT_ACTIONS = [
   // Phase 12.8: Marketplace Intelligence & Operations
   'MARKETPLACE_RECOMMENDATIONS_VIEWED',
   'AGENT_HEALTH_EVALUATED',
-  'AGENT_LIFECYCLE_EVENT_TRIGGERED',  // Phase 12.1: AI Copilot Platform
+  'AGENT_LIFECYCLE_EVENT_TRIGGERED',
+  // Phase 12.9: Enterprise Release Readiness
+  'SECURITY_AUDIT_COMPLETED',
+  'PERFORMANCE_TEST_COMPLETED',
+  'BACKUP_VALIDATED',
+  'DR_TEST_COMPLETED',
+  'DEPLOYMENT_READINESS_CHECKED',
+  // Phase 12.1: AI Copilot Platform
   'AI_COPILOT_SESSION_CREATED',
   'AI_COPILOT_MESSAGE_SENT',
   // Phase 10: SaaS Marketplace, Governance & Tenant Management

@@ -1158,6 +1158,58 @@ Analyzes workflows against real execution telemetry, generates improvement plans
 
 All Phase 12 responses use the standard `{ data }` envelope and are scoped via the `X-Workspace-Id` header.
 
+## Phase 12.9: Enterprise Release Readiness & Production Hardening
+
+Validation and hardening phase: prove the platform is production-ready across eight
+dimensions (security, performance, reliability, deployment, monitoring, backup, disaster
+recovery, documentation) and turn the results into machine-readable reports, a readiness
+console and an operations runbook.
+
+### Readiness API (`/api/v1/release-readiness`)
+
+| Method | Path | Permission | Purpose |
+| --- | --- | --- | --- |
+| GET | `/security-audit` | `SECURITY_READ` | Deterministic audit (8 families, 17 checks) with 0-100 score, findings and severities |
+| GET | `/performance` | `OPERATIONS_MANAGE` | 5-iteration benchmark battery over real data paths with explicit thresholds |
+| GET | `/database` | `OPERATIONS_READ` | Schema-declared index verification and collection growth watch |
+| GET | `/disaster-recovery` | `OPERATIONS_MANAGE` | Snapshot + restore dry-run + recovery estimate (RTO 4h / RPO 24h) |
+| GET | `/deployment` | `OPERATIONS_READ` | Validates `deploy/k8s/production` manifests and queue/worker wiring |
+| GET | `/metrics?windowHours=` | `OPERATIONS_READ` | Enterprise metrics: latency, throughput, AI cost, agent execution, marketplace activity |
+| GET | `/readiness` | `OPERATIONS_READ` | Weighted aggregate score with per-dimension status |
+
+All responses use the standard `{ data }` envelope. Every run writes to the audit chain
+(`SECURITY_AUDIT_COMPLETED`, `PERFORMANCE_TEST_COMPLETED`, `BACKUP_VALIDATED`,
+`DR_TEST_COMPLETED`, `DEPLOYMENT_READINESS_CHECKED`).
+
+### Deployment guide
+
+1. **Secrets** - create `workflow-engine-secrets` with `mongodb-uri`, `redis-url`,
+   `auth-jwt-secret` (>= 32 chars) and `webhook-secret-key` (>= 32 chars). The webhook
+   key removes the HIGH fallback-key finding from the security audit.
+2. **Apply** - `kubectl apply -k deploy/k8s/production` (namespace, secrets and ordered
+   apply steps are documented in `deploy/k8s/production/README.md`).
+3. **Verify** - `kubectl rollout status`, then call
+   `GET /api/v1/release-readiness/deployment` and `GET /api/v1/release-readiness/readiness`.
+4. **Load test** - run the scripts in `tests/load` against the deployed instance and
+   compare with the documented expected limits.
+5. **Rollback** - `kubectl rollout undo` for image rollbacks; revert the kustomization
+   tag or previous git revision for manifest rollbacks (details in the overlay README).
+
+### Documentation
+
+- Operations runbook: [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) -
+  scoring model, audit checks, benchmark thresholds, DR drill, pre-release checklist.
+- Kubernetes overlay: [`deploy/k8s/production/README.md`](deploy/k8s/production/README.md).
+- Load tests: [`tests/load/README.md`](tests/load/README.md).
+
+### Frontend
+
+`/platform/readiness` readiness console: aggregate score with per-dimension cards,
+SecurityScoreCard (findings + severities), PerformanceCard (operation thresholds),
+DeploymentStatus (manifests + queue/worker checks), DatabaseHealth (indexes + growth
+watch) and DRStatus (backup validation, recovery estimate), with on-demand DR drill and
+benchmark actions.
+
 ## License
 
 ISC

@@ -1,0 +1,21 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: workflow-engine-api
+  namespace: workflow-engine
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: workflow-engine-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: workflow-engine-worker
+  namespace: workflow-engine
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: workflow-engine-worker

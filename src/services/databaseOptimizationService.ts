@@ -8,6 +8,11 @@ import { APIKeyModel } from '../models/APIKeyModel.js';
 import { WebhookModel } from '../models/WebhookModel.js';
 import { WorkspaceModel } from '../models/WorkspaceModel.js';
 import { WorkspaceMemberModel } from '../models/WorkspaceMemberModel.js';
+import { AgentMarketplaceModel } from '../models/AgentMarketplaceModel.js';
+import { InstalledAgentModel } from '../models/InstalledAgentModel.js';
+import { AgentReviewModel } from '../models/AgentReviewModel.js';
+import { AgentRunModel } from '../models/AgentRunModel.js';
+import { AIUsageModel } from '../models/AIUsageModel.js';
 
 export interface IndexInfo {
   name: string;
@@ -159,5 +164,141 @@ export async function getDatabaseOptimizationReport(): Promise<DatabaseOptimizat
       status: missingRecommendationsCount === 0 ? 'OPTIMAL' : 'NEEDS_OPTIMIZATION',
       recommendationsCount: missingRecommendationsCount,
     },
+  };
+}
+
+// Phase 12.9: Enterprise Release Readiness - schema-declared index verification and growth watch.
+
+export interface IndexVerificationEntry {
+  collection: string;
+  count: number;
+  avgDocumentBytes: number | null;
+  missingIndexes: string[];
+  status: 'HEALTHY' | 'WARN' | 'FAIL';
+  issues: string[];
+}
+
+export interface IndexVerificationReport {
+  generatedAt: string;
+  collections: IndexVerificationEntry[];
+  recommendations: string[];
+  score: number;
+  verdict: 'HEALTHY' | 'WARN' | 'FAIL';
+}
+
+const INDEX_VERIFICATION_TARGETS: Array<{
+  collection: string;
+  model: mongoose.Model<any>;
+  expected: Array<Record<string, number>>;
+}> = [
+  {
+    collection: 'agentruns',
+    model: AgentRunModel,
+    expected: [
+      { workspaceId: 1, agentId: 1, createdAt: -1 },
+      { workspaceId: 1, status: 1 },
+    ],
+  },
+  { collection: 'auditlogs', model: AuditLogModel, expected: [{ workspaceId: 1, createdAt: -1 }] },
+  {
+    collection: 'installedagents',
+    model: InstalledAgentModel,
+    expected: [
+      { workspaceId: 1, agentMarketplaceId: 1 },
+      { workspaceId: 1, status: 1 },
+    ],
+  },
+  {
+    collection: 'agentmarketplaces',
+    model: AgentMarketplaceModel,
+    expected: [
+      { workspaceId: 1, agentId: 1 },
+      { workspaceId: 1, status: 1 },
+      { status: 1, visibility: 1, category: 1 },
+    ],
+  },
+  {
+    collection: 'agentreviews',
+    model: AgentReviewModel,
+    expected: [
+      { agentMarketplaceId: 1, userId: 1 },
+      { agentMarketplaceId: 1, createdAt: -1 },
+    ],
+  },
+];
+
+const INDEX_GROWTH_WATCH: Array<{
+  collection: string;
+  warnAt: number;
+  ttlRecommended: boolean;
+}> = [
+  { collection: 'auditlogs', warnAt: 50_000, ttlRecommended: true },
+  { collection: 'agentruns', warnAt: 100_000, ttlRecommended: true },
+  { collection: 'workflowexecutions', warnAt: 100_000, ttlRecommended: false },
+  { collection: 'aiusages', warnAt: 200_000, ttlRecommended: true },
+];
+async function collectionSizeStats(collection: string): Promise<{ count: number; avgDocumentBytes: number | null }> {
+  try {
+    const db = mongoose.connection.db;
+    if (!db) return { count: 0, avgDocumentBytes: null };
+    const stats = (await db.command({ collStats: collection })) as { count?: number; avgObjSize?: number };
+    return {
+      count: stats.count ?? 0,
+      avgDocumentBytes: typeof stats.avgObjSize === 'number' ? Math.round(stats.avgObjSize) : null,
+    };
+  } catch {
+    return { count: 0, avgDocumentBytes: null };
+  }
+}
+
+export async function getIndexVerificationReport(): Promise<IndexVerificationReport> {
+  const collections: IndexVerificationEntry[] = [];
+  const recommendations: string[] = [];
+  for (const target of INDEX_VERIFICATION_TARGETS) {
+    const declared = target.model.schema.indexes().map(([keys]) => JSON.stringify(keys));
+    const missing = target.expected
+      .filter((keys) => !declared.includes(JSON.stringify(keys)))
+      .map((keys) => JSON.stringify(keys));
+    const stats = await collectionSizeStats(target.collection);
+    const issues: string[] = [];
+    if (missing.length > 0) issues.push(`Missing expected index(es): ${missing.join(', ')}`);
+
+    collections.push({
+      collection: target.collection,
+      count: stats.count,
+      avgDocumentBytes: stats.avgDocumentBytes,
+      missingIndexes: missing,
+      status: missing.length === 0 ? 'HEALTHY' : 'FAIL',
+      issues,
+    });
+  }
+  for (const watch of INDEX_GROWTH_WATCH) {
+    const stats = await collectionSizeStats(watch.collection);
+    const entry = collections.find((item) => item.collection === watch.collection);
+    if (entry) {
+      entry.count = stats.count;
+      entry.avgDocumentBytes = stats.avgDocumentBytes;
+    }
+    if (stats.count >= watch.warnAt) {
+      if (entry) {
+        if (entry.status === 'HEALTHY') entry.status = 'WARN';
+        entry.issues.push(`Collection has ${stats.count} documents (watch threshold ${watch.warnAt}).`);
+      }
+      recommendations.push(
+        watch.ttlRecommended
+          ? `${watch.collection}: add a TTL index to expire documents outside the retention window.`
+          : `${watch.collection}: plan an archival or partitioning strategy for sustained growth.`,
+      );
+    }
+  }
+
+  const failures = collections.filter((item) => item.status === 'FAIL').length;
+  const warnings = collections.filter((item) => item.status === 'WARN').length;
+  return {
+    generatedAt: new Date().toISOString(),
+    collections,
+    recommendations,
+    score: Math.max(0, 100 - failures * 25 - warnings * 10),
+    verdict: failures > 0 ? 'FAIL' : warnings > 0 ? 'WARN' : 'HEALTHY',
   };
 }

@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: workflow-engine
+resources:
+- api-deployment.yaml
+- worker-deployment.yaml
+- service.yaml
+- ingress.yaml
+- hpa.yaml
+- pdb.yaml
+commonLabels:
+  app.kubernetes.io/part-of: workflow-engine
+images:
+- name: workflow-engine-api
+  newTag: 1.0.0
+- name: workflow-engine-worker
+  newTag: 1.0.0

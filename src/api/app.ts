@@ -69,6 +69,7 @@ import aiGovernanceRoutes from './routes/aiGovernanceRoutes.js';
 import predictiveOperationsRoutes from './routes/predictiveOperationsRoutes.js';
 import predictiveIntelligenceRoutes from './routes/predictiveIntelligenceRoutes.js';
 import optimizationRoutes from './routes/optimizationRoutes.js';
+import releaseReadinessRoutes from './routes/releaseReadinessRoutes.js';
 import agentMarketplaceRoutes from './routes/agentMarketplaceRoutes.js';
 
 const OPENAPI_DOCUMENT = buildOpenApiDocument();
@@ -195,6 +196,7 @@ export function createApp(options: AppOptions) {
   app.use('/api/v1/predictive-operations', requireAuth, predictiveOperationsRoutes);
   app.use('/api/v1/predictive-intelligence', requireAuth, predictiveIntelligenceRoutes);
   app.use('/api/v1/optimization', requireAuth, optimizationRoutes());
+  app.use('/api/v1/release-readiness', requireAuth, releaseReadinessRoutes());
 
   // Collaboration routes
   app.use('/api/v1/comments', requireAuth, createCommentRoutes(requireAuth));
