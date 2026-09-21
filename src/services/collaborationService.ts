@@ -1,10 +1,26 @@
 import mongoose, { Types } from 'mongoose';
 import { WorkflowModel } from '../models/WorkflowModel.js';
+import { WorkspaceModel } from '../models/WorkspaceModel.js';
+import { WorkspaceMemberModel } from '../models/WorkspaceMemberModel.js';
 import { permissionsForRole } from '../auth/permissions.js';
 import type { WorkspaceRole } from '../models/WorkspaceMemberModel.js';
 import { createAuditLog } from './auditService.js';
 import { findTargetMembership, getActiveMembership, requireWorkspace } from './memberService.js';
 import { tenantScope } from './tenantScope.js';
+
+const TRANSFER_MAX_ATTEMPTS = 3;
+const TRANSFER_RETRY_BASE_DELAY_MS = 50;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableTransactionError(error: unknown): boolean {
+  const labels = (error as { errorLabels?: string[] } | null)?.errorLabels ?? [];
+  if (labels.includes('TransientTransactionError')) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /catalog changes/i.test(message) || /Unable to acquire .* lock/i.test(message);
+}
 
 export interface TransferSummary {
   workflowId: string;
@@ -34,29 +50,49 @@ export async function transferWorkflowOwnership(
   if (target.status !== 'ACTIVE') throw new Error('INVALID_TRANSFER_TARGET');
   if (target.role === 'OWNER') throw new Error('OWNER_ROLE_IMMUTABLE');
 
-  const workspace = await requireWorkspace(workspaceId);
+  await requireWorkspace(workspaceId);
 
   const session = await mongoose.startSession();
-  session.startTransaction();
   try {
-    actor.role = 'EDITOR';
-    actor.permissions = permissionsForRole('EDITOR');
-    await actor.save({ session });
+    for (let attempt = 1; ; attempt += 1) {
+      session.startTransaction();
+      try {
+        const downgradeOwner = await WorkspaceMemberModel.updateOne(
+          { _id: actor._id, role: 'OWNER' },
+          { $set: { role: 'EDITOR', permissions: permissionsForRole('EDITOR') } },
+          { session },
+        );
+        if (downgradeOwner.matchedCount === 0) throw new Error('OWNER_ROLE_IMMUTABLE');
 
-    target.role = 'OWNER';
-    target.permissions = permissionsForRole('OWNER');
-    await target.save({ session });
+        const promoteTarget = await WorkspaceMemberModel.updateOne(
+          { _id: target._id, status: 'ACTIVE' },
+          { $set: { role: 'OWNER', permissions: permissionsForRole('OWNER') } },
+          { session },
+        );
+        if (promoteTarget.matchedCount === 0) throw new Error('MEMBER_NOT_FOUND');
 
-    workspace.ownerId = target.userId;
-    await workspace.save({ session });
+        const moveWorkspace = await WorkspaceModel.updateOne(
+          { _id: workspaceId },
+          { $set: { ownerId: target.userId } },
+          { session },
+        );
+        if (moveWorkspace.matchedCount === 0) throw new Error('WORKSPACE_NOT_FOUND');
 
-    workflow.ownerId = target.userId;
-    await workflow.save({ session });
+        const moveWorkflow = await WorkflowModel.updateOne(
+          { _id: workflowId },
+          { $set: { ownerId: target.userId } },
+          { session },
+        );
+        if (moveWorkflow.matchedCount === 0) throw new Error('WORKFLOW_NOT_FOUND');
 
-    await session.commitTransaction();
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
+        await session.commitTransaction();
+        break;
+      } catch (error) {
+        await session.abortTransaction();
+        if (attempt >= TRANSFER_MAX_ATTEMPTS || !isRetryableTransactionError(error)) throw error;
+        await delay(TRANSFER_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+      }
+    }
   } finally {
     session.endSession();
   }
