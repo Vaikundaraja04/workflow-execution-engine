@@ -2,8 +2,10 @@ import { Types } from 'mongoose';
 import { WorkspaceMemberModel } from '../models/WorkspaceMemberModel.js';
 import type { MembershipStatus, WorkspaceRole } from '../models/WorkspaceMemberModel.js';
 import { WorkspaceModel } from '../models/WorkspaceModel.js';
-import { permissionsForRole, roleHasPermission, roleHasAiPermission, roleHasTemplatePermission, isAiPermission, isTemplatePermission } from '../auth/permissions.js';
-import type { Permission, AIPermission, TemplatePermission } from '../auth/permissions.js';
+import { permissionsForRole, roleHasPermission, roleHasAiPermission, roleHasTemplatePermission, isAiPermission, isTemplatePermission, roleHasAgentMarketplacePermission, isAgentMarketplacePermission } from '../auth/permissions.js';
+import type { Permission, AIPermission, TemplatePermission, AgentMarketplacePermission } from '../auth/permissions.js';
+
+type AnyPermission = Permission | AIPermission | TemplatePermission | AgentMarketplacePermission;
 
 export interface MembershipSnapshot {
   workspaceId: string;
@@ -56,7 +58,7 @@ export async function isWorkspaceActive(workspaceId: string): Promise<boolean> {
 async function evaluateMembership(
   workspaceId: string,
   userId: string,
-  permission?: Permission | AIPermission | TemplatePermission,
+  permission?: AnyPermission,
 ): Promise<PermissionCheck> {
   const membership = await findMembership(workspaceId, userId);
   if (!membership || membership.status === 'REMOVED') return { outcome: 'absent', membership: null };
@@ -71,6 +73,10 @@ async function evaluateMembership(
       if (!roleHasTemplatePermission(membership.role, permission)) {
         return { outcome: 'forbidden', membership };
       }
+    } else if (isAgentMarketplacePermission(permission)) {
+      if (!roleHasAgentMarketplacePermission(membership.role, permission)) {
+        return { outcome: 'forbidden', membership };
+      }
     } else if (!roleHasPermission(membership.role, permission as Permission)) {
       return { outcome: 'forbidden', membership };
     }
@@ -81,7 +87,7 @@ async function evaluateMembership(
 export async function checkUserPermission(
   workspaceId: string,
   userId: string,
-  permission: Permission | AIPermission | TemplatePermission,
+  permission: AnyPermission,
 ): Promise<PermissionCheck> {
   return evaluateMembership(workspaceId, userId, permission);
 }

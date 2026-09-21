@@ -87,6 +87,16 @@ export const AI_PERMISSIONS = [
 
 export type AIPermission = (typeof AI_PERMISSIONS)[number];
 
+// Agent Marketplace (Phase 12.7)
+export const AGENT_MARKETPLACE_PERMISSIONS = [
+  'AGENT_MARKETPLACE_READ',
+  'AGENT_MARKETPLACE_CREATE',
+  'AGENT_MARKETPLACE_MANAGE',
+  'AGENT_INSTALL',
+] as const;
+
+export type AgentMarketplacePermission = (typeof AGENT_MARKETPLACE_PERMISSIONS)[number];
+
 export const WORKSPACE_ROLES: readonly WorkspaceRole[] = ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'];
 
 export const OWNER_ONLY_ACTIONS = [
@@ -150,6 +160,25 @@ export const ROLE_AI_PERMISSIONS: Record<WorkspaceRole, readonly AIPermission[]>
   ],
   VIEWER: ['AI_OPTIMIZATION_READ', 'AI_ANALYSIS_READ', 'AI_OPERATIONS_READ', 'AI_BUSINESS_READ', 'AI_GOVERNANCE_READ', 'AI_MODEL_ROUTER_READ'],
 };
+
+export const ROLE_AGENT_MARKETPLACE_PERMISSIONS: Record<WorkspaceRole, readonly AgentMarketplacePermission[]> = {
+  OWNER: AGENT_MARKETPLACE_PERMISSIONS,
+  ADMIN: AGENT_MARKETPLACE_PERMISSIONS,
+  EDITOR: ['AGENT_MARKETPLACE_READ', 'AGENT_INSTALL'],
+  VIEWER: ['AGENT_MARKETPLACE_READ'],
+};
+
+export function roleHasAgentMarketplacePermission(role: WorkspaceRole, permission: AgentMarketplacePermission): boolean {
+  return ROLE_AGENT_MARKETPLACE_PERMISSIONS[role]?.includes(permission) ?? false;
+}
+
+export function agentMarketplacePermissionsForRole(role: WorkspaceRole): AgentMarketplacePermission[] {
+  return [...ROLE_AGENT_MARKETPLACE_PERMISSIONS[role]];
+}
+
+export function isAgentMarketplacePermission(value: unknown): value is AgentMarketplacePermission {
+  return typeof value === 'string' && (AGENT_MARKETPLACE_PERMISSIONS as readonly string[]).includes(value);
+}
 
 export function roleHasTemplatePermission(role: WorkspaceRole, permission: TemplatePermission): boolean {
   return ROLE_TEMPLATE_PERMISSIONS[role]?.includes(permission) ?? false;

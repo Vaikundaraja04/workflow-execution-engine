@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { Types } from 'mongoose';
 import { getAuthUser } from '../../auth/auth.middleware.js';
-import type { Permission, AIPermission, TemplatePermission } from '../../auth/permissions.js';
+import type { Permission, AIPermission, TemplatePermission, AgentMarketplacePermission } from '../../auth/permissions.js';
 import { checkUserPermission, checkWorkspaceMembership } from '../../services/permissionService.js';
 import type { PermissionOutcome, WorkspaceContext } from '../../services/permissionService.js';
 import { resolveWorkspaceId } from '../../services/workspaceService.js';
@@ -9,7 +9,7 @@ import { WorkflowModel } from '../../models/WorkflowModel.js';
 import { WorkflowExecutionModel } from '../../models/WorkflowExecutionModel.js';
 
 type RequestWithWorkspace = Request & { workspaceContext?: WorkspaceContext };
-export type AnyPermission = Permission | AIPermission | TemplatePermission;
+export type AnyPermission = Permission | AIPermission | TemplatePermission | AgentMarketplacePermission;
 
 export interface WorkspaceSource {
   workflowParam?: string;

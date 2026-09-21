@@ -51,7 +51,22 @@ export const AI_OPERATIONS_PERMISSIONS = [
 
 export type AIOperationsPermission = (typeof AI_OPERATIONS_PERMISSIONS)[number];
 
-export type AnyPermission = Permission | TemplatePermission | AIPermission | AIOperationsPermission;
+// Phase 12.7 — Enterprise AI Agent Marketplace permissions.
+export const AGENT_MARKETPLACE_PERMISSIONS = [
+  'AGENT_MARKETPLACE_READ',
+  'AGENT_MARKETPLACE_CREATE',
+  'AGENT_MARKETPLACE_MANAGE',
+  'AGENT_INSTALL',
+] as const;
+
+export type AgentMarketplacePermission = (typeof AGENT_MARKETPLACE_PERMISSIONS)[number];
+
+export type AnyPermission =
+  | Permission
+  | TemplatePermission
+  | AIPermission
+  | AIOperationsPermission
+  | AgentMarketplacePermission;
 
 export const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly Permission[]> = {
   OWNER: PERMISSIONS,
@@ -96,6 +111,16 @@ export const ROLE_AI_OPERATIONS_PERMISSIONS: Record<
       VIEWER: ['AI_GOVERNANCE_READ', 'AI_MODEL_ROUTER_READ'],
 };
 
+export const ROLE_AGENT_MARKETPLACE_PERMISSIONS: Record<
+  WorkspaceRole,
+  readonly AgentMarketplacePermission[]
+> = {
+  OWNER: AGENT_MARKETPLACE_PERMISSIONS,
+  ADMIN: AGENT_MARKETPLACE_PERMISSIONS,
+  EDITOR: ['AGENT_MARKETPLACE_READ', 'AGENT_INSTALL'],
+  VIEWER: ['AGENT_MARKETPLACE_READ'],
+};
+
 export function hasPermission(role: WorkspaceRole | undefined | null, permission: AnyPermission): boolean {
   if (!role) return false;
 
@@ -111,6 +136,11 @@ export function hasPermission(role: WorkspaceRole | undefined | null, permission
   if ((AI_OPERATIONS_PERMISSIONS as readonly string[]).includes(permission)) {
     return (
       ROLE_AI_OPERATIONS_PERMISSIONS[role]?.includes(permission as AIOperationsPermission) ?? false
+    );
+  }
+  if ((AGENT_MARKETPLACE_PERMISSIONS as readonly string[]).includes(permission)) {
+    return (
+      ROLE_AGENT_MARKETPLACE_PERMISSIONS[role]?.includes(permission as AgentMarketplacePermission) ?? false
     );
   }
   return false;
