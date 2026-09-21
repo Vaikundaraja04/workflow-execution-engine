@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import supertest from 'supertest';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import mongoose, { Types } from 'mongoose';
@@ -175,6 +175,53 @@ describe('Phase 3C workflow collaboration', () => {
       const audit = await AuditLogModel.findOne({ action: 'WORKFLOW_TRANSFERRED' });
       expect(audit?.workspaceId?.toString()).toBe(workspaceId);
       expect(audit?.resourceId).toBe(workflowId);
+    });
+
+    it('retries a transient database lock failure without losing a write', async () => {
+      const transient = Object.assign(
+        new Error("Unable to acquire IX lock on '{Collection : test.workspaces}' within 5ms. opId: 1, op: conn1, connId: 1."),
+        { name: 'MongoServerError', errorLabels: ['TransientTransactionError'] },
+      );
+      const workspaceWrite = vi
+        .spyOn(WorkspaceModel, 'updateOne')
+        .mockImplementationOnce(() => { throw transient; });
+
+      const res = await request
+        .post(transferPath())
+        .set(authHeader(owner.token))
+        .send({ userId: editor.id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.previousOwnerId).toBe(owner.id);
+      expect(res.body.newOwnerId).toBe(editor.id);
+      expect(workspaceWrite).toHaveBeenCalledTimes(2);
+      workspaceWrite.mockRestore();
+
+      const previousOwner = await WorkspaceMemberModel.findOne({
+        workspaceId: new Types.ObjectId(workspaceId),
+        userId: new Types.ObjectId(owner.id),
+      });
+      expect(previousOwner?.role).toBe('EDITOR');
+      expect(previousOwner?.permissions).toEqual(permissionsForRole('EDITOR'));
+
+      const newOwner = await WorkspaceMemberModel.findOne({
+        workspaceId: new Types.ObjectId(workspaceId),
+        userId: new Types.ObjectId(editor.id),
+      });
+      expect(newOwner?.role).toBe('OWNER');
+      expect(newOwner?.permissions).toEqual(permissionsForRole('OWNER'));
+
+      const owners = await WorkspaceMemberModel.countDocuments({
+        workspaceId: new Types.ObjectId(workspaceId),
+        role: 'OWNER',
+      });
+      expect(owners).toBe(1);
+
+      const workspace = await WorkspaceModel.findById(workspaceId);
+      expect(workspace?.ownerId.toString()).toBe(editor.id);
+
+      const workflow = await WorkflowModel.findById(workflowId);
+      expect(workflow?.ownerId.toString()).toBe(editor.id);
     });
 
     it('moves owner-only powers to the new owner', async () => {
