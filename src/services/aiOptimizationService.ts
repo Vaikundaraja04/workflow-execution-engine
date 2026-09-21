@@ -3,6 +3,7 @@ import { AIProviderFactory } from './ai/AIProviderFactory.js';
 import { AISecurityService } from './ai/aiSecurityService.js';
 import { AIUsageService } from './aiUsageService.js';
 import { createAuditLog } from './auditService.js';
+import { AIGovernanceGate } from './aiGovernanceGate.js';
 import { WorkflowModel } from '../models/WorkflowModel.js';
 import { ExecutionAnalyticsModel } from '../models/ExecutionAnalyticsModel.js';
 import type { WorkflowOptimizationInput } from './ai/AIProvider.js';
@@ -99,6 +100,15 @@ export class AIOptimizationService {
       workspaceId,
       'optimization'
     );
+
+    const governance = await AIGovernanceGate.getInstance().authorize({
+      workspaceId: workspaceId.toString(),
+      userId: userId.toString(),
+      feature: 'AI_OPTIMIZATION',
+      model,
+    });
+    if (governance.decision === 'DENY') throw new Error('AI_GOVERNANCE_DENIED');
+    if (governance.decision === 'REQUIRE_APPROVAL') throw new Error('AI_GOVERNANCE_APPROVAL_REQUIRED');
 
     // 5. AI optimization
     const result = await provider.suggestOptimization(sanitizedWorkflowData);

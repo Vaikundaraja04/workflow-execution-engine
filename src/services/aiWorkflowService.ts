@@ -3,9 +3,12 @@ import { AIProviderFactory } from './ai/AIProviderFactory.js';
 import { AISecurityService } from './ai/aiSecurityService.js';
 import { AIUsageService } from './aiUsageService.js';
 import { createAuditLog } from './auditService.js';
+import type { ValidationError, WorkflowDefinition } from '../types/workflow.js';
+import type { WorkflowNode, WorkflowEdge } from '../types/workflow.js';
 import type { WorkflowDefinitionInput } from '../schemas/workflowSchema.js';
-import type { ValidationError, WorkflowNode, WorkflowEdge } from '../types/workflow.js';
 import type { TemplateVisibility } from '../models/WorkflowTemplateModel.js';
+import { NodeCapabilityRegistry } from './ai/nodeCapabilityRegistry.js';
+import { AIGovernanceGate } from './aiGovernanceGate.js';
 
 export interface GenerateWorkflowResult {
   draftWorkflow: {
@@ -17,6 +20,7 @@ export interface GenerateWorkflowResult {
     definition: WorkflowDefinitionInput;
     status: 'DRAFT';
     isPublished: false;
+    riskLevel?: import('./ai/nodeCapabilityRegistry.js').NodeRiskLevel;
   };
   validation: {
     isValid: boolean;
@@ -72,8 +76,23 @@ export class AIWorkflowService {
       'workflowGeneration'
     );
 
-    // 3. AI generation
-    const generated = await provider.generateWorkflow(sanitizedPrompt);
+    const governance = await AIGovernanceGate.getInstance().authorize({
+      workspaceId: workspaceId.toString(),
+      userId: userId.toString(),
+      feature: 'AI_WORKFLOW_CREATE',
+      model,
+      prompt: sanitizedPrompt,
+    });
+    if (governance.decision === 'DENY') throw new Error('AI_GOVERNANCE_DENIED');
+    if (governance.decision === 'REQUIRE_APPROVAL') throw new Error('AI_GOVERNANCE_APPROVAL_REQUIRED');
+    const governedPrompt = governance.redactedPrompt ?? sanitizedPrompt;
+
+    // 3. AI generation (node capability catalog is injected so providers do not
+    // hardcode node knowledge; see NodeCapabilityRegistry)
+    const registry = NodeCapabilityRegistry.getInstance();
+    const generated = await provider.generateWorkflow(governedPrompt, {
+      systemContext: registry.buildGenerationContext(),
+    });
 
     // 4. Normalize definition format
     const nodes = (generated.nodes || []).map((node) => ({
@@ -105,6 +124,7 @@ export class AIWorkflowService {
       definition: definitionCandidate,
       status: 'DRAFT' as const,
       isPublished: false as const, // Never auto publish!
+      riskLevel: registry.maxRiskLevel(nodes.map((node) => node.type)),
     };
 
     const suggestedTemplateName = generated.workflowName
@@ -131,6 +151,7 @@ export class AIWorkflowService {
         nodesCount: nodes.length,
         edgesCount: edges.length,
         isValid: validation.isValid,
+        riskLevel: registry.maxRiskLevel(nodes.map((node) => node.type)),
       },
     });
 
@@ -159,8 +180,19 @@ export class AIWorkflowService {
       'workflowGeneration' // We use workflowGeneration feature to generate the workflow part
     );
 
+    const governance = await AIGovernanceGate.getInstance().authorize({
+      workspaceId: workspaceId.toString(),
+      userId: userId.toString(),
+      feature: 'AI_WORKFLOW_CREATE',
+      model,
+      prompt: sanitizedPrompt,
+    });
+    if (governance.decision === 'DENY') throw new Error('AI_GOVERNANCE_DENIED');
+    if (governance.decision === 'REQUIRE_APPROVAL') throw new Error('AI_GOVERNANCE_APPROVAL_REQUIRED');
+    const governedPrompt = governance.redactedPrompt ?? sanitizedPrompt;
+
     // 3. AI generation for workflow
-    const generated = await provider.generateWorkflow(sanitizedPrompt);
+    const generated = await provider.generateWorkflow(governedPrompt);
 
     // 4. Normalize definition format
     const nodes = (generated.nodes || []).map((node) => ({

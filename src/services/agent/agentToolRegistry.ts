@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AIProviderFactory } from '../ai/AIProviderFactory.js';
+import { AIGovernanceGate } from '../aiGovernanceGate.js';
 import { AnthropicProvider } from '../ai/AnthropicProvider.js';
 import { OpenAIProvider } from '../ai/OpenAIProvider.js';
 import { MockAIProvider } from '../ai/MockAIProvider.js';
@@ -232,6 +233,16 @@ class SummarizeTool implements ToolDefinition {
       const { provider } = await AIProviderFactory.getProviderForWorkspace(
         context.workspaceId
       );
+
+      const governance = await AIGovernanceGate.getInstance().authorize({
+        workspaceId: context.workspaceId,
+        feature: 'AI_AGENT',
+        prompt: validatedInput.text.slice(0, 1000),
+        ...(context.userId ? { userId: context.userId } : {}),
+      });
+      if (governance.decision === 'DENY' || governance.decision === 'REQUIRE_APPROVAL') {
+        throw new Error('AI_GOVERNANCE_RESTRICTED');
+      }
 
       const prompt = validatedInput.maxLength
         ? `Summarize the following text in ${validatedInput.format || 'paragraph'} format within ${validatedInput.maxLength} characters:\n\n${validatedInput.text}`

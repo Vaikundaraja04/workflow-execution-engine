@@ -4,6 +4,8 @@ import { MockAIProvider } from './MockAIProvider.js';
 import { OpenAIProvider } from './OpenAIProvider.js';
 import { AnthropicProvider } from './AnthropicProvider.js';
 import { AIConfigurationModel } from '../../models/AIConfigurationModel.js';
+import type { EvaluateRequestInput } from '../aiGovernancePolicyService.js';
+import type { GovernedProviderResult } from '../aiGovernanceGate.js';
 
 export class AIProviderFactory {
   private static mockInstance: AIProvider = new MockAIProvider();
@@ -27,6 +29,16 @@ export class AIProviderFactory {
    */
   static resetMockProvider(): void {
     this.mockInstance = new MockAIProvider();
+  }
+
+  /**
+   * Get a governance-checked provider for an AI operation (Phase 12.6).
+   * Runs the governance gate first: DENY and REQUIRE_APPROVAL throw mapped errors;
+   * ALLOW_REDACTED returns the sanitized prompt; THROTTLE uses cost-optimized routing.
+   */
+  static async getGovernedProviderForWorkspace(context: EvaluateRequestInput): Promise<GovernedProviderResult> {
+    const { AIGovernanceGate } = await import('../aiGovernanceGate.js');
+    return AIGovernanceGate.getInstance().authorizeProvider(context);
   }
 
   /**

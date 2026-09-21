@@ -16,6 +16,24 @@ import {
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { hasPermission } from '@/types/permissions';
 import type { AIModelRouterConfigDTO, AIRoutingStrategy } from '@/types/aiOperations';
+import { AIAuditDashboard } from '@/features/ai-governance/AIAuditDashboard';
+import { GovernancePostureCard } from '@/features/ai-governance/GovernancePostureCard';
+import {
+  ApprovalPolicyPanel,
+  FeaturePoliciesPanel,
+  ModelAccessPolicyPanel,
+  PrivacyRulesPanel,
+  PromptPolicyPanel,
+  UsageLimitsPanel,
+} from '@/features/ai-governance/PolicyPanels';
+
+const TABS = [
+  { id: 'budget', label: 'Budget & Routing' },
+  { id: 'policies', label: 'Policies' },
+  { id: 'audit', label: 'AI Audit' },
+] as const;
+
+type GovernanceTab = (typeof TABS)[number]['id'];
 
 interface AIProviderRow {
   id: string;
@@ -91,6 +109,7 @@ function buildProviderRows(config: AIModelRouterConfigDTO): AIProviderRow[] {
 }
 
 export default function AIGovernancePlatformPage() {
+  const [activeTab, setActiveTab] = React.useState<GovernanceTab>('budget');
   const [budget, setBudget] = React.useState<AIGovernanceBudget>({
     monthlyCapUSD: 2500,
     currentSpendUSD: 1420.75,
@@ -242,8 +261,39 @@ export default function AIGovernancePlatformPage() {
         </div>
       </div>
 
-      {/* Grid: Budget Card & Multi-Model Router Controls */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <GovernancePostureCard />
+
+      <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs w-fit">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              'px-3 py-1 rounded font-medium transition-all cursor-pointer',
+              activeTab === tab.id ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'policies' ? (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <ModelAccessPolicyPanel />
+          <FeaturePoliciesPanel />
+          <PromptPolicyPanel />
+          <PrivacyRulesPanel />
+          <UsageLimitsPanel />
+          <ApprovalPolicyPanel />
+        </div>
+      ) : null}
+
+      {activeTab === 'audit' ? <AIAuditDashboard /> : null}
+
+      {activeTab === 'budget' ? (
+        /* Grid: Budget Card & Multi-Model Router Controls */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* AI Budget Governance Card */}
         <div className="col-span-12 lg:col-span-6">
           <AIGovernanceBudgetCard
@@ -333,6 +383,7 @@ export default function AIGovernancePlatformPage() {
           </div>
         </div>
       </div>
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workflow-engine-worker
+  labels:
+    app: workflow-engine-worker
+spec:
+  # Scale horizontally: each replica is an independent BullMQ consumer.
+  # Total job concurrency = replicas * WORKER_CONCURRENCY.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: workflow-engine-worker
+  template:
+    metadata:
+      labels:
+        app: workflow-engine-worker
+    spec:
+      # BullMQ drains in-flight jobs on SIGTERM; allow time for that to finish.
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: worker
+        image: workflow-engine-api:latest
+        # Same image as the API, different entrypoint.
+        command: ["node", "dist/workers/startWorker.js"]
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: REGION
+          value: "us-east-1"
+        - name: WORKER_CONCURRENCY
+          value: "5"
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: workflow-engine-secrets
+              key: mongodb-uri
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: workflow-engine-secrets
+              key: redis-url
+        - name: AUTH_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: workflow-engine-secrets
+              key: auth-jwt-secret
+        resources:
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+        # NOTE: no liveness/readiness probes on purpose.
+        # The worker does not serve HTTP, so httpGet probes are impossible, and
+        # an exec probe would need extra binaries (pgrep/redis-cli) that are not
+        # in the node:20-alpine image. The container restarts automatically if the
+        # process exits. For observability, the worker publishes a Redis heartbeat
+        # to workflow-engine:worker:heartbeat, which the API surfaces as the
+        # `worker` field of GET /health (status "degraded" when the heartbeat stops).

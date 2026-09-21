@@ -1,0 +1,15 @@
+{
+  // Build-only config: emits runnable JavaScript to dist/ for the Docker image
+  // and for `node dist/api/server.js` / `node dist/workers/startWorker.js`.
+  // Extends the root tsconfig so typechecking stays identical, and only widens
+  // the include/outDir/exclude settings that the root config leaves open.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["frontend", "node_modules", "dist", "tests"]
+}

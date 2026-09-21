@@ -5,6 +5,7 @@ import type { WorkflowDefinition } from '../../types/workflow.js';
 import {
   createWorkflow,
   getWorkflow,
+  listWorkflows,
   updateDraft,
   validateDraft,
   publishWorkflow,
@@ -59,6 +60,7 @@ function getRouteId(req: Request): string {
 }
 
 const requireWorkflowCreate = requirePermission('WORKFLOW_CREATE', { useBodyWorkspace: true });
+const requireWorkflowList = requirePermission('WORKFLOW_READ');
 const requireWorkflowRead = requirePermission('WORKFLOW_READ', { workflowParam: 'id' });
 const requireWorkflowUpdate = requirePermission('WORKFLOW_UPDATE', { workflowParam: 'id' });
 const requireWorkflowMembership = requireMembership({ workflowParam: 'id' });
@@ -83,6 +85,16 @@ workflowRouter.post('/', requireWorkflowCreate, async (req: Request, res: Respon
       userAgent: req.get('user-agent'),
     });
     res.status(201).json(wf);
+  } catch (err) {
+    next(err);
+  }
+});
+
+workflowRouter.get('/', requireWorkflowList, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const workspaceId = getWorkspaceContext(req).workspaceId;
+    const workflows = await listWorkflows(getAuthUser(req).userId, workspaceId);
+    res.json(workflows);
   } catch (err) {
     next(err);
   }

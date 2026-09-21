@@ -3,6 +3,7 @@ import { WorkflowExecutionModel } from '../models/WorkflowExecutionModel.js';
 import { WorkflowModel } from '../models/WorkflowModel.js';
 import { AuditLogModel } from '../models/AuditLogModel.js';
 import { AIProviderFactory } from './ai/AIProviderFactory.js';
+import { AIGovernanceGate } from './aiGovernanceGate.js';
 import { ObservabilityService } from './observabilityService.js';
 import { EnterpriseAnalyticsService } from './enterpriseAnalyticsService.js';
 import { AuditIntelligenceService } from './auditIntelligenceService.js';
@@ -43,6 +44,14 @@ export class AIOperationsAssistantService {
       workspaceId,
       'failureAnalysis'
     );
+
+    const governance = await AIGovernanceGate.getInstance().authorize({
+      workspaceId: workspaceId.toString(),
+      feature: 'AI_ANALYSIS',
+      ...(userId ? { userId: userId.toString() } : {}),
+    });
+    if (governance.decision === 'DENY') throw new Error('AI_GOVERNANCE_DENIED');
+    if (governance.decision === 'REQUIRE_APPROVAL') throw new Error('AI_GOVERNANCE_APPROVAL_REQUIRED');
 
     const analysisResult = await provider.analyzeExecution({
       executionId: execution._id.toString(),

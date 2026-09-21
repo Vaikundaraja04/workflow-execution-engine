@@ -15,6 +15,13 @@ import type { SelfHealingIncident } from '@/features/autonomous-ops/SelfHealingI
 import type { SelfHealingPolicy } from '@/features/autonomous-ops/PolicyManager';
 import type { PredictiveAnomalyItem } from '@/features/autonomous-ops/PredictiveRadar';
 import type { AIGovernanceBudget } from '@/features/autonomous-ops/AIGovernanceBudgetCard';
+import type {
+  FailurePredictionResult,
+  PerformancePredictionResult,
+  CapacityPredictionResult,
+  CostPredictionResult,
+  IPredictionAlert,
+} from '@/types/predictiveIntelligence';
 
 /**
  * Module 12F — mappers between the Phase 12 API DTOs and the console view models.
@@ -252,5 +259,86 @@ export function routingStrategyFromConfig(config: AIModelRouterConfigDTO): AIRou
   if (config.enableCostOptimization) return 'cost_optimized';
   if (config.enableLatencyOptimization) return 'latency_optimized';
   return 'quality_optimized';
+}
+
+// ---------------------------------------------------------------------------
+// Module 12.4 — Predictive Intelligence Platform
+// ---------------------------------------------------------------------------
+
+export function mapFailureToDashboard(data: FailurePredictionResult) {
+  return {
+    failureProbability: data.failureProbability,
+    riskLevel: data.riskLevel,
+    confidenceScore: data.confidenceScore,
+    riskyNodes: data.riskyNodes.map((n) => ({
+      id: n.nodeId,
+      type: n.nodeType,
+      likelihood: n.failureLikelihood,
+      factors: n.contributingFactors,
+    })),
+    horizon: data.horizon,
+    modelVersion: data.modelVersion,
+    predictedAt: data.predictedAt,
+  };
+}
+
+export function mapPerformanceToDashboard(data: PerformancePredictionResult) {
+  return {
+    predictedDurationMs: data.predictedDurationMs,
+    p50DurationMs: data.p50DurationMs,
+    p95DurationMs: data.p95DurationMs,
+    p99DurationMs: data.p99DurationMs,
+    latencySpikeRisk: data.latencySpikeRisk,
+    confidenceScore: data.confidenceScore,
+    horizon: data.horizon,
+    modelVersion: data.modelVersion,
+    predictedAt: data.predictedAt,
+  };
+}
+
+export function mapCapacityToDashboard(data: CapacityPredictionResult) {
+  return {
+    queueDepthPrediction: data.queueDepthPrediction,
+    queueThroughputPrediction: data.queueThroughputPrediction,
+    recommendedWorkerCount: data.recommendedWorkerCount,
+    currentWorkerCount: data.currentWorkerCount,
+    utilizationRate: data.utilizationRate,
+    queueGrowthRate: data.queueGrowthRate,
+    confidenceScore: data.confidenceScore,
+    horizon: data.horizon,
+    modelVersion: data.modelVersion,
+    predictedAt: data.predictedAt,
+  };
+}
+
+export function mapCostToDashboard(data: CostPredictionResult) {
+  return {
+    monthlyAiCostPrediction: data.monthlyAiCostPrediction,
+    monthlyExecutionCostPrediction: data.monthlyExecutionCostPrediction,
+    monthlyStorageCostPrediction: data.monthlyStorageCostPrediction,
+    currentMonthlyAiCost: data.currentMonthlyAiCost,
+    currentMonthlyExecutionCost: data.currentMonthlyExecutionCost,
+    currentMonthlyStorageCost: data.currentMonthlyStorageCost,
+    storageGrowthRateGBPerMonth: data.storageGrowthRateGBPerMonth,
+    totalMonthlyPrediction: data.totalMonthlyPrediction,
+    confidenceScore: data.confidenceScore,
+    horizon: data.horizon,
+    modelVersion: data.modelVersion,
+    predictedAt: data.predictedAt,
+  };
+}
+
+export function mapAlertToPanel(data: IPredictionAlert) {
+  return {
+    id: data._id,
+    type: data.type,
+    severity: data.severity,
+    confidence: data.confidence,
+    recommendation: data.recommendation,
+    status: data.status,
+    predictedAt: data.predictedAt,
+    horizon: data.horizon,
+    modelVersion: data.modelVersion,
+  };
 }
 

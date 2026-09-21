@@ -4,6 +4,7 @@ import type { ExecutionAnalysisInput } from './ai/AIProvider.js';
 import { AISecurityService } from './ai/aiSecurityService.js';
 import { AIUsageService } from './aiUsageService.js';
 import { createAuditLog } from './auditService.js';
+import { AIGovernanceGate } from './aiGovernanceGate.js';
 import { WorkflowExecutionModel } from '../models/WorkflowExecutionModel.js';
 import { WorkflowModel } from '../models/WorkflowModel.js';
 
@@ -67,6 +68,17 @@ export class AIFailureAnalysisService {
       workspaceId,
       'failureAnalysis'
     );
+
+    if (workspaceId) {
+      const governance = await AIGovernanceGate.getInstance().authorize({
+        workspaceId: workspaceId.toString(),
+        userId: userId.toString(),
+        feature: 'AI_ANALYSIS',
+        model,
+      });
+      if (governance.decision === 'DENY') throw new Error('AI_GOVERNANCE_DENIED');
+      if (governance.decision === 'REQUIRE_APPROVAL') throw new Error('AI_GOVERNANCE_APPROVAL_REQUIRED');
+    }
 
     // 5. AI analysis
     const result = await provider.analyzeExecution(sanitizedExecutionData);

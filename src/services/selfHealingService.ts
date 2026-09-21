@@ -5,6 +5,7 @@ import { SelfHealingIncidentModel, type ISelfHealingIncident, type SelfHealingIn
 import { WorkflowExecutionModel } from '../models/WorkflowExecutionModel.js';
 import { WorkflowModel } from '../models/WorkflowModel.js';
 import { AIProviderFactory } from './ai/AIProviderFactory.js';
+import { AIGovernanceGate } from './aiGovernanceGate.js';
 import { createAuditLog } from './auditService.js';
 
 export interface EvaluateFailureOptions {
@@ -114,7 +115,15 @@ export class SelfHealingService {
         workspaceId,
         'failureAnalysis'
       );
-      const aiResult = await provider.analyzeExecution({
+      const governance = await AIGovernanceGate.getInstance().authorize({
+        workspaceId: workspaceId.toString(),
+        feature: 'AI_ANALYSIS',
+        prompt: errorMessage,
+        ...(execution.ownerId ? { userId: execution.ownerId.toString() } : {}),
+      });
+      if (governance.decision === 'DENY' || governance.decision === 'REQUIRE_APPROVAL') {
+        throw new Error('AI_GOVERNANCE_RESTRICTED');
+      }      const aiResult = await provider.analyzeExecution({
         executionId: execution._id.toString(),
         status: execution.status,
         error: errorMessage,

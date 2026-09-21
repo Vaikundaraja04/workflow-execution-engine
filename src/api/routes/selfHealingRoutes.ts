@@ -2,9 +2,11 @@ import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { requirePermission } from '../middleware/requirePermission.js';
 import { SelfHealingService } from '../../services/selfHealingService.js';
+import { SelfHealingDecisionService } from '../../services/selfHealingDecisionService.js';
 
 const router = Router();
 const selfHealingService = SelfHealingService.getInstance();
+const decisionService = SelfHealingDecisionService.getInstance();
 
 // List all policies for a workspace
 router.get(
@@ -204,6 +206,72 @@ router.post(
       next(err);
     }
   }
+);
+
+
+// ─── Phase 12.3: Decision Engine Endpoints ─────────────────────────────────────
+
+// GET /api/v1/self-healing/executions/:id/recommendations
+// Get AI-powered recovery recommendations for a failed execution
+router.get(
+  '/executions/:id/recommendations',
+  requirePermission('SELF_HEALING_READ'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaceContext = (req as any).workspaceContext;
+      const rawId = req.params.id;
+      const executionId = typeof rawId === 'string' ? rawId : '';
+      const recommendations = await decisionService.getRecommendations(
+        executionId,
+        workspaceContext.workspaceId,
+      );
+      res.json({ data: recommendations });
+    } catch (err: any) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/v1/self-healing/executions/:id/apply
+// Apply a recovery action to a failed execution
+router.post(
+  '/executions/:id/apply',
+  requirePermission('SELF_HEALING_MANAGE'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaceContext = (req as any).workspaceContext;
+      const rawId = req.params.id;
+      const executionId = typeof rawId === 'string' ? rawId : '';
+      const actionIndex = req.body?.actionIndex ?? 0;
+      const result = await decisionService.applyRecovery(
+        executionId,
+        workspaceContext.workspaceId,
+        actionIndex,
+        workspaceContext.userId,
+      );
+
+      if (!result.success) {
+        if (result.incidentId) {
+          return res.status(403).json({
+            error: result.error,
+            incidentId: result.incidentId,
+            requiresApproval: true,
+          });
+        }
+        return res.status(400).json({ error: result.error });
+      }
+
+      res.json({
+        data: {
+          success: true,
+          incidentId: result.incidentId,
+          execution: result.execution,
+        },
+      });
+    } catch (err: any) {
+      next(err);
+    }
+  },
 );
 
 export default router;

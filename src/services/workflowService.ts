@@ -37,6 +37,10 @@ export async function getWorkflow(id: string, ownerId: string, workspaceId: stri
   return doc.toObject();
 }
 
+export async function listWorkflows(ownerId: string, workspaceId: string) {
+  return WorkflowModel.find({ ...tenantScope(ownerId, workspaceId) }).sort({ createdAt: -1 });
+}
+
 export async function updateDraft(id: string, updates: { name?: string; definition?: WorkflowDefinition }, ownerId: string, workspaceId: string) {
   assertValidWorkflowId(id);
   const doc = await WorkflowModel.findOne({ _id: id, ...tenantScope(ownerId, workspaceId) });

@@ -5,6 +5,7 @@ import { Activity, AlertTriangle, ShieldCheck, TrendingUp, CheckCircle, Clock, A
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
+import type { FailurePredictionResult, PerformancePredictionResult, CapacityPredictionResult, CostPredictionResult } from '@/types/predictiveIntelligence';
 
 export interface PredictiveAnomalyItem {
   id: string;
@@ -18,8 +19,16 @@ export interface PredictiveAnomalyItem {
   detectedAt: string;
 }
 
+interface PredictionData {
+  failure?: FailurePredictionResult;
+  performance?: PerformancePredictionResult;
+  capacity?: CapacityPredictionResult;
+  cost?: CostPredictionResult;
+}
+
 interface PredictiveRadarProps {
   anomalies: PredictiveAnomalyItem[];
+  predictionData?: PredictionData;
   onAcknowledge?: (id: string) => void;
   onApplyRecommendation?: (id: string) => void;
   className?: string;
@@ -27,6 +36,7 @@ interface PredictiveRadarProps {
 
 export function PredictiveRadar({
   anomalies,
+  predictionData,
   onAcknowledge,
   onApplyRecommendation,
   className,
@@ -105,6 +115,79 @@ export function PredictiveRadar({
             <p className="text-[11px] text-slate-500 mt-1">
               No performance anomalies or failure risks detected across workflows.
             </p>
+
+       {/* Prediction Data Section */}
+       {predictionData && (
+         <div className="px-5 py-3 bg-slate-900/50 border-b border-slate-800">
+           <div className="flex items-center justify-between mb-2">
+             <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">AI Predictions</span>
+             <Badge variant="outline" size="sm" className="text-[10px] bg-slate-900 text-slate-400 border-slate-800">
+               Live
+             </Badge>
+           </div>
+           <div className="grid grid-cols-2 gap-2">
+             {predictionData.failure && (
+               <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
+                 <div className="flex items-center justify-between">
+                   <span className="text-[10px] text-slate-400">Failure Risk</span>
+                   <span className={cn('text-xs font-bold font-mono',
+                     predictionData.failure.riskLevel === 'critical' ? 'text-rose-400' :
+                     predictionData.failure.riskLevel === 'high' ? 'text-amber-400' :
+                     predictionData.failure.riskLevel === 'medium' ? 'text-yellow-400' : 'text-emerald-400'
+                   )}>
+                     {predictionData.failure.failureProbability}%
+                   </span>
+                 </div>
+                 <div className="text-[10px] text-slate-500 mt-1">
+                   {predictionData.failure.riskyNodes.length} risky nodes
+                 </div>
+               </div>
+             )}
+             {predictionData.performance && (
+               <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
+                 <div className="flex items-center justify-between">
+                   <span className="text-[10px] text-slate-400">Latency Risk</span>
+                   <span className={cn('text-xs font-bold font-mono',
+                     predictionData.performance.latencySpikeRisk === 'high' ? 'text-rose-400' :
+                     predictionData.performance.latencySpikeRisk === 'medium' ? 'text-amber-400' : 'text-emerald-400'
+                   )}>
+                     {predictionData.performance.latencySpikeRisk}
+                   </span>
+                 </div>
+                 <div className="text-[10px] text-slate-500 mt-1">
+                   P95: {predictionData.performance.p95DurationMs}ms
+                 </div>
+               </div>
+             )}
+             {predictionData.capacity && (
+               <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
+                 <div className="flex items-center justify-between">
+                   <span className="text-[10px] text-slate-400">Queue Depth</span>
+                   <span className="text-xs font-bold font-mono text-slate-300">
+                     {predictionData.capacity.queueDepthPrediction}
+                   </span>
+                 </div>
+                 <div className="text-[10px] text-slate-500 mt-1">
+                   Workers: {predictionData.capacity.recommendedWorkerCount}
+                 </div>
+               </div>
+             )}
+             {predictionData.cost && (
+               <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
+                 <div className="flex items-center justify-between">
+                   <span className="text-[10px] text-slate-400">Monthly Cost</span>
+                   <span className="text-xs font-bold font-mono text-slate-300">
+                     ${predictionData.cost.totalMonthlyPrediction.toFixed(0)}
+                   </span>
+                 </div>
+                 <div className="text-[10px] text-slate-500 mt-1">
+                   AI: ${predictionData.cost.monthlyAiCostPrediction.toFixed(0)}
+                 </div>
+               </div>
+             )}
+           </div>
+         </div>
+       )}
           </div>
         ) : (
           activeAnomalies.map((item) => (

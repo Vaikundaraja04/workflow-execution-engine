@@ -140,8 +140,10 @@ describe('Permission System', () => {
       expect(AI_PERMISSIONS).toContain('AI_WORKFLOW_CREATE');
       expect(AI_PERMISSIONS).toContain('AI_ANALYSIS_READ');
       expect(AI_PERMISSIONS).toContain('AI_OPTIMIZATION_CREATE');
+      expect(AI_PERMISSIONS).toContain('AI_OPTIMIZATION_READ');
+      expect(AI_PERMISSIONS).toContain('AI_OPTIMIZATION_APPROVE');
       expect(AI_PERMISSIONS).toContain('AI_CONFIGURATION_MANAGE');
-      expect(AI_PERMISSIONS.length).toBe(4);
+      expect(AI_PERMISSIONS.length).toBe(6);
     });
 
     it('should define ROLE_PERMISSIONS mapping correctly', () => {
@@ -169,9 +171,10 @@ describe('Permission System', () => {
       expect(ROLE_AI_PERMISSIONS.EDITOR).toEqual([
         'AI_WORKFLOW_CREATE',
         'AI_OPTIMIZATION_CREATE',
+        'AI_OPTIMIZATION_READ',
         'AI_ANALYSIS_READ',
       ]);
-      expect(ROLE_AI_PERMISSIONS.VIEWER).toEqual(['AI_ANALYSIS_READ']);
+      expect(ROLE_AI_PERMISSIONS.VIEWER).toEqual(['AI_OPTIMIZATION_READ', 'AI_ANALYSIS_READ']);
     });
   });
 

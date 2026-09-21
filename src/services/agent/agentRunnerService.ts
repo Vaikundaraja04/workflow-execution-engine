@@ -1,4 +1,5 @@
 import { AIProviderFactory } from '../ai/AIProviderFactory.js';
+import { AIGovernanceGate } from '../aiGovernanceGate.js';
 import { AgentToolRegistry, type ToolExecutionContext } from './agentToolRegistry.js';
 import type {
   AgentNodeConfig,
@@ -75,6 +76,16 @@ export class AgentRunnerService {
         const { provider } = await AIProviderFactory.getProviderForWorkspace(
           workspaceId
         );
+
+        const governance = await AIGovernanceGate.getInstance().authorize({
+          workspaceId,
+          userId,
+          feature: 'AI_AGENT',
+          prompt: currentPrompt,
+        });
+        if (governance.decision === 'DENY' || governance.decision === 'REQUIRE_APPROVAL') {
+          throw new Error('AI_GOVERNANCE_RESTRICTED');
+        }
 
         const fullSystemPrompt = `${config.systemPrompt}\n\nAvailable tools: ${(config.toolsAllowed || []).join(', ')}`;
         const genOptions = {

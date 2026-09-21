@@ -54,17 +54,17 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async generateWorkflow(prompt: string, options: AIGenerationOptions = {}): Promise<GeneratedWorkflow> {
+    // Node capability knowledge comes from the NodeCapabilityRegistry (injected via
+    // options.systemContext); the provider no longer hardcodes node types.
+    const nodeCatalog = options.systemContext ?? '';
     const systemPrompt = `You are a workflow engine architect. Generate a workflow definition in JSON format based on the user prompt.
-Valid node types:
-- webhook (config: {}) - exactly 1 start node
-- condition (config: { field: string, operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan', value: any })
-- log (config: { message: string })
+${nodeCatalog}
 Edges must connect existing node IDs.
 Response format strictly JSON:
 {
   "workflowName": "string",
   "description": "string",
-  "nodes": [{ "id": "string", "type": "webhook" | "condition" | "log", "config": {} }],
+  "nodes": [{ "id": "string", "type": string, "config": {} }],
   "connections": [{ "source": "string", "target": "string", "condition": "true" | "false" (optional) }],
   "variables": {}
 }`;

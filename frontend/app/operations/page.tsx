@@ -40,6 +40,9 @@ export default function OperationsPage() {
         <Link href="/operations/autonomous" className="px-3 py-1 rounded bg-muted hover:bg-muted/80">
           Autonomous Operations
         </Link>
+        <Link href="/operations/optimization" className="px-3 py-1 rounded bg-muted hover:bg-muted/80">
+          Optimization
+        </Link>
       </nav>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Executive Overview - takes full width */}

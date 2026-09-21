@@ -2,6 +2,8 @@ export interface AIGenerationOptions {
   temperature?: number;
   maxTokens?: number;
   model?: string;
+  /** Registry-derived node capability context injected by services (Phase 12.1). */
+  systemContext?: string;
 }
 
 export interface GeneratedWorkflowNode {

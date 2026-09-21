@@ -1102,6 +1102,19 @@ Wires the Phase 12A–12D backend APIs into two consoles with typed services, pe
 - Service clients: `frontend/services/{selfHealingApi,predictiveOpsApi,aiGovernanceApi}.ts` (unwrap the `{ data }` envelope, forward `X-Workspace-Id`), with shared DTO→view-model mappers in `frontend/services/aiOperationsMappers.ts`
 - Both consoles show a **Live API Telemetry** vs **Demo Data** badge depending on whether any API returned rows, so seeded demo data remains usable without a running backend
 
+### Module 12.5: Autonomous Workflow Optimization Platform
+Analyzes workflows against real execution telemetry, generates improvement plans, and applies them through an approval-gated, validation-first pipeline.
+
+- **AutonomousOptimizationService** — 30-day execution profile (≤200 sampled executions) with per-node runs/failures/timeouts/average duration, p50/p95/p99 latency and trend, reliability and AI-cost estimates
+- **Bottleneck detection** — redundant transitive edges, condition nodes without a false-branch fallback, slow nodes, failing nodes, timeout-heavy and retry-heavy execution windows
+- **Recommendation engine** — cost/performance/reliability/architecture recommendations; only provably safe graph edits become actionable changes (`REMOVE_EDGE`, `ADD_EDGE` fallback, `UPDATE_NODE_CONFIG`, `ADD_NODE`), everything else is advisory with evidence; AI explanations are generated through the shared provider layer (`AIProviderFactory` + `AISecurityService`, usage metered via `AIUsageService`)
+- **Plan lifecycle** — `PENDING → APPROVED | REJECTED → APPLIED | FAILED`; `approvalRequired` escalates for HIGH-risk changes, predictive failure risk ≥ 60 (via `PredictiveIntelligenceService`), or premium models with actionable changes
+- **Safe apply** — deterministic change application, `WorkflowDefinitionSchema` + `validateGraph` validation, then a transactional DRAFT workflow version (next allocated number, `sourceVersionId` = published version) with a stored before/after diff; published versions are never touched and apply failures return 422 with validation details
+- **Plan model** — `WorkflowOptimizationModel` (workspace-scoped, indexed by workspace/status/workflow)
+- **Permissions** — `AI_OPTIMIZATION_READ`, `AI_OPTIMIZATION_CREATE`, `AI_OPTIMIZATION_APPROVE` (owners/admins full, editors read+create, viewers read)
+- **Audit actions** — `AI_OPTIMIZATION_ANALYSIS_COMPLETED`, `AI_OPTIMIZATION_PLAN_CREATED|APPROVED|REJECTED|APPLIED|FAILED`
+- **Frontend** — `/operations/optimization` dashboard: workflow picker, analysis card, plan detail with recommendations/impact/actions, and optimization history
+
 ## Phase 12 API Endpoints
 
 ### Self-Healing (`/api/v1/self-healing`)
@@ -1133,6 +1146,15 @@ Wires the Phase 12A–12D backend APIs into two consoles with typed services, pe
 - `GET /tools` — list registered agent tools (`AGENT_READ`)
 - `POST /tools/execute` — execute a tool directly with `{ toolName, input }` (`AGENT_EXECUTE`)
 - `POST /run` — run an agent node or multi-agent orchestration with `{ input, config, executionId, contextVariables }` (`AGENT_EXECUTE`)
+
+### Workflow Optimization (`/api/v1/optimization`)
+- `GET /workflows/:id/analyze` — execution profile + detected bottlenecks (`AI_OPTIMIZATION_READ`)
+- `POST /workflows/:id/generate-plan` — generate a PENDING optimization plan (`AI_OPTIMIZATION_CREATE`)
+- `GET /plans` — list plans, filterable by `status` and `workflowId` (`AI_OPTIMIZATION_READ`)
+- `GET /plans/:id` — plan detail (`AI_OPTIMIZATION_READ`)
+- `POST /plans/:id/approve` — approve with `{ note }` (`AI_OPTIMIZATION_APPROVE`)
+- `POST /plans/:id/reject` — reject with `{ reason }` (`AI_OPTIMIZATION_APPROVE`)
+- `POST /plans/:id/apply` — validate changes and create a DRAFT workflow version; responds 422 with validation details when the candidate definition is invalid (`AI_OPTIMIZATION_CREATE`)
 
 All Phase 12 responses use the standard `{ data }` envelope and are scoped via the `X-Workspace-Id` header.
 
