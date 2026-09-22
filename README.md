@@ -1210,6 +1210,55 @@ DeploymentStatus (manifests + queue/worker checks), DatabaseHealth (indexes + gr
 watch) and DRStatus (backup validation, recovery estimate), with on-demand DR drill and
 benchmark actions.
 
+## Phase 18: Enterprise Production Completion Platform
+
+The production-completion phase: named enterprise accounts with contracts and renewals, a
+customer success intelligence that ranks workspaces by what is recorded, an enterprise
+support desk with SLA tracking and breach alerts, a compliance center that reports the
+platform's own posture from evidence, one operator console over a workspace, and the
+production launch checklist.
+
+### Accounts, success, support and compliance APIs
+
+| Method | Path | Access | Purpose |
+| --- | --- | --- | --- |
+| POST | `/api/v1/accounts` | Platform administrator | Create the commercial account record for a workspace |
+| GET | `/api/v1/accounts` | Platform administrator | Account register with filters (status, industry, owner, search, renewal window) and a folded summary |
+| GET | `/api/v1/accounts/:id` | Platform administrator | One account by id or workspace id, with the workspace name and subscription joined in |
+| PATCH | `/api/v1/accounts/:id` | Platform administrator | Status, renewal, owner, plan, contract, MRR, seats and notes - every change audited |
+| GET | `/api/v1/customer-success/health` | Administrator (portfolio) / member (own workspace) | Usage, success rate, AI adoption, team activity and support pressure folded into HEALTHY / WARNING / CRITICAL |
+| POST | `/api/v1/support/tickets` | Workspace member | Raise a ticket; SLA deadlines stamped from the priority policy |
+| GET | `/api/v1/support/tickets` | Member (own workspace) / administrator (all, with filters) | Ticket page with total, open, breached and resolved counts |
+| GET | `/api/v1/support/tickets/:id` | Member (own) / administrator | One ticket - a foreign workspace resolves to 404 |
+| PATCH | `/api/v1/support/tickets/:id` | Member (own) / administrator | Assignment, status flow, priority re-scoring and resolution; the first staff update stamps the first-response time |
+| GET | `/api/v1/support/sla` | Workspace member | SLA policies and open breaches |
+| POST | `/api/v1/support/sla/sweep` | Platform administrator | Idempotent sweep: marks breaches, escalates, notifies and audits |
+| GET | `/api/v1/compliance/center` | Administrator (platform or `?workspaceId=`) / member (own) | Posture from recorded evidence: audit coverage, security controls, data access and AI governance |
+
+### Compliance center
+
+Four weighted sections (audit coverage 30, security controls 25, data access 20, AI
+governance 25) fold into a 0-100 score and an A-D grade. A section without evidence is
+excluded from the aggregate and its weight is named in the notes - a score is never
+fabricated from an empty window - and every read writes a `COMPLIANCE_CENTER_VIEWED`
+audit entry.
+
+### Frontend
+
+`/enterprise/console` composes the operator view over one workspace: account overview,
+usage, customer health, security (the Phase 8 dashboard), support tickets and the Phase
+15.8 billing book, each panel with its own loading, empty and error state. `/compliance`
+renders the posture through ComplianceScore, AuditCoverage and SecurityControls.
+
+### Documentation and tests
+
+- Launch checklist: [`docs/PRODUCTION_LAUNCH_CHECKLIST.md`](docs/PRODUCTION_LAUNCH_CHECKLIST.md) -
+  environment and secrets, database, Redis, payments, email, monitoring, backup and rollback.
+- Backend suites: `enterpriseAccounts`, `customerSuccessIntelligence`, `supportSla` and
+  `enterpriseCompliance` (supertest against the real app with an in-memory replica set).
+- Frontend suites: `enterpriseConsole` and `enterpriseCompliance` (vitest + Testing
+  Library with mocked services).
+
 ## License
 
 ISC

@@ -87,6 +87,11 @@ import predictiveIntelligenceRoutes from './routes/predictiveIntelligenceRoutes.
 import optimizationRoutes from './routes/optimizationRoutes.js';
 import releaseReadinessRoutes from './routes/releaseReadinessRoutes.js';
 import agentMarketplaceRoutes from './routes/agentMarketplaceRoutes.js';
+import { createMarketplaceEcosystemRouter, createPartnerSolutionRouter, createEcosystemAnalyticsRouter } from './routes/marketplaceEcosystemRoutes.js';
+import { createEnterpriseAccountRouter } from './routes/enterpriseAccountRoutes.js';
+import { createSupportRouter } from './routes/supportRoutes.js';
+import { createCustomerSuccessIntelligenceRouter } from './routes/customerSuccessIntelligenceRoutes.js';
+import { createEnterpriseComplianceRouter } from './routes/enterpriseComplianceRoutes.js';
 
 const OPENAPI_DOCUMENT = buildOpenApiDocument();
 
@@ -234,6 +239,18 @@ export function createApp(options: AppOptions) {
   app.use('/api/v1/agent', requireAuth, agentRoutes);
   app.use('/api/v1/agents', requireAuth, enterpriseAgentRoutes);
   app.use('/api/v1/agent-marketplace', requireAuth, agentMarketplaceRoutes);
+
+  // Phase 17: Ecosystem & marketplace revenue platform
+  app.use('/api/v1/marketplace', requireAuth, createMarketplaceEcosystemRouter());
+  app.use('/api/marketplace', requireAuth, createMarketplaceEcosystemRouter());
+  app.use('/api/v1/partners', requireAuth, createPartnerSolutionRouter());
+  app.use('/api/v1/analytics', requireAuth, createEcosystemAnalyticsRouter());
+
+  // Phase 18: Enterprise Production Completion Platform
+  app.use('/api/v1/accounts', requireAuth, createEnterpriseAccountRouter());
+  app.use('/api/v1/support', requireAuth, createSupportRouter());
+  app.use('/api/v1/customer-success', requireAuth, createCustomerSuccessIntelligenceRouter());
+  app.use('/api/v1/compliance', requireAuth, createEnterpriseComplianceRouter());
   app.use('/api/v1/ai/governance', requireAuth, aiGovernanceRoutes);
   app.use('/api/v1/predictive-operations', requireAuth, predictiveOperationsRoutes);
   app.use('/api/v1/predictive-intelligence', requireAuth, predictiveIntelligenceRoutes);

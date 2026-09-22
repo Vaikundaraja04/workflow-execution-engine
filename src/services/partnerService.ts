@@ -4,6 +4,9 @@ import type { IPartner, PartnerStatus, PartnerTier } from '../models/PartnerMode
 import { LeadModel } from '../models/LeadModel.js';
 import { PaymentRecordModel } from '../models/PaymentRecordModel.js';
 import { createAuditLog } from './auditService.js';
+import { PartnerMarketplaceModel } from '../models/PartnerMarketplaceModel.js';
+import type { PartnerListingStatus, PartnerListingType } from '../models/PartnerMarketplaceModel.js';
+import { WorkflowTemplateModel } from '../models/WorkflowTemplateModel.js';
 
 /**
  * Phase 16.6 - Partner channel service.
@@ -57,6 +60,35 @@ export interface PartnerRevenueReport {
     commissionByCurrency: Record<string, number>;
   };
   generatedAt: string;
+}
+
+export interface PartnerSolutionView {
+  solutionId: string;
+  partnerId: string;
+  partnerName: string;
+  workspaceId: string | null;
+  listingType: PartnerListingType;
+  title: string;
+  description: string;
+  templateId: string | null;
+  solutionReference: string | null;
+  industryTags: string[];
+  commissionRatePercent: number;
+  status: PartnerListingStatus;
+  statistics: { referrals: number; customers: number; commissionEarned: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PartnerSolutionInput {
+  listingType?: PartnerListingType | undefined;
+  title: string;
+  description: string;
+  templateId?: string | null | undefined;
+  solutionId?: string | null | undefined;
+  industryTags?: string[] | undefined;
+  commissionRatePercent?: number | undefined;
+  status?: PartnerListingStatus | undefined;
 }
 
 function slugCode(value: string): string {
@@ -282,6 +314,133 @@ export class PartnerService {
     return { partners: rows, totals, generatedAt: new Date().toISOString() };
   }
 
+  private solutionViewFor(
+    solution: {
+      _id: Types.ObjectId;
+      partnerId: Types.ObjectId;
+      workspaceId: Types.ObjectId | null;
+      listingType: PartnerListingType;
+      title: string;
+      description: string;
+      templateId: Types.ObjectId | null;
+      solutionId: string | null;
+      industryTags: string[];
+      commissionRatePercent: number;
+      status: PartnerListingStatus;
+      statistics: { referrals: number; customers: number; commissionEarned: number };
+      createdAt: Date;
+      updatedAt: Date;
+    },
+    partnerName: string,
+  ): PartnerSolutionView {
+    return {
+      solutionId: solution._id.toString(),
+      partnerId: solution.partnerId.toString(),
+      partnerName,
+      workspaceId: solution.workspaceId ? solution.workspaceId.toString() : null,
+      listingType: solution.listingType,
+      title: solution.title,
+      description: solution.description,
+      templateId: solution.templateId ? solution.templateId.toString() : null,
+      solutionReference: solution.solutionId,
+      industryTags: solution.industryTags,
+      commissionRatePercent: solution.commissionRatePercent,
+      status: solution.status,
+      statistics: solution.statistics,
+      createdAt: new Date(solution.createdAt).toISOString(),
+      updatedAt: new Date(solution.updatedAt).toISOString(),
+    };
+  }
+  /** Platform admins publish what a partner offers the ecosystem. */
+  async createSolution(partnerId: string, input: PartnerSolutionInput, actorUserId?: string | undefined): Promise<PartnerSolutionView> {
+    if (!Types.ObjectId.isValid(partnerId)) throw new Error('INVALID_PARTNER_ID');
+    const partner = await PartnerModel.findById(partnerId);
+    if (!partner) throw new Error('PARTNER_NOT_FOUND');
+
+    let templateId: Types.ObjectId | null = null;
+    if (input.templateId) {
+      if (!Types.ObjectId.isValid(input.templateId)) throw new Error('WORKFLOW_TEMPLATE_NOT_FOUND');
+      const template = await WorkflowTemplateModel.findById(input.templateId).select('_id').lean();
+      if (!template) throw new Error('WORKFLOW_TEMPLATE_NOT_FOUND');
+      templateId = template._id;
+    }
+
+    const solution = await PartnerMarketplaceModel.create({
+      partnerId: partner._id,
+      workspaceId: null,
+      listingType: input.listingType ?? 'SOLUTION',
+      title: input.title.trim(),
+      description: input.description.trim(),
+      templateId,
+      solutionId: input.solutionId ?? null,
+      industryTags: [...new Set((input.industryTags ?? []).map((tag) => tag.trim()).filter(Boolean))].slice(0, 12),
+      commissionRatePercent: input.commissionRatePercent ?? partner.commissionRatePercent,
+      status: input.status ?? 'PUBLISHED',
+      statistics: { referrals: 0, customers: 0, commissionEarned: 0 },
+      createdBy: actorUserId && Types.ObjectId.isValid(actorUserId) ? new Types.ObjectId(actorUserId) : new Types.ObjectId(),
+    });
+
+    await createAuditLog({
+      action: 'PARTNER_SOLUTION_PUBLISHED',
+      ...(actorUserId !== undefined ? { userId: actorUserId } : {}),
+      resource: 'partner_solution',
+      resourceId: solution._id.toString(),
+      metadata: {
+        partnerId: partner._id.toString(),
+        listingType: solution.listingType,
+        status: solution.status,
+        templateId: templateId ? templateId.toString() : null,
+        commissionRatePercent: solution.commissionRatePercent,
+      },
+    });
+
+    return this.solutionViewFor(solution, partner.name);
+  }
+  /** Publish, archive or draft a solution listing (platform admins). */
+  async updateSolutionStatus(
+    solutionId: string,
+    status: PartnerListingStatus,
+    actorUserId?: string | undefined,
+  ): Promise<PartnerSolutionView> {
+    if (!Types.ObjectId.isValid(solutionId)) throw new Error('PARTNER_SOLUTION_NOT_FOUND');
+    const solution = await PartnerMarketplaceModel.findById(solutionId);
+    if (!solution) throw new Error('PARTNER_SOLUTION_NOT_FOUND');
+    solution.status = status;
+    await solution.save();
+
+    const partner = await PartnerModel.findById(solution.partnerId).select('name').lean();
+    await createAuditLog({
+      action: 'PARTNER_SOLUTION_PUBLISHED',
+      ...(actorUserId !== undefined ? { userId: actorUserId } : {}),
+      resource: 'partner_solution',
+      resourceId: solution._id.toString(),
+      metadata: { partnerId: solution.partnerId.toString(), status },
+    });
+
+    return this.solutionViewFor(solution, partner?.name ?? 'Partner');
+  }
+  /** Solution discovery: published by default; status filtering is admin-only at the route. */
+  async listSolutions(options: {
+    status?: PartnerListingStatus | undefined;
+    listingType?: PartnerListingType | undefined;
+    partnerId?: string | undefined;
+    limit?: number | undefined;
+  } = {}): Promise<PartnerSolutionView[]> {
+    const limit = Number.isFinite(options.limit) && options.limit && options.limit > 0
+      ? Math.min(MAX_PARTNERS, Math.floor(options.limit))
+      : MAX_PARTNERS;
+    const query: Record<string, unknown> = { status: options.status ?? 'PUBLISHED' };
+    if (options.listingType) query.listingType = options.listingType;
+    if (options.partnerId && Types.ObjectId.isValid(options.partnerId)) {
+      query.partnerId = new Types.ObjectId(options.partnerId);
+    }
+    const rows = await PartnerMarketplaceModel.find(query).sort({ createdAt: -1 }).limit(limit).lean();
+    if (rows.length === 0) return [];
+    const partnerIds = [...new Set(rows.map((row) => row.partnerId.toString()))].map((id) => new Types.ObjectId(id));
+    const partners = await PartnerModel.find({ _id: { $in: partnerIds } }).select('name').lean();
+    const names = new Map(partners.map((partner) => [partner._id.toString(), partner.name]));
+    return rows.map((row) => this.solutionViewFor(row, names.get(row.partnerId.toString()) ?? 'Partner'));
+  }
   /** Public view of a partner with referral counts. */
   private viewFor(partner: IPartner & { _id: Types.ObjectId }): PartnerView {
     return {

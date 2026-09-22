@@ -21,6 +21,7 @@ import { AISecurityService } from './ai/aiSecurityService.js';
 import { createAuditLog } from './auditService.js';
 import type { AuditAction } from '../models/AuditLogModel.js';
 import type { WorkspaceRole } from '../models/WorkspaceMemberModel.js';
+import { agentMarketplaceBillingService } from './agentMarketplaceBillingService.js';
 
 export interface CreateListingInput {
   agentId: string;
@@ -506,6 +507,7 @@ export class AgentMarketplaceService {
     });
     if (existing) throw new Error('AGENT_ALREADY_INSTALLED');
 
+    await agentMarketplaceBillingService.assertLicenseForInstall(listing._id.toString(), workspaceId);
     const snapshot = (listing.agentSnapshot ?? null) as IAgentDefinitionSnapshot | null;
     if (!snapshot) throw new Error('INVALID_REQUEST');
 
