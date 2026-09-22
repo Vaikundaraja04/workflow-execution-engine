@@ -1,5 +1,6 @@
 import React from 'react';
 import { useOperationsStore } from '@/stores/operationsStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Activity,
   TrendingUp,
@@ -71,14 +72,14 @@ export const ExecutiveOverview: React.FC = () => {
     securityIntelligence,
     isLoading,
     error,
-  } = useOperationsStore((state) => ({
+  } = useOperationsStore(useShallow((state) => ({
     overview: state.overview,
     systemHealth: state.systemHealth,
     cost: state.cost,
     securityIntelligence: state.securityIntelligence,
     isLoading: state.isLoading,
     error: state.error,
-  }));
+  })));
 
   if (isLoading) {
     return (

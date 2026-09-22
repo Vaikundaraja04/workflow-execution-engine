@@ -1,5 +1,6 @@
 import React from 'react';
 import { useOperationsStore } from '@/stores/operationsStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   DollarSign,
   Activity,
@@ -100,12 +101,12 @@ export const CostAnalytics: React.FC = () => {
     overview,
     isLoading,
     error,
-  } = useOperationsStore((state) => ({
+  } = useOperationsStore(useShallow((state) => ({
     cost: state.cost,
     overview: state.overview,
     isLoading: state.isLoading,
     error: state.error,
-  }));
+  })));
 
   if (isLoading) {
     return (

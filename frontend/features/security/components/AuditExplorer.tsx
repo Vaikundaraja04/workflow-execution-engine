@@ -240,8 +240,8 @@ export const AuditExplorer: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                logs.map((log) => (
-                  <tr key={log._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/50">
+                logs.map((log, idx) => (
+                  <tr key={log._id || idx} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/50">
                     <td className="px-5 py-3.5 font-mono text-xs font-bold text-gray-900 dark:text-white">
                       {log.action}
                     </td>

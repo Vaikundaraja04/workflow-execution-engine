@@ -5,9 +5,11 @@ import { AppShell } from '@/components/layout/AppShell';
 import { useAuthStore } from '@/stores/authStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 
+const mockRouter = { push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() };
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => mockRouter,
 }));
 
 vi.mock('@/services/workspaceApi', () => ({

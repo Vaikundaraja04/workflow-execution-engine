@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useOperationsStore } from '@/stores/operationsStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { useAuthStore } from '@/stores/authStore';
 import {
   FileText,
   Plus,
@@ -33,10 +35,13 @@ export default function ReportsPage() {
     isLoading,
   } = useOperationsStore();
 
-  const workspaceId = 'workspace-1';
-  const userId = 'user-1';
+const { currentWorkspace } = useWorkspaceStore();
+  const { user } = useAuthStore();
+  const workspaceId = currentWorkspace?._id || currentWorkspace?.id || '';
+  const userId = user?.id || '';
 
   useEffect(() => {
+    if (!workspaceId) return;
     getReports(workspaceId, filterType !== 'all' ? { type: filterType } : {});
   }, [workspaceId, filterType, getReports]);
 

@@ -80,16 +80,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!useAuthStore.getState().isAuthenticated) {
-      useAuthStore.getState().initFromStorage();
-    }
-  }, []);
-
-  React.useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
+      const state = useAuthStore.getState();
+      if (!state.isAuthenticated) {
+        state.initFromStorage();
+        if (!useAuthStore.getState().isAuthenticated) {
+          router.push('/login');
+        }
+      }
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated]);
 
   React.useEffect(() => {
     setReady(true);

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useOperationsStore } from '@/stores/operationsStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { ExecutionAnalyticsData } from '@/types/operations.types';
 import {
   Activity,
@@ -305,12 +306,12 @@ export const ExecutionAnalytics: React.FC = () => {
     overview,
     isLoading,
     error,
-  } = useOperationsStore((state) => ({
+  } = useOperationsStore(useShallow((state) => ({
     executions: state.executions,
     overview: state.overview,
     isLoading: state.isLoading,
     error: state.error,
-  }));
+  })));
 
   if (isLoading) {
     return (

@@ -3,17 +3,18 @@
 import React from 'react';
 import Link from 'next/link';
 import { useOperationsStore } from '@/stores/operationsStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { ExecutiveOverview } from '@/features/enterprise-operations/ExecutiveOverview';
 import { SystemHealth } from '@/features/enterprise-operations/SystemHealth';
 import { useEffect } from 'react';
 
 export default function OperationsPage() {
   const { fetchOverviewAnalytics, fetchSystemHealth, fetchSystemMetrics } = useOperationsStore();
+  const { currentWorkspace } = useWorkspaceStore();
+  const workspaceId = currentWorkspace?._id || currentWorkspace?.id || '';
 
   useEffect(() => {
-    // In a real app, we would get the workspaceId from context or URL
-    // For now, we'll use a placeholder or get it from auth context
-    const workspaceId = 'workspace-1'; // This should come from auth context
+    if (!workspaceId) return;
 
     fetchOverviewAnalytics(workspaceId);
     fetchSystemHealth();
@@ -23,7 +24,7 @@ export default function OperationsPage() {
     return () => {
       // cleanup if needed
     };
-  }, [fetchOverviewAnalytics, fetchSystemHealth, fetchSystemMetrics]);
+  }, [workspaceId, fetchOverviewAnalytics, fetchSystemHealth, fetchSystemMetrics]);
 
   return (
     <div className="space-y-8">

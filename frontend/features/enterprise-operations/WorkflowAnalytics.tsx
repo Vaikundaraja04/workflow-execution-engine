@@ -1,5 +1,6 @@
 import React from 'react';
 import { useOperationsStore } from '@/stores/operationsStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Activity,
   TrendingUp,
@@ -146,12 +147,12 @@ export const WorkflowAnalytics: React.FC = () => {
     overview,
     isLoading,
     error,
-  } = useOperationsStore((state) => ({
+  } = useOperationsStore(useShallow((state) => ({
     workflows: state.workflows,
     overview: state.overview,
     isLoading: state.isLoading,
     error: state.error,
-  }));
+  })));
 
   if (isLoading) {
     return (

@@ -12,14 +12,14 @@ export default function CustomerConsoleLayout({ children }: { children: React.Re
   const router = useRouter();
 
   useEffect(() => {
-    if (!useAuthStore.getState().isAuthenticated) {
-      useAuthStore.getState().initFromStorage();
-    }
-  }, []);
-
-  useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
+      const state = useAuthStore.getState();
+      if (!state.isAuthenticated) {
+        state.initFromStorage();
+        if (!useAuthStore.getState().isAuthenticated) {
+          router.push('/login');
+        }
+      }
     }
   }, [isAuthenticated, router]);
 

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useOperationsStore } from '@/stores/operationsStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { WorkflowAnalytics } from '@/features/enterprise-operations/WorkflowAnalytics';
 import { ExecutionAnalytics } from '@/features/enterprise-operations/ExecutionAnalytics';
 import { CostAnalytics } from '@/features/enterprise-operations/CostAnalytics';
@@ -20,14 +21,16 @@ export default function AnalyticsPage() {
     isLoading,
   } = useOperationsStore();
 
-  const workspaceId = 'workspace-1';
+  const { currentWorkspace } = useWorkspaceStore();
+  const workspaceId = currentWorkspace?._id || currentWorkspace?.id || '';
 
   useEffect(() => {
+    if (!workspaceId) return;
     fetchOverviewAnalytics(workspaceId, timeframe);
     fetchWorkflowAnalytics(workspaceId, timeframe);
     fetchExecutionAnalytics(workspaceId, timeframe);
     fetchCostAnalytics(workspaceId, timeframe);
-  }, [timeframe, fetchOverviewAnalytics, fetchWorkflowAnalytics, fetchExecutionAnalytics, fetchCostAnalytics]);
+  }, [workspaceId, timeframe, fetchOverviewAnalytics, fetchWorkflowAnalytics, fetchExecutionAnalytics, fetchCostAnalytics]);
 
   const handleExport = async (format: 'json' | 'csv') => {
     try {

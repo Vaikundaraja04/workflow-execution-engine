@@ -168,3 +168,25 @@ A final residual sweep also annotated the remaining plan-vs-code test-file names
 
 With the execution-pipeline fixes (A), API-contract fixes (B), and documentation audit (F), the codebase typechecks, passes its full suites (1078 backend + 197 frontend), and its docs now accurately describe what ships. Remaining items are tracked as engineering risks (R1-R5) rather than docs gaps.
 
+
+---
+
+## H. Post-audit verification sweep (2026-09-22, evening)
+
+After the fix round, every app route was swept in a real browser (agent-browser,
+logged-in session): 37 routes visited with a full page load each, console errors
+and page content captured. Findings and fixes:
+
+| # | Finding | Fix |
+|---|---|---|
+| H1 | **Full page load (F5) on any app route redirected to /login** even with a valid session (API log proved requests were authenticated). Two layout effects raced: the redirect read the pre-restore auth value. | AppShell + customer layout now restore the session first, then re-read the store before redirecting. |
+| H2 | `/operations`, `/operations/analytics`, `/operations/reports` hardcoded `workspaceId = 'workspace-1'` -> analytics endpoints returned instant 500s. | Pages now derive the workspace from the workspace store and skip fetching without one. |
+| H3 | Compliance page crashed (`report.sections.map` on undefined) - component expected a shape the API never returns. | Component rewritten against the real evidence-category shape + regression tests. |
+| H4 | Executions could not be created from the UI: the API requires `idempotencyKey`, the client sent `{}`. | `executionApi.createExecution` generates a key; run dialog added for workflow input. |
+| H5 | Tailwind v4 tokens (`bg-card`, `text-foreground`, ...) generated no CSS; `dark:` followed the OS instead of the app theme. | `@theme inline` token mapping + class-based `dark` variant in `globals.css`. |
+| H6 | Tall modals could not be scrolled (flex centering + overflow on one container). | Dialog capped to viewport height, content scrolls internally. |
+| H7 | Zustand object selectors in 4 operations components caused "getSnapshot should be cached" warnings. | Wrapped with `useShallow`. |
+| H8 | Audit Explorer React key warning (entries without `_id`). | Key falls back to the row index. |
+
+Sweep result after fixes: 37/37 routes render with real content, no crashes, no
+console errors. Frontend: 202 tests + typecheck + production build green.
