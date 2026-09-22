@@ -9,6 +9,7 @@ import { workflowApi } from '@/services/workflowApi';
 import { executionApi } from '@/services/executionApi';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { hasPermission } from '@/types/permissions';
+import { useWorkspaceHydration } from '@/hooks/useWorkspaceHydration';
 import { Spinner as Loader } from '@/components/ui/Loading';
 import { Button } from '@/components/ui/Button';
 
@@ -25,9 +26,10 @@ export default function WorkflowDebugPage() {
   const [workflow, setWorkflow] = useState<any>(null);
   const [executionId, setExecutionId] = useState<string | null>(null);
   const { currentRole } = useWorkspaceStore();
+  const hydrated = useWorkspaceHydration();
 
   useEffect(() => {
-    if (!workflowId) return;
+    if (!workflowId || !hydrated) return;
 
     let isMounted = true;
 
@@ -81,7 +83,7 @@ export default function WorkflowDebugPage() {
     return () => {
       isMounted = false;
     };
-  }, [workflowId, currentRole]);
+  }, [workflowId, hydrated, currentRole]);
 
   if (loading) {
     return (

@@ -28,6 +28,7 @@ interface WorkflowBuilderState {
   workflowDescription: string;
   currentVersion: number;
   publishedVersion: number | null;
+  setPublishedVersion: (version: number) => void;
   isReadOnly: boolean;
 
   // React Flow Graph
@@ -657,6 +658,8 @@ export const useWorkflowBuilderStore = create<WorkflowBuilderState>((set, get) =
       edges: backendEdges,
     };
   },
+
+  setPublishedVersion: (version: number) => set({ publishedVersion: version, currentVersion: version }),
 
   loadFromBackendDefinition: (name, definition, workflowId = null, currentVersion = 1, publishedVersion = null, isReadOnly = false) => {
     if (!definition || !definition.nodes || definition.nodes.length === 0) {

@@ -20,11 +20,13 @@ import { PropertiesPanel } from '../panels/PropertiesPanel';
 import { ValidationPanel } from '../panels/ValidationPanel';
 import { WorkflowToolbar } from '../panels/WorkflowToolbar';
 import { workflowApi } from '@/services/workflowApi';
+import { workspaceApi } from '@/services/workspaceApi';
 import { collaborationApi } from '@/services/collaborationApi';
 import type { BuilderNodeType } from '../types/workflowBuilder';
 import { Sliders, ShieldCheck, AlertCircle, CheckCircle2, MessageSquare } from 'lucide-react';
 import { useCollaborationStore } from '@/stores/collaborationStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useWorkspaceHydration } from '@/hooks/useWorkspaceHydration';
 import { PresenceTracker } from '@/features/collaboration/components/PresenceTracker';
 import { CommentsPanel } from '@/features/collaboration/components/CommentsPanel';
 import { ConflictResolver } from '@/features/collaboration/components/ConflictResolver';
@@ -65,6 +67,7 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
     setBackendValidationErrors,
     toBackendDefinition,
     loadFromBackendDefinition,
+    setPublishedVersion,
   } = useWorkflowBuilderStore();
 
   const {
@@ -96,6 +99,10 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
       return () => clearTimeout(timer);
     }
   }, [notification]);
+
+  // Hydrate the active workspace (and role) when the builder is opened directly,
+  // so permission-gated actions (Save Draft / Publish) render correctly.
+  useWorkspaceHydration();
 
   // Handle initial trigger node for brand new workflow if empty
   React.useEffect(() => {
@@ -271,7 +278,8 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
       });
 
       // Then publish
-      await workflowApi.publishWorkflow(currentId);
+      const publishResult = await workflowApi.publishWorkflow(currentId);
+      setPublishedVersion(publishResult.versionNumber ?? currentVersion);
       setNotification({ type: 'success', message: 'Workflow version published successfully!' });
     } catch (err: any) {
       setNotification({

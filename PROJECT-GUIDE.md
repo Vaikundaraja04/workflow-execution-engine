@@ -117,7 +117,19 @@ That structure is exactly what interviewers want to hear.
    `flex items-center` + `overflow-y-auto` on the same container - the flexbox
    centering trap. Fix: cap dialog at viewport height, scroll content internally.
 
-6. **Refreshing any page logged you out (the best story).**
+6. **The builder lost its Save/Publish buttons (or spun forever) on refresh.**
+   Symptom: open /workflows/new or an edit page directly (or press F5) and the
+   Save Draft / Publish buttons were missing; the edit page span forever.
+   Root cause: those buttons are permission-gated, and the page checked the role
+   before the workspace (which carries the role) had loaded. On top of that, a
+   redirect helper called inside an async effect silently did nothing, leaving a
+   permanent loading spinner.
+   Fix: a `useWorkspaceHydration` hook loads the workspace first on every
+   un-shelled page; the permission checks now wait for it.
+   Lesson: any UI that hides actions behind permissions must first wait for the
+   identity/role it depends on.
+
+7. **Refreshing any page logged you out (the best story).**
    Symptom: press F5 on any app page and you land on the login screen, even though
    the session was valid - but the API log showed the page's own requests were
    authenticated (200/304 with a user id). So the session was fine; the UI was wrong.

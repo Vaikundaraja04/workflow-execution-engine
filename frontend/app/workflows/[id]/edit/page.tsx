@@ -8,6 +8,7 @@ import { useWorkflowBuilderStore } from '@/features/workflow-builder/stores/work
 import { workflowApi } from '@/services/workflowApi';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { hasPermission } from '@/types/permissions';
+import { useWorkspaceHydration } from '@/hooks/useWorkspaceHydration';
 
 export default function EditWorkflowPage() {
   const params = useParams<{ id: string }>();
@@ -18,11 +19,12 @@ export default function EditWorkflowPage() {
   }
 
   const [loading, setLoading] = useState(true);
+  const hydrated = useWorkspaceHydration();
   const { currentRole } = useWorkspaceStore();
   const { loadFromBackendDefinition, setIsReadOnly } = useWorkflowBuilderStore();
 
   useEffect(() => {
-    if (!workflowId) return;
+    if (!workflowId || !hydrated) return;
 
     let isMounted = true;
 
@@ -49,7 +51,10 @@ export default function EditWorkflowPage() {
             workflow.draft?.definition || workflow.definition,
             workflow.id || workflow._id,
             workflow.currentVersion,
-            workflow.publishedVersion ?? null,
+            workflow.publishedVersion ??
+              (workflow.publishedVersionId || workflow.status === 'PUBLISHED'
+                ? workflow.latestVersionNumber ?? workflow.currentVersion ?? null
+                : null),
             isWorkflowReadOnly
           );
           setLoading(false);
@@ -66,7 +71,7 @@ export default function EditWorkflowPage() {
     return () => {
       isMounted = false;
     };
-  }, [workflowId, loadFromBackendDefinition, setIsReadOnly, currentRole]);
+  }, [workflowId, hydrated, loadFromBackendDefinition, setIsReadOnly, currentRole]);
 
   if (loading) {
     return (

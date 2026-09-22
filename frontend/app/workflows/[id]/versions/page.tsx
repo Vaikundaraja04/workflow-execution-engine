@@ -8,6 +8,7 @@ import { ArrowLeft, History, GitCompare, Calendar, CheckCircle, Clock } from 'lu
 import Link from 'next/link';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { hasPermission } from '@/types/permissions';
+import { useWorkspaceHydration } from '@/hooks/useWorkspaceHydration';
 import { workflowApi } from '@/services/workflowApi';
 import type { WorkflowVersionView, VersionComparison } from '@/types/workflow';
 
@@ -37,6 +38,7 @@ export default function WorkflowVersionsPage() {
   });
 
   const { currentRole } = useWorkspaceStore();
+  const hydrated = useWorkspaceHydration();
 
   const canViewVersions =
     hasPermission(currentRole, 'WORKFLOW_READ') ||
@@ -44,7 +46,7 @@ export default function WorkflowVersionsPage() {
     hasPermission(currentRole, 'WORKFLOW_CREATE');
 
   useEffect(() => {
-    if (!workflowId) return;
+    if (!workflowId || !hydrated) return;
 
     let isMounted = true;
 
@@ -75,7 +77,7 @@ export default function WorkflowVersionsPage() {
     return () => {
       isMounted = false;
     };
-  }, [workflowId, canViewVersions]);
+  }, [workflowId, hydrated, canViewVersions]);
 
   const handleCompare = async () => {
     if (

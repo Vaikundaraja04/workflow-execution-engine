@@ -33,6 +33,7 @@ export interface Workflow {
     definition?: WorkflowDefinition;
   };
   publishedVersion?: number;
+  publishedVersionId?: string;
   definition?: WorkflowDefinition;
   createdAt: string;
   updatedAt: string;
