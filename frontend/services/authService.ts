@@ -24,13 +24,12 @@ export const authService = {
   register: async (
     data: RegisterRequest
   ): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    user: User;
+    id: string;
+    email: string;
     defaultWorkspaceId: string;
   }> => {
     const response = await apiClient.post<
-      { accessToken: string; refreshToken: string; user: User; defaultWorkspaceId: string }
+      { id: string; email: string; defaultWorkspaceId: string }
     >('/api/auth/register', data);
     return response.data;
   },

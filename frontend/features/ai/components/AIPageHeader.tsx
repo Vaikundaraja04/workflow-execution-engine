@@ -4,8 +4,6 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { useWorkspaceStore } from '@/stores/workspaceStore';
-import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 
 const AI_NAV = [
@@ -22,12 +20,11 @@ interface AIPageHeaderProps {
 
 export function AIPageHeader({ title, description }: AIPageHeaderProps) {
   const pathname = usePathname();
-  const { currentWorkspace } = useWorkspaceStore();
 
   return (
-    <header className="border-b bg-white sticky top-0 z-30 shadow-2xs">
+    <header className="border-b bg-white shadow-2xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
+        <div className="flex h-16 items-center">
           <div className="flex items-center space-x-3">
             <Link
               href="/dashboard"
@@ -47,7 +44,7 @@ export function AIPageHeader({ title, description }: AIPageHeaderProps) {
             </div>
           </div>
 
-          <WorkspaceSwitcher workspace={currentWorkspace} />
+
         </div>
 
         <nav className="-mb-px flex space-x-1 overflow-x-auto">

@@ -8,6 +8,7 @@ import { authService } from '@/services/authService';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useAuthStore } from '@/stores/authStore';
 
 const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -34,17 +35,13 @@ export default function RegisterPage() {
     setError(null);
     setSuccess(null);
     try {
-      const { accessToken, refreshToken, user, defaultWorkspaceId } = await authService.register(data);
-      // Store tokens
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-      // Store user and default workspace
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('defaultWorkspaceId', defaultWorkspaceId);
+      await authService.register(data);
+      const { accessToken, refreshToken, defaultWorkspaceId } = await authService.login(data);
+      useAuthStore.getState().setAuth({ accessToken, refreshToken, defaultWorkspaceId });
       // Redirect to dashboard
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Registration failed');
+      setError(err.message || err.response?.data?.error?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }

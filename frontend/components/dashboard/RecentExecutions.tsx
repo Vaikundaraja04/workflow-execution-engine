@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/Table';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Activity, Clock, PlayCircle } from 'lucide-react';
+import Link from 'next/link';
 import type { WorkflowExecution, ExecutionStatus } from '@/types/execution';
 
 export interface RecentExecutionsProps {
@@ -83,7 +84,7 @@ export const RecentExecutions: React.FC<RecentExecutionsProps> = ({
                 {executions.slice(0, 5).map((exec) => (
                   <TableRow key={exec._id || exec.id}>
                     <TableCell className="font-mono text-xs text-foreground">
-                      {(exec._id || exec.id || '').substring(0, 8)}...
+                      <Link href={'/executions/' + (exec._id || exec.id || '')} className="text-emerald-700 transition-colors hover:text-emerald-800 hover:underline">{(exec._id || exec.id || '').substring(0, 8)}...</Link>
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {(exec.workflowId || '').substring(0, 8)}...

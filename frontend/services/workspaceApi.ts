@@ -35,7 +35,7 @@ export const workspaceApi = {
   },
 
   addMember: async (workspaceId: string, payload: AddMemberPayload): Promise<WorkspaceMember> => {
-    const response = await apiClient.post<WorkspaceMember>(`/api/workspaces/${workspaceId}/members`, payload);
+    const response = await apiClient.post<WorkspaceMember>(`/api/workspaces/${workspaceId}/members/invite`, payload);
     return response.data;
   },
 

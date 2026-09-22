@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { apiClient } from '@/services/apiClient';
 
 interface Deployment {
   version: string;
@@ -19,10 +20,8 @@ const DeploymentStatus: React.FC = () => {
   useEffect(() => {
     const fetchDeployments = async () => {
       try {
-        const res = await fetch('/api/platform/deployments');
-        if (!res.ok) throw new Error('Failed to fetch deployments');
-        const data = await res.json();
-        setDeployments(data.data);
+        const res = await apiClient.get('/api/v1/platform/deployments');
+        setDeployments(res.data.data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { apiClient } from '@/services/apiClient';
 
 interface NodeHealth {
   id: string;
@@ -22,10 +23,8 @@ const InfrastructureHealth: React.FC = () => {
   useEffect(() => {
     const fetchHealth = async () => {
       try {
-        const res = await fetch('/api/platform/infrastructure');
-        if (!res.ok) throw new Error('Failed to fetch infrastructure health');
-        const data = await res.json();
-        setNodes(data.data);
+        const res = await apiClient.get('/api/v1/platform/infrastructure');
+        setNodes(res.data.data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {

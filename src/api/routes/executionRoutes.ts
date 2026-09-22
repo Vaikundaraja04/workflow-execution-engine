@@ -129,6 +129,39 @@ export function createExecutionRouter(
   );
 
   router.get(
+    '/executions/:executionId/logs',
+    requireAuth,
+    requireExecutionRead,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const executionId = getRouteParameter(req, 'executionId', 'INVALID_EXECUTION_ID');
+        const workspaceId = getWorkspaceContext(req).workspaceId;
+        const execution = await getWorkflowExecution(executionId, getAuthUser(req).userId, workspaceId);
+
+        const logs: Array<{ timestamp: string; level: 'INFO' | 'WARN' | 'ERROR'; message: string }> =
+          execution.statusHistory.map(event => ({
+            timestamp: event.timestamp.toISOString(),
+            level: event.status === 'FAILED' ? 'ERROR' : 'INFO',
+            message: `Execution status changed to ${event.status}${event.attempt !== undefined ? ` (attempt ${event.attempt})` : ''}`,
+          }));
+
+        if (execution.error) {
+          logs.push({
+            timestamp: (execution.finishedAt ?? new Date()).toISOString(),
+            level: 'ERROR',
+            message: `${execution.error.code}: ${execution.error.message}`,
+          });
+        }
+
+        logs.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+        return res.json(logs);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
     '/workflows/:workflowId/executions',
     requireAuth,
     requireWorkflowRead,

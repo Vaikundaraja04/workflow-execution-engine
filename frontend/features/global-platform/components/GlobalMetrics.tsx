@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { apiClient } from '@/services/apiClient';
 
 interface GlobalMetrics {
   totalExecutions24h: number;
@@ -17,10 +18,8 @@ const GlobalMetrics: React.FC = () => {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const res = await fetch('/api/platform/metrics');
-        if (!res.ok) throw new Error('Failed to fetch global metrics');
-        const data = await res.json();
-        setMetrics(data.data);
+        const res = await apiClient.get('/api/v1/platform/metrics');
+        setMetrics(res.data.data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {

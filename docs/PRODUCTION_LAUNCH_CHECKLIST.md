@@ -60,9 +60,10 @@ Two providers are implemented: Stripe and Razorpay.
 | --- | --- |
 | Stripe | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | Razorpay | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` |
+| Selection | `BILLING_PROVIDER` (`mock` default; `stripe` or `razorpay`) |
 
-- [ ] Live keys configured for the provider that will take the first payment; the
-      other stays unset so it cannot be selected by accident.
+- [ ] `BILLING_PROVIDER` set explicitly to the live provider (`stripe` or `razorpay`); the default is
+      `mock`, and setting live keys alone does NOT switch the provider.
 - [ ] Webhook endpoints registered with the provider and pointed at the deployment;
       signatures verified with the matching webhook secret.
 - [ ] Live-mode smoke test: signup -> subscription -> invoice recorded, using a real

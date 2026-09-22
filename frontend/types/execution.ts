@@ -12,10 +12,12 @@ export type ExecutionStatus =
 export interface WorkflowExecution {
   _id: string;
   id?: string;
+  executionId?: string;
   workflowId: string;
   workspaceId: string;
   status: ExecutionStatus;
   version: number;
+  versionNumber?: number;
   triggerType?: string;
   initialInput?: Record<string, unknown>;
   output?: Record<string, unknown>;
@@ -35,9 +37,12 @@ export interface DeadLetter {
   executionId: string;
   workflowId: string;
   workspaceId: string;
-  error: string;
+  failureReason?: string;
+  error?: string;
+  message?: string;
   payload?: Record<string, unknown>;
   createdAt: string;
+  attempts?: number;
   attemptsMade?: number;
   retryCount?: number;
 }

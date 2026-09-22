@@ -182,8 +182,7 @@ const ExecutionNodeCard: React.FC<{
       {/* Error preview if failed */}
       {data.error && (
         <div className="mt-2 text-[10px] bg-rose-50 text-rose-700 border border-rose-200 rounded p-1.5 truncate">
-          {data.error}
-        </div>
+          {typeof data.error === 'string' ? data.error : JSON.stringify(data.error)}        </div>
       )}
 
       <Handle type="source" position={Position.Right} className="w-2 h-2 !bg-gray-400" />

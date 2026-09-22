@@ -7,7 +7,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { useExecutionStore } from '@/features/execution-console/stores/executionStore';
 import { executionConsoleApi } from '@/services/executionConsoleApi';
-import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 import { Button } from '@/components/ui/Button';
 import { Loading } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -19,7 +18,7 @@ import type { ExecutionTableRow, ExecutionFilters as ExecutionFiltersType } from
 import { Server, AlertTriangle, RefreshCw, X } from 'lucide-react';
 
 export default function ExecutionsPage() {
-  const { user, isAuthenticated, clearAuth } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const { currentWorkspace } = useWorkspaceStore();
   const { filters, setFilters } = useExecutionStore();
   const router = useRouter();
@@ -59,16 +58,14 @@ export default function ExecutionsPage() {
   // Check auth on load
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
-      return;
+      useAuthStore.getState().initFromStorage();
+      if (!useAuthStore.getState().isAuthenticated) {
+        router.push('/login');
+        return;
+      }
     }
     fetchExecutions();
   }, [isAuthenticated, fetchExecutions]);
-
-  const handleLogout = async () => {
-    clearAuth();
-    router.push('/login');
-  };
 
   const handleFilterChange = (newFilters: ExecutionFiltersType) => {
     setFilters(newFilters);
@@ -82,59 +79,10 @@ export default function ExecutionsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-30 shadow-2xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center space-x-4">
-              <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-gray-900">
-                  Execution Console
-                </h1>
-              </div>
-              <div className="hidden md:flex md:items-center md:space-x-4">
-                <WorkspaceSwitcher workspace={currentWorkspace} onWorkspaceChange={fetchExecutions} />
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <Link
-                href="/dead-letters"
-                className="inline-flex items-center px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold transition-colors gap-1.5"
-              >
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                Dead Letters (DLQ)
-              </Link>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowWorkerModal(true)}
-                className="text-xs h-8 bg-white hover:bg-gray-50 text-gray-700 border-gray-300"
-              >
-                <Server className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
-                Worker Fleet
-              </Button>
-              <div className="flex items-center text-sm text-gray-600 pl-2 border-l border-gray-200">
-                {user?.email && (
-                  <>
-                    <span className="mr-2 text-xs font-medium text-gray-500 hidden sm:inline">{user.email}</span>
-                    <button
-                      onClick={handleLogout}
-                      className="text-xs text-gray-600 hover:text-rose-600 font-medium cursor-pointer"
-                    >
-                      Sign out
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="space-y-6">
 
       {/* Main */}
-      <main className="flex-1">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+        <div className="space-y-6">
           {/* Page header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -146,6 +94,22 @@ export default function ExecutionsPage() {
               </p>
             </div>
             <div className="flex items-center space-x-3">
+              <Link
+                href="/dead-letters"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+              >
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                Dead Letters (DLQ)
+              </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowWorkerModal(true)}
+                className="h-8 border-gray-300 bg-white text-xs text-gray-700 hover:bg-gray-50"
+              >
+                <Server className="h-3.5 w-3.5 mr-1.5 text-indigo-500" />
+                Worker Fleet
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -203,7 +167,6 @@ export default function ExecutionsPage() {
             />
           )}
         </div>
-      </main>
 
       {/* Worker Fleet Modal */}
       {showWorkerModal && (

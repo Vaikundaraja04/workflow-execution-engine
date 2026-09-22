@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { apiClient } from '@/services/apiClient';
 
 interface Distribution {
   region: string;
@@ -16,10 +17,8 @@ const TenantDistribution: React.FC = () => {
   useEffect(() => {
     const fetchDistribution = async () => {
       try {
-        const res = await fetch('/api/platform/tenants');
-        if (!res.ok) throw new Error('Failed to fetch tenant distribution');
-        const data = await res.json();
-        setDistribution(data.data);
+        const res = await apiClient.get('/api/v1/platform/tenants');
+        setDistribution(res.data.data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {

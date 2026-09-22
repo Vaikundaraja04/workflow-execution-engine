@@ -58,7 +58,7 @@ export const Modal: React.FC<ModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
     >
       {/* Backdrop */}
       <div
@@ -70,7 +70,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Dialog box */}
       <div
         className={cn(
-          'relative z-50 w-full overflow-hidden rounded-xl border border-border bg-card p-6 text-card-foreground shadow-2xl transition-all animate-in fade-in zoom-in-95',
+          'relative z-50 flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-border bg-card p-6 text-card-foreground shadow-2xl transition-all animate-in fade-in zoom-in-95',
           maxWidthClass,
           className
         )}
@@ -85,7 +85,7 @@ export const Modal: React.FC<ModalProps> = ({
         </button>
 
         {title && (
-          <div className="mb-4 space-y-1">
+          <div className="mb-4 shrink-0 space-y-1">
             <h3 className="text-lg font-semibold leading-none tracking-tight">
               {title}
             </h3>
@@ -95,10 +95,10 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
 
-        <div className="py-2">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto py-2">{children}</div>
 
         {footer && (
-          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <div className="mt-6 flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             {footer}
           </div>
         )}

@@ -94,7 +94,7 @@ export function createAuthController(config: AuthConfig): AuthController {
         });
         const tokens = await issueTokens(config, user._id, user.email, requestContext(req));
         const defaultWorkspaceId = await ensureUserWorkspace(user._id.toString());
-        res.json({ ...tokens, defaultWorkspaceId });
+        res.json({ ...tokens, user: toUserView(user), defaultWorkspaceId });
       } catch (error) {
         next(error);
       }

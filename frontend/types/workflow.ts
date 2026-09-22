@@ -25,6 +25,8 @@ export interface Workflow {
   name: string;
   workspaceId: string;
   ownerId: string;
+  status?: 'DRAFT' | 'PUBLISHED';
+  latestVersionNumber?: number;
   currentVersion: number;
   draft?: {
     name?: string;

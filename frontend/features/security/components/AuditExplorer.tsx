@@ -17,6 +17,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { securityApi } from '@/services/securityApi';
+import { apiClient } from '@/services/apiClient';
 import type { AuditLogEntry } from '@/types/security.types';
 
 export const AuditExplorer: React.FC = () => {
@@ -38,13 +39,16 @@ export const AuditExplorer: React.FC = () => {
   const fetchLogs = async () => {
     setIsLoading(true);
     try {
-      // In the real system, calls /api/v1/audit with query params
-      const res = await fetch(`/api/v1/audit?limit=25&search=${encodeURIComponent(search)}&action=${encodeURIComponent(actionFilter)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data.logs || data.items || []);
-        setTotal(data.total || 0);
-      }
+      const res = await apiClient.get('/api/v1/audit', {
+        params: {
+          limit: 25,
+          search: search || undefined,
+          action: actionFilter || undefined,
+        },
+      });
+      const data = res.data;
+      setLogs(data.logs || data.items || []);
+      setTotal(data.total || 0);
     } catch (err) {
       console.error('Failed to fetch audit logs:', err);
     } finally {

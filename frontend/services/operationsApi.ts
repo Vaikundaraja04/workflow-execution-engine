@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { apiClient } from './apiClient';
 import type {
   OverviewAnalyticsData,
   WorkflowAnalyticsData,
@@ -16,48 +17,45 @@ import type {
   CreateReportInput,
 } from '@/types/operations.types';
 
-// Base URL for the operations API
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
-
 export const operationsApi = {
   // Analytics endpoints
   getOverviewAnalytics: async (workspaceId: string, timeframe = '30d'): Promise<OverviewAnalyticsData> => {
-    const { data } = await axios.get(`${API_BASE_URL}/analytics/overview`, {
+    const { data } = await apiClient.get('/api/v1/analytics/overview', {
       params: { workspaceId, timeframe },
     });
     return data;
   },
 
   getWorkflowAnalytics: async (workspaceId: string, timeframe = '30d'): Promise<WorkflowAnalyticsData> => {
-    const { data } = await axios.get(`${API_BASE_URL}/analytics/workflows`, {
+    const { data } = await apiClient.get('/api/v1/analytics/workflows', {
       params: { workspaceId, timeframe },
     });
     return data;
   },
 
   getExecutionAnalytics: async (workspaceId: string, timeframe = '30d'): Promise<ExecutionAnalyticsData> => {
-    const { data } = await axios.get(`${API_BASE_URL}/analytics/executions`, {
+    const { data } = await apiClient.get('/api/v1/analytics/executions', {
       params: { workspaceId, timeframe },
     });
     return data;
   },
 
   getUserAnalytics: async (workspaceId: string, timeframe = '30d'): Promise<UserAnalyticsData> => {
-    const { data } = await axios.get(`${API_BASE_URL}/analytics/users`, {
+    const { data } = await apiClient.get('/api/v1/analytics/users', {
       params: { workspaceId, timeframe },
     });
     return data;
   },
 
   getPerformanceAnalytics: async (workspaceId: string, timeframe = '30d'): Promise<PerformanceAnalyticsData> => {
-    const { data } = await axios.get(`${API_BASE_URL}/analytics/performance`, {
+    const { data } = await apiClient.get('/api/v1/analytics/performance', {
       params: { workspaceId, timeframe },
     });
     return data;
   },
 
   getCostAnalytics: async (workspaceId: string, timeframe = '30d'): Promise<CostAnalyticsData> => {
-    const { data } = await axios.get(`${API_BASE_URL}/analytics/cost`, {
+    const { data } = await apiClient.get('/api/v1/analytics/cost', {
       params: { workspaceId, timeframe },
     });
     return data;
@@ -68,7 +66,7 @@ export const operationsApi = {
     type: string,
     format: 'json' | 'csv' = 'json'
   ): Promise<{ data: Blob; filename: string }> => {
-    const response = await axios.get(`${API_BASE_URL}/analytics/export`, {
+    const response = await apiClient.get('/api/v1/analytics/export', {
       params: { workspaceId, type, format },
       responseType: 'blob',
     });
@@ -85,12 +83,12 @@ export const operationsApi = {
 
   // Operations endpoints
   getSystemHealth: async (): Promise<SystemObservabilityHealth> => {
-    const { data } = await axios.get(`${API_BASE_URL}/operations/health`);
+    const { data } = await apiClient.get('/api/v1/operations/health');
     return data;
   },
 
   getSystemMetrics: async (): Promise<SystemMetricsData> => {
-    const { data } = await axios.get(`${API_BASE_URL}/operations/metrics`);
+    const { data } = await apiClient.get('/api/v1/operations/metrics');
     return data;
   },
 
@@ -103,13 +101,13 @@ export const operationsApi = {
     services: SystemObservabilityHealth['services'];
     metrics: SystemMetricsData;
   }> => {
-    const { data } = await axios.get(`${API_BASE_URL}/operations/system`);
+    const { data } = await apiClient.get('/api/v1/operations/system');
     return data;
   },
 
   // Security Intelligence endpoints
   getSecurityIntelligence: async (workspaceId: string): Promise<SecurityIntelligenceData> => {
-    const { data } = await axios.get(`${API_BASE_URL}/security/intelligence`, {
+    const { data } = await apiClient.get('/api/v1/security/intelligence', {
       params: { workspaceId },
     });
     return data;
@@ -119,8 +117,8 @@ export const operationsApi = {
     workspaceId: string,
     userId: string
   ): Promise<SecurityIntelligenceData> => {
-    const { data } = await axios.post(
-      `${API_BASE_URL}/security/intelligence/scan`,
+    const { data } = await apiClient.post(
+      '/api/v1/security/intelligence/scan',
       { workspaceId, userId }
     );
     return data;
@@ -132,19 +130,18 @@ export const operationsApi = {
     workspaceId: string,
     userId?: string
   ): Promise<AIOperationsFailureExplanation> => {
-    const { data } = await axios.post(
-      `${API_BASE_URL}/ai/operations/explain-failure`,
+    const { data } = await apiClient.post(
+      '/api/v1/ai/operations/explain-failure',
       { executionId, workspaceId, userId }
     );
     return data;
   },
-
   summarizeSystemHealth: async (
     workspaceId: string,
     userId?: string
   ): Promise<AIOperationsSystemSummary> => {
-    const { data } = await axios.post(
-      `${API_BASE_URL}/ai/operations/system-summary`,
+    const { data } = await apiClient.post(
+      '/api/v1/ai/operations/system-summary',
       { workspaceId, userId }
     );
     return data;
@@ -160,8 +157,8 @@ export const operationsApi = {
     detectedAt: string;
     recommendation: string;
   }> }> => {
-    const { data } = await axios.post(
-      `${API_BASE_URL}/ai/operations/anomalies`,
+    const { data } = await apiClient.post(
+      '/api/v1/ai/operations/anomalies',
       { workspaceId }
     );
     return data;
@@ -176,8 +173,8 @@ export const operationsApi = {
     reasoning: string;
     recommendations: string[];
   }> => {
-    const { data } = await axios.post(
-      `${API_BASE_URL}/ai/operations/scaling-recommendations`,
+    const { data } = await apiClient.post(
+      '/api/v1/ai/operations/scaling-recommendations',
       { workspaceId }
     );
     return data;
@@ -186,8 +183,8 @@ export const operationsApi = {
   suggestOptimizations: async (
     workspaceId: string
   ): Promise<AIOperationsOptimizationSuggestion[]> => {
-    const { data } = await axios.post(
-      `${API_BASE_URL}/ai/operations/suggest-optimizations`,
+    const { data } = await apiClient.post(
+      '/api/v1/ai/operations/suggest-optimizations',
       { workspaceId }
     );
     return data;
@@ -199,8 +196,8 @@ export const operationsApi = {
     userId: string,
     input: CreateReportInput
   ): Promise<ReportItem> => {
-    const { data } = await axios.post(
-      `${API_BASE_URL}/reports`,
+    const { data } = await apiClient.post(
+      '/api/v1/reports',
       { ...input, workspaceId, userId }
     );
     return data;
@@ -210,10 +207,10 @@ export const operationsApi = {
     workspaceId: string,
     filters: { type?: string; status?: string } = {}
   ): Promise<ReportItem[]> => {
-    const { data } = await axios.get(`${API_BASE_URL}/reports`, {
+    const { data } = await apiClient.get('/api/v1/reports', {
       params: { workspaceId, ...filters },
     });
-    return data;
+    return data.reports;
   },
 
   getReportById: async (
@@ -221,7 +218,7 @@ export const operationsApi = {
     workspaceId: string
   ): Promise<ReportItem | null> => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/reports/${reportId}`, {
+      const { data } = await apiClient.get(`/api/v1/reports/${reportId}`, {
         params: { workspaceId },
       });
       return data;
@@ -238,7 +235,7 @@ export const operationsApi = {
     workspaceId: string,
     userId: string
   ): Promise<boolean> => {
-    await axios.delete(`${API_BASE_URL}/reports/${reportId}`, {
+    await apiClient.delete(`/api/v1/reports/${reportId}`, {
       data: { workspaceId, userId },
     });
     return true;
@@ -252,7 +249,7 @@ export const operationsApi = {
     const params: Record<string, any> = { workspaceId };
     if (formatOverride) params.formatOverride = formatOverride;
 
-    const response = await axios.get(`${API_BASE_URL}/reports/${reportId}/export`, {
+    const response = await apiClient.get(`/api/v1/reports/${reportId}/export`, {
       params,
       responseType: 'blob',
     });
@@ -269,3 +266,4 @@ export const operationsApi = {
 };
 
 export default operationsApi;
+

@@ -201,7 +201,7 @@ export class MarketplaceService {
     ]);
 
     if (!listing || listing.length === 0) {
-      throw new Error('Marketplace listing not found');
+      throw new Error('LISTING_NOT_FOUND');
     }
 
     return listing[0];
@@ -220,20 +220,20 @@ export class MarketplaceService {
     // Verify template exists and user has permission
     const template = await WorkflowTemplateModel.findById(templateIdObj);
     if (!template) {
-      throw new Error('Template not found');
+      throw new Error('TEMPLATE_NOT_FOUND');
     }
 
     // Check if user is the creator or has publish permission
     if (template.createdBy.toString() !== userIdObj.toString()) {
       // In a real implementation, we would check permissions here
       // For now, we'll allow the creator to publish
-      throw new Error('Only the template creator can publish to marketplace');
+      throw new Error('TEMPLATE_PUBLISH_ERROR');
     }
 
     // Check if already published
     const existingListing = await MarketplaceListingModel.findOne({ templateId: templateIdObj });
     if (existingListing) {
-      throw new Error('Template already published to marketplace');
+      throw new Error('TEMPLATE_PUBLISH_ERROR');
     }
 
     // Create marketplace listing
@@ -290,7 +290,7 @@ export class MarketplaceService {
 
     const listing = await MarketplaceListingModel.findById(listingIdObj);
     if (!listing) {
-      throw new Error('Marketplace listing not found');
+      throw new Error('LISTING_NOT_FOUND');
     }
 
     listing.verificationStatus = feature ? MarketplaceVerificationStatus.FEATURED : MarketplaceVerificationStatus.VERIFIED;
@@ -337,7 +337,7 @@ export class MarketplaceService {
 
     const listing = await MarketplaceListingModel.findById(listingIdObj);
     if (!listing) {
-      throw new Error('Marketplace listing not found');
+      throw new Error('LISTING_NOT_FOUND');
     }
 
     listing.verificationStatus = MarketplaceVerificationStatus.UNVERIFIED;
@@ -385,12 +385,12 @@ export class MarketplaceService {
     const userIdObj = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
 
     if (rating < 1 || rating > 5) {
-      throw new Error('Rating must be between 1 and 5');
+      throw new Error('INVALID_RATING');
     }
 
     const listing = await MarketplaceListingModel.findById(listingIdObj);
     if (!listing) {
-      throw new Error('Marketplace listing not found');
+      throw new Error('LISTING_NOT_FOUND');
     }
 
     // Verify user has installed/used the template (simplified check)
@@ -448,7 +448,7 @@ export class MarketplaceService {
 
     const listing = await MarketplaceListingModel.findById(listingIdObj);
     if (!listing) {
-      throw new Error('Marketplace listing not found');
+      throw new Error('LISTING_NOT_FOUND');
     }
 
     listing.statistics.downloads += 1;

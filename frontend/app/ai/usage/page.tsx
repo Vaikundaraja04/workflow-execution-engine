@@ -12,7 +12,10 @@ export default function AIUsagePage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
+      useAuthStore.getState().initFromStorage();
+      if (!useAuthStore.getState().isAuthenticated) {
+        router.push('/login');
+      }
     }
   }, [isAuthenticated, router]);
 

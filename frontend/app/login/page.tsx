@@ -8,6 +8,7 @@ import { authService } from '@/services/authService';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useAuthStore } from '@/stores/authStore';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -32,16 +33,12 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const { accessToken, refreshToken, user } = await authService.login(data);
-      // Store tokens
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-      // Store user (optional, we can also fetch from auth store)
-      localStorage.setItem('user', JSON.stringify(user));
+      const { accessToken, refreshToken, user, defaultWorkspaceId } = await authService.login(data);
+      useAuthStore.getState().setAuth({ accessToken, refreshToken, defaultWorkspaceId }, user);
       // Redirect to dashboard
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Login failed');
+      setError(err.message || err.response?.data?.error?.message || 'Login failed');
     } finally {
       setLoading(false);
     }

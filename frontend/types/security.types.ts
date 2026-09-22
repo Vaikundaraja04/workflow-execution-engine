@@ -140,12 +140,5 @@ export interface ComplianceSection {
   controls: ComplianceControl[];
 }
 
-export interface ComplianceReportData {
-  id: string;
-  framework: ComplianceFramework;
-  generatedAt: string;
-  status: 'COMPLETED' | 'IN_PROGRESS' | 'FAILED';
-  sections: ComplianceSection[];
-  summary: string;
-}
+export type ComplianceReportData = Record<string, unknown>;
 

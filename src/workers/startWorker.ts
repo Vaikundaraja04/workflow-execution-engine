@@ -1,8 +1,10 @@
 import { loadEnv } from '../config/env.js';
 import { connectDB, disconnectDB } from '../db/connection.js';
 import { createExecutionWorker } from './executionWorker.js';
+import { createWebhookWorker } from './webhookWorker.js';
 import { BullMqExecutionQueue } from '../queues/bullMqExecutionQueue.js';
-import { recoverPendingExecutions } from '../services/executionService.js';
+import { BullMqWebhookQueue } from '../queues/bullMqWebhookQueue.js';
+import { configureWebhookDispatch, recoverPendingExecutions } from '../services/executionService.js';
 import { startWorkerHeartbeat } from '../observability/workerHeartbeat.js';
 import { logger } from '../observability/logger.js';
 
@@ -27,6 +29,11 @@ async function startWorker(): Promise<void> {
       concurrency: env.WORKER_CONCURRENCY,
     });
     await worker.waitUntilReady();
+    const webhookDispatchQueue = new BullMqWebhookQueue(env.REDIS_URL);
+    await webhookDispatchQueue.waitUntilReady();
+    configureWebhookDispatch(webhookDispatchQueue);
+    const webhookWorker = createWebhookWorker(env.REDIS_URL);
+    await webhookWorker.waitUntilReady();
     const heartbeat = startWorkerHeartbeat(env.REDIS_URL);
     logger.info('execution_worker_ready', { concurrency: env.WORKER_CONCURRENCY });
 
@@ -36,6 +43,8 @@ async function startWorker(): Promise<void> {
       console.log(`Received ${signal}, shutting down worker gracefully...`);
       await heartbeat.stop();
       await worker.close();
+      await webhookWorker.close();
+      await webhookDispatchQueue.close();
       await disconnectDB();
       process.exit(0);
     };

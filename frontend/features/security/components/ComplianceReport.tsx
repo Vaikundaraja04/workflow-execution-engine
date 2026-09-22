@@ -8,21 +8,122 @@ import {
   ShieldCheck,
   RefreshCw,
   Download,
-  Search,
   Loader2,
   List,
-  BarChart3,
-  Globe,
 } from 'lucide-react';
 import { securityApi } from '@/services/securityApi';
 import type { ComplianceReportData, ComplianceFramework } from '@/types/security.types';
+
+const FRAMEWORK_LABELS: Record<ComplianceFramework, string> = {
+  SOC2: 'SOC2 Type II',
+  GDPR: 'GDPR Article 30',
+  ISO27001: 'ISO27001',
+};
+
+const SECTION_LABELS: Record<string, string> = {
+  accessManagement: 'Access Management',
+  changeManagement: 'Change Management',
+  encryption: 'Encryption',
+  incidentResponse: 'Incident Response',
+  availability: 'Availability',
+  confidentiality: 'Confidentiality',
+  dataSubjectRights: 'Data Subject Rights',
+  dataProtection: 'Data Protection',
+  processingActivities: 'Processing Activities',
+  retentionAndDeletion: 'Retention & Deletion',
+  securityControls: 'Security Controls',
+  assetManagement: 'Asset Management',
+};
+
+function humanize(key: string): string {
+  const spaced = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function formatKey(key: string): string {
+  return SECTION_LABELS[key] ?? humanize(key);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function formatPrimitive(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}T/.test(value)) {
+      return new Date(value).toLocaleString();
+    }
+    return value;
+  }
+  return String(value);
+}
+
+function MetricValue({ value }: { value: unknown }) {
+  if (typeof value === 'boolean') {
+    return value ? (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Compliant
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Attention
+      </span>
+    );
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <span className="text-sm text-gray-500">None recorded</span>;
+    }
+    if (value.every((item) => !isPlainObject(item))) {
+      return (
+        <span className="text-sm text-gray-700">
+          {value.map((item) => formatPrimitive(item)).join(', ')}
+        </span>
+      );
+    }
+    return (
+      <div className="w-full space-y-2">
+        {value.map((item, index) => (
+          <div key={index} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            {isPlainObject(item) ? (
+              <dl className="grid gap-1 text-xs">
+                {Object.entries(item).map(([key, entryValue]) => (
+                  <div key={key} className="flex justify-between gap-4">
+                    <dt className="text-gray-500">{humanize(key)}</dt>
+                    <dd className="text-right font-medium text-gray-800">
+                      {formatPrimitive(entryValue)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <span className="text-xs text-gray-700">{formatPrimitive(item)}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (isPlainObject(value)) {
+    return <span className="font-mono text-xs text-gray-700">{JSON.stringify(value)}</span>;
+  }
+
+  return <span className="text-sm font-medium text-gray-900">{formatPrimitive(value)}</span>;
+}
 
 export const ComplianceReport: React.FC = () => {
   const [report, setReport] = useState<ComplianceReportData | null>(null);
   const [framework, setFramework] = useState<ComplianceFramework>('SOC2');
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [availableFrameworks, setAvailableFrameworks] = useState<ComplianceFramework[]>(['SOC2', 'GDPR', 'ISO27001']);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchReport = async () => {
@@ -31,8 +132,9 @@ export const ComplianceReport: React.FC = () => {
     try {
       const res = await securityApi.getComplianceReport(framework);
       setReport(res);
+      setGeneratedAt(new Date().toISOString());
     } catch (err: any) {
-      setError(err.message || 'Failed to generate compliance report');
+      setError(err?.response?.data?.error?.message || err?.message || 'Failed to load the compliance report');
       setReport(null);
     } finally {
       setIsLoading(false);
@@ -42,219 +144,154 @@ export const ComplianceReport: React.FC = () => {
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
-      const res = await securityApi.generateComplianceReport(framework);
+      const res = await securityApi.getComplianceReport(framework);
       setReport(res);
+      setGeneratedAt(new Date().toISOString());
+      setError(null);
     } catch (err: any) {
-      setError(err.message || 'Failed to generate compliance report');
+      setError(err?.response?.data?.error?.message || err?.message || 'Failed to generate the compliance report');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleExport = async (format: 'PDF' | 'JSON') => {
+  const handleExport = () => {
     if (!report) return;
-    try {
-      const res = await securityApi.exportComplianceReport(report.id, format);
-      const blob = new Blob([res.data], { type: res.mimeType });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = res.filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err: any) {
-      setError(err.message || 'Failed to export report');
-    }
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `compliance-report-${framework.toLowerCase()}-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
   useEffect(() => {
-    fetchReport();
+    void fetchReport();
   }, [framework]);
+
+  const sections = report ? Object.entries(report) : [];
 
   return (
     <div className="space-y-6">
-      {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <FileText className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
+            <FileText className="h-7 w-7 text-indigo-600" />
             Compliance Evidence Center
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Automated SOC2 Type II, GDPR, and ISO27001 compliance reporting with evidence collection.
+          <p className="mt-1 text-sm text-gray-500">
+            Generate SOC2 Type II, GDPR and ISO27001 evidence reports from workspace activity.
           </p>
         </div>
-
         <div className="flex items-center gap-3">
           <select
             value={framework}
             onChange={(e) => setFramework(e.target.value as ComplianceFramework)}
-            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-hidden"
+            className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-900 focus:outline-none"
           >
-            {availableFrameworks.map((fw) => (
+            {(Object.keys(FRAMEWORK_LABELS) as ComplianceFramework[]).map((fw) => (
               <option key={fw} value={fw}>
-                {fw === 'SOC2' ? 'SOC2 Type II' : fw === 'GDPR' ? 'GDPR Article 30' : 'ISO27001'}
+                {FRAMEWORK_LABELS[fw]}
               </option>
             ))}
           </select>
           <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition"
+            onClick={() => void handleGenerate()}
+            disabled={isGenerating || isLoading}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-indigo-700 disabled:opacity-60"
           >
             {isGenerating ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Generating...
-              </>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              'Generate Report'
+              <RefreshCw className="h-3.5 w-3.5" />
             )}
+            {isGenerating ? 'Generating...' : 'Generate Report'}
           </button>
           {report && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleExport('PDF')}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition flex items-center gap-1"
-              >
-                <Download className="w-3.5 h-3.5" />
-                PDF
-              </button>
-              <button
-                onClick={() => handleExport('JSON')}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition flex items-center gap-1"
-              >
-                <Download className="w-3.5 h-3.5" />
-                JSON
-              </button>
-            </div>
+            <button
+              onClick={handleExport}
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-100"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export JSON
+            </button>
           )}
         </div>
       </div>
 
-      {/* Error Banner */}
       {error && (
-        <div className="p-4 rounded-xl border bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
-          <div>
-            <p className="font-medium">{error}</p>
-          </div>
+        <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
+          <AlertTriangle className="h-5 w-5 text-rose-600" />
+          <p className="font-medium">{error}</p>
         </div>
       )}
 
-      {/* Report Content */}
-      {report && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-2xs overflow-hidden">
-          <div className="p-6">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-indigo-600" />
-                {framework === 'SOC2' ? 'SOC2 Type II' : framework === 'GDPR' ? 'GDPR Article 30' : 'ISO27001'} Report
+      {isLoading && !report && (
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading compliance evidence...
+        </div>
+      )}
+
+      {report && sections.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xs">
+          <div className="space-y-5 p-6">
+            <div>
+              <h2 className="flex items-center gap-2 text-xl font-bold text-gray-900">
+                <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                {FRAMEWORK_LABELS[framework]} Evidence Report
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Report ID: {report.id} • Generated: {new Date(report.generatedAt).toLocaleString()} •
-                {report.status === 'COMPLETED' ? (
-                  <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400">
-                    COMPLETED
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400">
-                    IN_PROGRESS
-                  </span>
-                )}
+              <p className="mt-1 text-sm text-gray-500">
+                Generated from live workspace evidence
+                {generatedAt ? ' • ' + new Date(generatedAt).toLocaleString() : ''}
               </p>
             </div>
 
-            {/* Evidence Sections */}
-            <div className="space-y-5">
-              {report.sections.map((section, idx) => (
-                <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-                  <div className="bg-gray-50 dark:bg-gray-900/50 px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                      <List className="w-4 h-4 text-indigo-500" />
-                      {section.title}
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {section.description}
-                    </p>
-                  </div>
-                  <div className="p-4">
-                    {section.controls.map((control, cdx) => (
-                      <div key={cdx} className="flex items-start gap-4 mb-3 last:mb-0">
-                        <div className="flex-shrink-0 mt-1">
-                          {control.compliant ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          ) : (
-                            <AlertTriangle className="w-4 h-4 text-rose-600" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between">
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                              {control.id}: {control.title}
-                            </h4>
-                            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                              control.compliant
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400'
-                                : 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-400'
-                            }`}>
-                              {control.compliant ? 'COMPLIANT' : 'NON_COMPLIANT'}
-                            </span>
-                          </div>
-                          {control.description && (
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                              {control.description}
-                            </p>
-                          )}
-                          {control.evidence && control.evidence.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-xs font-medium text-gray-800 dark:text-gray-200 mb-1">
-                                Evidence:
-                              </p>
-                              <ul className="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-1">
-                                {control.evidence.map((ev, evdx) => (
-                                  <li key={evdx}>{ev}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            {sections.map(([sectionKey, sectionValue]) => (
+              <div key={sectionKey} className="overflow-hidden rounded-xl border border-gray-200">
+                <div className="border-b border-gray-200 bg-gray-50 px-5 py-3">
+                  <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                    <List className="h-4 w-4 text-indigo-500" />
+                    {formatKey(sectionKey)}
+                  </h3>
                 </div>
-              ))}
-            </div>
-
-            {/* Summary */}
-            <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-indigo-600" />
-                Executive Summary
-              </h3>
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                {report.summary}
-              </p>
-            </div>
+                <div className="p-5">
+                  {isPlainObject(sectionValue) ? (
+                    <div className="divide-y divide-gray-100">
+                      {Object.entries(sectionValue).map(([metricKey, metricValue]) => (
+                        <div
+                          key={metricKey}
+                          className="flex flex-col gap-1 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <span className="text-sm text-gray-500">{humanize(metricKey)}</span>
+                          <MetricValue value={metricValue} />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <MetricValue value={sectionValue} />
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Placeholder when no report */}
       {!report && !isLoading && !error && (
-        <div className="text-center py-12">
-          <ShieldCheck className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-            No compliance report generated
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Select a compliance framework and click "Generate Report" to create an automated compliance evidence package.
+        <div className="py-12 text-center">
+          <ShieldCheck className="mx-auto mb-4 h-12 w-12 text-emerald-500" />
+          <h3 className="mb-2 text-lg font-bold text-gray-900">No compliance report loaded</h3>
+          <p className="text-sm text-gray-500">
+            Select a framework and click "Generate Report" to build an evidence package.
           </p>
         </div>
       )}
     </div>
   );
 };
+
 export default ComplianceReport;

@@ -23,6 +23,13 @@ import {
   DEFAULT_EXECUTION_ATTEMPTS,
   DEFAULT_EXECUTION_BACKOFF_MS,
 } from '../queues/executionQueue.js';
+import type { WebhookQueue } from '../queues/webhookQueue.js';
+import {
+  dispatchExecutionCompleted,
+  dispatchExecutionFailed,
+  dispatchExecutionReplayed,
+  dispatchExecutionStarted,
+} from './webhookDispatcher.js';
 
 export interface ExecutionCreationOptions {
   attempts?: number;
@@ -33,6 +40,23 @@ export interface ExecutionCreationOptions {
 export const MAX_EXECUTION_ATTEMPTS = 20;
 export const MAX_RETRY_DELAY_MS = 3_600_000;
 export const EXECUTION_TIMEOUT_CODE = 'EXECUTION_TIMEOUT';
+
+let webhookDispatchQueue: WebhookQueue | null = null;
+
+export function configureWebhookDispatch(queue: WebhookQueue | null): void {
+  webhookDispatchQueue = queue;
+}
+
+function dispatchExecutionWebhook(
+  dispatch: (queue: WebhookQueue, execution: IWorkflowExecution) => Promise<void>,
+  execution: IWorkflowExecution,
+): void {
+  const queue = webhookDispatchQueue;
+  if (!queue) return;
+  void dispatch(queue, execution).catch((error: unknown) => {
+    console.error('Webhook dispatch failed:', error instanceof Error ? error.message : error);
+  });
+}
 
 export function resolveRetryPolicy(
   request: CreateExecutionRequest,
@@ -344,6 +368,7 @@ export async function createWorkflowExecution(
     return replayIdempotentExecution(queue, racedExecution, inputHash, options);
   }
   execution = await enqueuePersistedExecution(queue, execution, options);
+  dispatchExecutionWebhook(dispatchExecutionStarted, execution);
   return { execution, replayed: false };
 }
 
@@ -491,6 +516,7 @@ export async function markExecutionFailed(
   if (failed) {
     await recordDeadLetter(failed, error.code, error.message, attemptNumber);
     await recordExecutionOutcome(failed);
+    dispatchExecutionWebhook(dispatchExecutionFailed, failed);
   }
   return failed;
 }
@@ -554,7 +580,12 @@ export async function runExecutionAttempt(
       () => executor(version.definition, structuredClone(claimed.input)),
       deadlineMs,
     );
-    return persistTerminalResult(claimed._id, attemptNumber, result);
+    const terminal = await persistTerminalResult(claimed._id, attemptNumber, result);
+    dispatchExecutionWebhook(
+      terminal.status === 'SUCCEEDED' ? dispatchExecutionCompleted : dispatchExecutionFailed,
+      terminal,
+    );
+    return terminal;
   } catch (error) {
     if (error instanceof Error && error.message === 'EXECUTION_STATE_CONFLICT') {
       throw error;
@@ -637,6 +668,7 @@ export async function replayWorkflowExecution(
 
   const queued = await enqueuePersistedExecution(queue, replay, options);
   await recordExecutionReplay(queued.workflowId, queued.workspaceId);
+  dispatchExecutionWebhook(dispatchExecutionReplayed, queued);
   return queued;
 }
 export function toWorkflowExecutionView(execution: IWorkflowExecution): WorkflowExecutionView {

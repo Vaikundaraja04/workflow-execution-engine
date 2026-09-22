@@ -87,20 +87,56 @@ Custom AI permissions (`AI_WORKFLOW_CREATE`, `AI_ANALYSIS_READ`, `AI_OPTIMIZATIO
 
 ## Getting Started
 
-1. Install dependencies: `npm install`
-2. Start the development server: `npm run dev`
-3. Run tests: `npm test`
-4. Run type checking: `npm run typecheck`
+### Prerequisites
+
+- Node.js >= 18
+- Docker Desktop (runs MongoDB + Redis)
+
+### First-time setup
+
+1. Install backend dependencies: `npm install`
+2. Install frontend dependencies: `cd frontend && npm install`
+3. Make sure `.env` exists in the repo root (copy `.env.example` if needed).
+
+### Run it (development)
+
+Start each command in its own terminal, in this order:
+
+| Step | Where | Command | What it starts |
+| --- | --- | --- | --- |
+| 1 | repo root | `docker compose up -d` | MongoDB + Redis |
+| 2 | repo root | `npm run dev:api` | API server on http://localhost:3000 |
+| 3 | repo root | `npm run dev:worker` | BullMQ worker (executes workflows) |
+| 4 | frontend/ | `npm run dev -- -p 3001` | Web UI on http://localhost:3001 |
+
+Step 4 means two commands: first `cd frontend` (press Enter), then `npm run dev -- -p 3001`.
+
+Then open http://localhost:3001 in your browser.
+
+Demo account with sample data (4 workflows, 7 executions): `demo@workflow.test` / `DemoPass123!` -
+create or refresh it any time with `npx tsx scripts/seed-demo.mts`.
+
+Notes:
+
+- Keep the API on port 3000 and the frontend on 3001. `frontend/.env.local` points at the API on port 3000, and the backend only allows CORS from http://localhost:3001.
+- Configuration lives in `.env` (repo root): database URLs, JWT secret, CORS origins, rate limits.
+- To stop everything: Ctrl+C in each terminal, then `docker compose down` (data stays in Docker volumes).
+
+### Other commands
+
+- Run the booking-workflow demo without any server: `npm run dev`
+- Backend tests: `npm test` - frontend tests: `cd frontend && npm test`
+- Type checking: `npm run typecheck` and `cd frontend && npm run typecheck`
 
 ## Frontend Implementation (Phase 7A)
 
 ### Overview
 
-The frontend is a modern web application built with Next.js 15, React, and TypeScript that provides an enterprise-grade interface for the Workflow Execution Engine. It implements a complete authentication flow, workspace management, dashboard analytics, and permission-aware UI components.
+The frontend is a modern web application built with Next.js 16, React, and TypeScript that provides an enterprise-grade interface for the Workflow Execution Engine. It implements a complete authentication flow, workspace management, dashboard analytics, and permission-aware UI components.
 
 ### Technology Stack
 
-- **Framework**: Next.js 15 with App Router
+- **Framework**: Next.js 16 with App Router
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS with CSS variables for light/dark theme support
 - **State Management**: 
@@ -117,7 +153,9 @@ The frontend is a modern web application built with Next.js 15, React, and TypeS
 ```
 frontend/
 ├── app/                    # Next.js app router
-│   ├── (auth)/             # Authentication routes
+│   ├── login/              # Sign-in page
+│   ├── register/           # Registration page
+│   ├── forgot-password/    # Password reset request
 │   ├── dashboard/          # Dashboard route
 │   ├── layout.tsx          # Root layout
 │   └── page.tsx            # Home page
@@ -167,7 +205,6 @@ frontend/
    Create a `.env.local` file in the frontend directory:
    ```
    NEXT_PUBLIC_API_URL=http://localhost:3000
-   NEXT_PUBLIC_APP_URL=http://localhost:3001
    ```
 
 3. **Installation**:
@@ -313,8 +350,7 @@ Frontend tests are written with Vitest and React Testing Library:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `NEXT_PUBLIC_API_URL` | Base URL for backend API | `http://localhost:3000/api/v1` |
-| `NEXT_PUBLIC_APP_URL` | Base URL for frontend application | `http://localhost:3001` |
+| `NEXT_PUBLIC_API_URL` | Base URL for backend API (origin only, no `/api/v1` suffix) | `http://localhost:3000` |
 
 ### Building for Production
 
@@ -528,8 +564,7 @@ frontend/
 2. **Environment Variables**:
    Create a `.env.local` file in the frontend directory:
    ```
-   NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
-   NEXT_PUBLIC_APP_URL=http://localhost:3001
+   NEXT_PUBLIC_API_URL=http://localhost:3000
    ```
 
 3. **Installation**:
@@ -766,7 +801,7 @@ All collaboration features integrate with backend services:
 - **Lock REST API**: Workflow locking mechanism (`/api/v1/locks/workflows/*`)
 - **Notification REST API**: Notification management (`/api/v1/notifications/*`)
 - **Activity REST API**: Activity feed retrieval (`/api/v1/activity/*`)
-- **Presence REST API**: Workspace and workflow presence (`/api/v1/presence/*`)
+- **Presence**: Workspace and workflow presence is real-time over Socket.IO only (no REST endpoint); see the Socket.IO events above
 
 #### RBAC Integration
 The collaboration platform implements granular permission checking:

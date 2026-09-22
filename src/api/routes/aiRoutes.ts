@@ -262,6 +262,30 @@ router.post(
   }
 );
 
+// POST /api/v1/ai/operations/suggest-optimizations
+router.post(
+  '/operations/suggest-optimizations',
+  requirePermission('AI_OPERATIONS_EXECUTE'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Get workspace context from the request (set by requirePermission middleware)
+      const workspaceContext = (req as any).workspaceContext;
+      if (!workspaceContext) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const aiService = AIOperationsAssistantService;
+      const result = await aiService.suggestOptimizations(
+        workspaceContext.workspaceId
+      );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // POST /api/v1/ai/operations/scaling-recommendations
 router.post(
   '/operations/scaling-recommendations',

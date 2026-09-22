@@ -22,7 +22,6 @@ import { FailureAnalysisPanel } from '@/features/execution-console/components/Fa
 import { ExecutionAIAnalysis } from '@/features/ai/analysis/ExecutionAIAnalysis';
 import { ExecutionActions } from '@/features/execution-console/components/ExecutionActions';
 import { WorkerStatus } from '@/features/execution-console/dashboard/WorkerStatus';
-import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 import {
   ArrowLeft,
   Activity,
@@ -41,7 +40,7 @@ export default function ExecutionDetailPage() {
   const executionId = params?.id;
   const router = useRouter();
 
-  const { user, isAuthenticated, clearAuth } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const { currentWorkspace } = useWorkspaceStore();
   const { selectedExecution, setSelectedExecution, selectedNode, setSelectedNode } = useExecutionStore();
 
@@ -53,7 +52,10 @@ export default function ExecutionDetailPage() {
   // Check auth
   React.useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
+      useAuthStore.getState().initFromStorage();
+      if (!useAuthStore.getState().isAuthenticated) {
+        router.push('/login');
+      }
     }
   }, [isAuthenticated, router]);
 
@@ -188,11 +190,6 @@ export default function ExecutionDetailPage() {
     loadExecutionData();
   }, [loadExecutionData]);
 
-  const handleLogout = async () => {
-    clearAuth();
-    router.push('/login');
-  };
-
   const handleNodeSelect = (node: ExecutionNode | string) => {
     const nodeId = typeof node === 'string' ? node : node.id;
     if (selectedExecution) {
@@ -209,7 +206,7 @@ export default function ExecutionDetailPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <ErrorState message={error} onRetry={loadExecutionData} />
       </div>
     );
@@ -217,7 +214,7 @@ export default function ExecutionDetailPage() {
 
   if (!selectedExecution) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <EmptyState
           title="Execution Not Found"
           description="The execution ID does not exist or you do not have permission to view it."
@@ -246,59 +243,36 @@ export default function ExecutionDetailPage() {
       : 'In progress...';
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Top Navbar */}
-      <header className="border-b border-gray-200 bg-white sticky top-0 z-30 shadow-2xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/executions"
-                className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors flex items-center gap-1.5 text-xs font-medium"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Executions</span>
-              </Link>
-              <div className="h-4 w-px bg-gray-200" />
-              <div className="flex items-center space-x-2">
-                <WorkflowIcon className="w-5 h-5 text-blue-600" />
-                <h1 className="text-sm sm:text-base font-bold text-gray-900 truncate max-w-[200px] sm:max-w-sm">
-                  {workflowName}
-                </h1>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              <WorkspaceSwitcher
-                workspace={currentWorkspace}
-                onWorkspaceChange={loadExecutionData}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowWorkerModal(true)}
-                className="text-xs h-8 bg-white hover:bg-gray-50 text-gray-700 border-gray-300"
-              >
-                <Server className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
-                Worker Pool
-              </Button>
-              <div className="hidden sm:flex items-center text-xs text-gray-500 pl-2 border-l border-gray-200">
-                {user?.email && (
-                  <button
-                    onClick={handleLogout}
-                    className="text-gray-600 hover:text-rose-600 transition-colors cursor-pointer"
-                  >
-                    Sign out
-                  </button>
-                )}
-              </div>
-            </div>
+    <div className="space-y-6">
+{/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/executions"
+            className="flex items-center gap-1.5 rounded-lg p-2 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Executions</span>
+          </Link>
+          <div className="h-4 w-px bg-gray-200" />
+          <div className="flex items-center gap-2">
+            <WorkflowIcon className="h-5 w-5 text-blue-600" />
+            <h1 className="max-w-[280px] truncate text-base font-bold text-gray-900 sm:max-w-sm">
+              {workflowName}
+            </h1>
           </div>
         </div>
-      </header>
-
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowWorkerModal(true)}
+          className="h-8 border-gray-300 bg-white text-xs text-gray-700 hover:bg-gray-50"
+        >
+          <Server className="h-3.5 w-3.5 mr-1.5 text-indigo-500" />
+          Worker Pool
+        </Button>
+      </div>
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Execution Header Card */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -513,7 +487,6 @@ export default function ExecutionDetailPage() {
             <ExecutionAIAnalysis executionId={execution._id} />
           </div>
         )}
-      </main>
 
       {/* Worker Status Modal Drawer */}
       {showWorkerModal && (

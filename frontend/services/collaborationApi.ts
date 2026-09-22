@@ -27,7 +27,7 @@ export const collaborationApi = {
     workspaceId?: string
   ): Promise<{ comments: WorkflowComment[]; total: number }> => {
     const res = await apiClient.get<{ comments: WorkflowComment[]; total: number }>(
-      `/api/v1/comments/workflows/${workflowId}`,
+      `/api/v1/comments/workflow/${workflowId}`,
       {
         params,
         ...workspaceConfig(workspaceId),
@@ -42,7 +42,7 @@ export const collaborationApi = {
     workspaceId?: string
   ): Promise<WorkflowComment> => {
     const res = await apiClient.post<WorkflowComment>(
-      `/api/v1/comments/workflows/${workflowId}`,
+      `/api/v1/comments/workflow/${workflowId}`,
       data,
       workspaceConfig(workspaceId)
     );
@@ -76,9 +76,9 @@ export const collaborationApi = {
     commentId: string,
     workspaceId?: string
   ): Promise<WorkflowComment> => {
-    const res = await apiClient.post<WorkflowComment>(
-      `/api/v1/comments/${commentId}/resolve`,
-      {},
+    const res = await apiClient.put<WorkflowComment>(
+      `/api/v1/comments/${commentId}`,
+      { status: 'RESOLVED' },
       workspaceConfig(workspaceId)
     );
     return res.data;
@@ -88,9 +88,9 @@ export const collaborationApi = {
     commentId: string,
     workspaceId?: string
   ): Promise<WorkflowComment> => {
-    const res = await apiClient.post<WorkflowComment>(
-      `/api/v1/comments/${commentId}/reopen`,
-      {},
+    const res = await apiClient.put<WorkflowComment>(
+      `/api/v1/comments/${commentId}`,
+      { status: 'OPEN' },
       workspaceConfig(workspaceId)
     );
     return res.data;

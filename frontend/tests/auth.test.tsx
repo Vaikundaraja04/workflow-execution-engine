@@ -105,7 +105,12 @@ describe('Authentication Pages', () => {
     });
 
     it('should handle successful registration', async () => {
-      vi.mocked(authService.register).mockResolvedValue(mockTokens);
+      vi.mocked(authService.register).mockResolvedValue({
+        id: '1',
+        email: 'test@example.com',
+        defaultWorkspaceId: 'workspace-1',
+      });
+      vi.mocked(authService.login).mockResolvedValue(mockTokens);
 
       render(<RegisterPage />);
 

@@ -272,7 +272,8 @@ services/aiGovernanceApi.ts (+ methods), aiOperationsMappers.ts (new mappers).
 
 Backend (vitest + MongoMemoryReplSet, matching existing Phase 12 test conventions):
 
-1. tests/aiGovernancePolicy.test.ts - engine behavior:
+1. tests/aiGovernance.test.ts ("policy evaluation engine" suite) - engine behavior (the planned
+   tests/aiGovernancePolicy.test.ts file was not split out):
    - default-permissive fallbacks (no policy rows = today's behavior)
    - feature entitlement per role; disabled feature denies
    - model access: blocked model denies, role allow-list denies, premium pattern yields REQUIRE_APPROVAL
@@ -283,15 +284,15 @@ Backend (vitest + MongoMemoryReplSet, matching existing Phase 12 test convention
    - approval round-trip: REQUIRE_APPROVAL creates ApprovalRequest; approved retry allows;
      rejected remains denied; expired approval re-requires approval
    - workspace isolation across every policy type
-2. tests/aiGovernanceEnforcement.test.ts - enforcement path:
+2. tests/aiGovernance.test.ts - enforcement path, route tests, and agent-tool-policy persistence (consolidated; the separately planned aiGovernanceEnforcement / aiGovernanceApi / agentToolPolicyPersistence files were not split out):
    - governed provider factory: DENY prevents provider invocation (spy on mock provider)
    - ALLOW_REDACTED passes sanitized prompt to the provider
    - budget BLOCK blocks even for otherwise-allowed operations
    - audit entries emitted for denied/redacted/throttled/approved outcomes only
-3. tests/aiGovernanceApi.test.ts - route tests (supertest, following aiRoutes.test.ts patterns):
-   permission matrix (READ vs MANAGE 403s), policy CRUD happy paths, evaluate dry-run has no
-   side effects, approvals queue decide flow, audit summary/events scoping + timeframe.
-4. tests/agentToolPolicyPersistence.test.ts - overrides survive service re-instantiation.
+   - Route/RBAC surface (covered in tests/aiGovernance.test.ts above — enforcement, route
+     tests, persistence): permission matrix (READ vs MANAGE 403s), policy CRUD happy paths,
+     evaluate dry-run has no side effects, approvals queue decide flow, audit summary/events
+     scoping + timeframe.
 
 Frontend: frontend/tests/aiGovernanceServices.test.ts - new API client methods (paths, headers,
 envelopes) + mapper round-trips.
@@ -330,7 +331,7 @@ modifications.
 7. Call-site migration to the governed path (highest-value services first)
 8. Agent tool policy persistence
 9. Frontend console tabs/panels + AI audit dashboard + API client/types
-10. Tests (backend 4 files + frontend) and full verification
+10. Tests (delivered suite + frontend) and full verification
 
 ## 15. Verification
 

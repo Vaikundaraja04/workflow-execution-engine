@@ -7,10 +7,8 @@ import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { workspaceApi } from '@/services/workspaceApi';
 import { workflowApi } from '@/services/workflowApi';
 import { executionApi } from '@/services/executionApi';
-import { analyticsApi } from '@/services/analyticsApi';
-import { authService } from '@/services/authService';
+import { collaborationApi } from '@/services/collaborationApi';
 import { Button } from '@/components/ui/Button';
-import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 import { WorkflowSummary } from '@/components/dashboard/WorkflowSummary';
 import { ExecutionSummary } from '@/components/dashboard/ExecutionSummary';
 import { SuccessRate } from '@/components/dashboard/SuccessRate';
@@ -21,7 +19,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function DashboardPage() {
-  const { user, isAuthenticated, clearAuth } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const { currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -33,8 +31,11 @@ export default function DashboardPage() {
   // Check auth on load
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
-      return;
+      useAuthStore.getState().initFromStorage();
+      if (!useAuthStore.getState().isAuthenticated) {
+        router.push('/login');
+        return;
+      }
     }
     // Fetch dashboard data
     fetchDashboardData();
@@ -48,9 +49,19 @@ export default function DashboardPage() {
       let workspace = currentWorkspace;
       if (!workspace) {
         // Try to get from localStorage
-        const workspaceId = localStorage.getItem('currentWorkspaceId');
+        const storedWorkspaceId = localStorage.getItem('currentWorkspaceId');
+        const defaultWorkspaceId = localStorage.getItem('defaultWorkspaceId');
+        const workspaceId = storedWorkspaceId || defaultWorkspaceId;
         if (workspaceId) {
-          workspace = await workspaceApi.getWorkspace(workspaceId);
+          try {
+            workspace = await workspaceApi.getWorkspace(workspaceId);
+          } catch (workspaceError) {
+            if (!defaultWorkspaceId || defaultWorkspaceId === workspaceId) {
+              throw workspaceError;
+            }
+            localStorage.removeItem('currentWorkspaceId');
+            workspace = await workspaceApi.getWorkspace(defaultWorkspaceId);
+          }
           setCurrentWorkspace(workspace);
         }
       }
@@ -62,18 +73,43 @@ export default function DashboardPage() {
         setWorkflows(workflowsResponse);
 
         // Fetch recent executions (across all workflows in workspace)
-        if (workflowsResponse.length > 0) {
-          const firstWorkflowId = workflowsResponse[0]._id || workflowsResponse[0].id || '';
-          if (firstWorkflowId) {
-            const executionsResponse = await executionApi.listExecutions(firstWorkflowId, workspaceId);
-            setExecutions(executionsResponse);
-          }
-        }
+        const executionLists = await Promise.all(
+          workflowsResponse.slice(0, 20).map(async (workflow) => {
+            const workflowId = workflow._id || workflow.id;
+            if (!workflowId) return [];
+            try {
+              return await executionApi.listExecutions(workflowId, workspaceId);
+            } catch {
+              return [];
+            }
+          }),
+        );
+        const allExecutions = executionLists.flat();
+        allExecutions.sort(
+          (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+        );
+        setExecutions(allExecutions);
 
         // Fetch recent audit events for the workspace
         if (workspaceId) {
-          const auditResponse = await analyticsApi.getWorkspaceAnalytics(workspaceId);
-          setAuditEvents([]); // Placeholder - would come from audit API
+          try {
+            const activity = await collaborationApi.getActivityFeed({ limit: 5 }, workspaceId);
+            setAuditEvents(
+              activity.activities.map((item) => ({
+                _id: item.id,
+                id: item.id,
+                action: item.action,
+                userId: item.userId,
+                workspaceId: item.workspaceId,
+                resource: item.resource,
+                resourceId: item.resourceId,
+                ipAddress: item.ipAddress,
+                createdAt: item.timestamp ?? item.createdAt,
+              })),
+            );
+          } catch (auditError) {
+            console.error('Failed to fetch activity feed:', auditError);
+          }
         }
       }
     } catch (err: any) {
@@ -81,20 +117,6 @@ export default function DashboardPage() {
       setError(err.response?.data?.error?.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        await authService.logout(refreshToken);
-      }
-    } catch (err) {
-      console.error('Logout error:', err);
-    } finally {
-      clearAuth();
-      router.push('/login');
     }
   };
 
@@ -107,43 +129,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-semibold text-gray-900">
-                  Workflow Execution Engine
-                </h1>
-              </div>
-              <div className="hidden md:flex md:items-center md:space-x-4">
-                <WorkspaceSwitcher workspace={currentWorkspace} onWorkspaceChange={fetchDashboardData} />
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center text-sm text-gray-600">
-                {user?.email && (
-                  <>
-                    <span className="mr-2">{user.email}</span>
-                    <button
-                      onClick={handleLogout}
-                      className="text-gray-600 hover:text-gray-900"
-                    >
-                      Sign out
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="space-y-6">
 
       {/* Main */}
-      <main>
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+        <div className="space-y-6">
           {/* Welcome message */}
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900">
@@ -177,7 +166,6 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      </main>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 export const CORS_ALLOWED_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
-export const CORS_ALLOWED_HEADERS = 'Authorization,Content-Type,X-Request-Id';
+export const CORS_ALLOWED_HEADERS = 'Authorization,Content-Type,X-Request-Id,X-Workspace-Id';
 export const CORS_MAX_AGE_SECONDS = '600';
 
 export function createCorsMiddleware(allowedOrigins: readonly string[] = []): RequestHandler {

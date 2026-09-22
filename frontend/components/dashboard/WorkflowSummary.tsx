@@ -18,7 +18,9 @@ export const WorkflowSummary: React.FC<WorkflowSummaryProps> = ({
   isLoading = false,
 }) => {
   const count = totalWorkflows ?? workflows.length;
-  const publishedCount = workflows.filter((w) => (w.publishedVersion ?? 0) > 0 || (w.currentVersion ?? 0) > 0).length;
+  const publishedCount = workflows.filter(
+    (w) => w.status === 'PUBLISHED' || (w.publishedVersion ?? 0) > 0 || (w.currentVersion ?? 0) > 0,
+  ).length;
 
   return (
     <Card>

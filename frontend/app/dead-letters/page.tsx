@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { workspaceApi } from '@/services/workspaceApi';
 import { useExecutionStore } from '@/features/execution-console/stores/executionStore';
 import { executionConsoleApi } from '@/services/executionConsoleApi';
 import type { DeadLetter } from '@/types/execution';
@@ -13,7 +14,6 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 import { ExecutionFilters } from '@/features/execution-console/components/ExecutionFilters';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
@@ -25,8 +25,8 @@ import {
 } from 'lucide-react';
 
 export default function DeadLettersPage() {
-  const { user, isAuthenticated, clearAuth } = useAuthStore();
-  const { currentWorkspace } = useWorkspaceStore();
+  const { isAuthenticated } = useAuthStore();
+  const { currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
   const { filters, setFilters } = useExecutionStore();
   const router = useRouter();
   const [deadLetters, setDeadLetters] = React.useState<DeadLetter[]>([]);
@@ -37,8 +37,11 @@ export default function DeadLettersPage() {
   // Check auth on load
   React.useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
-      return;
+      useAuthStore.getState().initFromStorage();
+      if (!useAuthStore.getState().isAuthenticated) {
+        router.push('/login');
+        return;
+      }
     }
     // Fetch dead letters data
     fetchDeadLetters();
@@ -48,61 +51,63 @@ export default function DeadLettersPage() {
     setLoading(true);
     setError(null);
     try {
-      const workspace = currentWorkspace;
-      if (workspace) {
-        const workspaceId = workspace._id || workspace.id || '';
-        // Fetch dead letters for all workflows in the workspace
-        const workflows = await executionConsoleApi.getWorkflows(undefined, workspaceId);
-        const deadLettersPromises = workflows.map(workflow =>
-          executionConsoleApi.getDeadLetters(workflow._id, workspaceId)
-        );
-        const deadLettersArrays = await Promise.all(deadLettersPromises);
-        const allDeadLetters = deadLettersArrays.flat();
-
-        // Apply filters
-        let filtered = allDeadLetters;
-
-        // Date range filter
-        if (filters.dateRange) {
-          const start = new Date(filters.dateRange.start);
-          const end = new Date(filters.dateRange.end);
-          filtered = filtered.filter(dl => {
-            const createdAt = new Date(dl.createdAt);
-            return createdAt >= start && createdAt <= end;
-          });
+      let workspace = currentWorkspace;
+      if (!workspace && typeof window !== 'undefined') {
+        const workspaceId = localStorage.getItem('currentWorkspaceId') || localStorage.getItem('defaultWorkspaceId');
+        if (workspaceId) {
+          try {
+            workspace = await workspaceApi.getWorkspace(workspaceId);
+            setCurrentWorkspace(workspace);
+          } catch {
+            localStorage.removeItem('currentWorkspaceId');
+          }
         }
-
-        // Search filter
-        if (filters.search) {
-          const searchTerm = filters.search.toLowerCase();
-          filtered = filtered.filter(dl =>
-            dl.executionId.toLowerCase().includes(searchTerm) ||
-            dl.workflowId.toLowerCase().includes(searchTerm) ||
-            dl.error.toLowerCase().includes(searchTerm)
-          );
-        }
-
-        // Sort by createdAt descending (newest first)
-        filtered.sort((a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-
-        setDeadLetters(filtered);
       }
+
+      const workspaceId = workspace?._id || workspace?.id || '';
+
+      // Fetch dead letters for all workflows in the workspace
+      const workflows = await executionConsoleApi.getWorkflows(undefined, workspaceId);
+      const deadLettersPromises = workflows.map(workflow =>
+        executionConsoleApi.getDeadLetters(workflow._id, workspaceId)
+      );
+      const deadLettersArrays = await Promise.all(deadLettersPromises);
+      const allDeadLetters = deadLettersArrays.flat();
+
+      // Apply filters
+      let filtered = allDeadLetters;
+
+      // Date range filter
+      if (filters.dateRange) {
+        const start = new Date(filters.dateRange.start);
+        const end = new Date(filters.dateRange.end);
+        filtered = filtered.filter(dl => {
+          const createdAt = new Date(dl.createdAt);
+          return createdAt >= start && createdAt <= end;
+        });
+      }
+
+      // Search filter
+      if (filters.search) {
+        const searchTerm = filters.search.toLowerCase();
+        filtered = filtered.filter(dl =>
+          dl.executionId.toLowerCase().includes(searchTerm) ||
+          (dl.workflowId || '').toLowerCase().includes(searchTerm) ||
+          (dl.failureReason || dl.error || '').toLowerCase().includes(searchTerm)
+        );
+      }
+
+      // Sort by createdAt descending (newest first)
+      filtered.sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      setDeadLetters(filtered);
     } catch (err: any) {
       console.error('Failed to fetch dead letters:', err);
       setError(err.response?.data?.error?.message || 'Failed to load dead letters');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      clearAuth();
-      router.push('/login');
-    } catch (err) {
-      console.error('Logout error:', err);
     }
   };
 
@@ -134,43 +139,10 @@ export default function DeadLettersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-semibold text-gray-900">
-                  Dead Letter Queue
-                </h1>
-              </div>
-              <div className="hidden md:flex md:items-center md:space-x-4">
-                <WorkspaceSwitcher workspace={currentWorkspace} onWorkspaceChange={fetchDeadLetters} />
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center text-sm text-gray-600">
-                {user?.email && (
-                  <>
-                    <span className="mr-2">{user.email}</span>
-                    <button
-                      onClick={handleLogout}
-                      className="text-gray-600 hover:text-gray-900"
-                    >
-                      Sign out
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="space-y-6">
 
       {/* Main */}
-      <main>
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+        <div className="space-y-6">
           {/* Page header */}
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900">
@@ -237,7 +209,7 @@ export default function DeadLettersPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {deadLetters.map((dl) => (
-                      <tr key={dl._id} className="hover:bg-gray-50">
+                      <tr key={dl.executionId} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {dl.executionId?.substring(0, 8)}...{dl.executionId?.slice(-4)}
                         </td>
@@ -245,10 +217,10 @@ export default function DeadLettersPage() {
                           Workflow {dl.workflowId?.substring(0, 8)}...
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 break-all">
-                          {dl.error || 'Unknown error'}
+                          {dl.failureReason || dl.error || dl.message || 'Unknown error'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {dl.attemptsMade || dl.retryCount || 0}
+                          {dl.attempts ?? dl.attemptsMade ?? dl.retryCount ?? 0}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {new Date(dl.createdAt).toLocaleString()}
@@ -257,7 +229,7 @@ export default function DeadLettersPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleRetryDeadLetter(dl._id, dl.workflowId)}
+                            onClick={() => handleRetryDeadLetter(dl.executionId, dl.workflowId)}
                             className="bg-white hover:bg-amber-50 text-amber-700 border-amber-300"
                           >
                             Retry
@@ -276,7 +248,6 @@ export default function DeadLettersPage() {
             />
           )}
         </div>
-      </main>
 
       {/* Retry Confirmation Modal */}
       <Modal

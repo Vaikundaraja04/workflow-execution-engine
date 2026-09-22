@@ -8,6 +8,7 @@ import { workspaceApi } from '@/services/workspaceApi';
 import { workflowApi } from '@/services/workflowApi';
 import { executionApi } from '@/services/executionApi';
 import { analyticsApi } from '@/services/analyticsApi';
+import { collaborationApi } from '@/services/collaborationApi';
 import type { Workspace } from '@/types/workspace';
 import type { Workflow } from '@/types/workflow';
 import type { WorkflowExecution } from '@/types/execution';
@@ -64,6 +65,7 @@ vi.mock('@/services/analyticsApi', () => ({
     getExecutionMetrics: vi.fn(),
   },
 }));
+ vi.mock('@/services/collaborationApi', () => ({   collaborationApi: {     getActivityFeed: vi.fn(),   }, }));
 
 vi.mock('@/services/authService', () => ({
   authService: {
@@ -162,7 +164,9 @@ describe('Dashboard Page', () => {
     vi.mocked(workspaceApi.listWorkspaces).mockResolvedValue([mockWorkspace]);
     vi.mocked(workspaceApi.getWorkspace).mockResolvedValue(mockWorkspace);
     vi.mocked(workflowApi.listWorkflows).mockResolvedValue(mockWorkflows);
-    vi.mocked(executionApi.listExecutions).mockResolvedValue(mockExecutions);
+    vi.mocked(executionApi.listExecutions).mockImplementation(async (workflowId: string) =>
+      workflowId === 'workflow-1' ? mockExecutions : [],
+    );
     vi.mocked(analyticsApi.getWorkspaceAnalytics).mockResolvedValue({
       workspaceId: 'workspace-1',
       totalWorkflows: 2,
@@ -170,6 +174,7 @@ describe('Dashboard Page', () => {
       totalExecutions: 2,
       successRate: 50,
     });
+    vi.mocked(collaborationApi.getActivityFeed).mockResolvedValue({ activities: [], total: 0 });
   });
 
   it('should redirect to login if not authenticated', () => {
@@ -190,7 +195,7 @@ describe('Dashboard Page', () => {
     render(<DashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/workflow execution engine/i)).toBeInTheDocument();
+      expect(screen.getByText(/welcome back, test!/i)).toBeInTheDocument();
     });
 
     expect(screen.getByText(/welcome back, test!/i)).toBeInTheDocument();

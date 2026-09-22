@@ -2,7 +2,7 @@
 
 Phase 3 transforms the single-owner workflow engine into a multi-tenant SaaS automation platform. It adds workspaces with role-based access control, workflow collaboration, advanced versioning, a scaled execution platform, analytics, new APIs, plus the database and migration design that support them. The graph engine, execution lifecycle, and worker contract are preserved and extended, not rewritten.
 
-Status: architecture plan only. No code changes are made until this plan is approved.
+Status: implemented and verified. (This architecture plan is retained for historical context; the Phase 3 surface shipped as described below.)
 
 ## 1. Phase 3 Vision
 
@@ -429,13 +429,13 @@ Each sub-phase builds, then validates with its suites plus `npm run typecheck`.
 
 - Files affected: src/auth/permissions.ts, src/api/middleware/requirePermission.ts, src/auth/auth.middleware.ts, workflowRoutes.ts, executionRoutes.ts, errorHandler.ts (PERMISSION_DENIED / FORBIDDEN), src/api/app.ts.
 - Models affected: WorkspaceMember (role), optional WorkspaceRole seed.
-- Tests required: tests/rbac.test.ts (matrix fixtures), tests/rbacIsolation.test.ts (403/404, invite acceptance, role change, OWNER guard).
+- Tests required: tests/rbac.test.ts (matrix fixtures), tests/rbacIsolation.test.ts (403/404, invite acceptance, role change, OWNER guard) — rbacIsolation was not split out; the 403/404 and role-guard coverage is consolidated in tests/rbacAuthorization.test.ts and tests/rbacSecurity.test.ts.
 
 ### Phase 3C - Collaboration
 
 - Files affected: src/api/routes/memberRoutes.ts, src/services/memberService.ts, workspaceRoutes.ts (transfer), src/types/collaboration.ts.
 - Models affected: Workflow (workspaceId only; optional WorkflowAccess extension), AuditLog (existing).
-- Tests required: tests/members.test.ts, tests/collaboration.test.ts (share/inherit, transfer invariants), tests/authzTransfer.test.ts.
+- Tests required: tests/members.test.ts, tests/collaboration.test.ts (share/inherit, transfer invariants), tests/authzTransfer.test.ts (not split out; transfer coverage lives in tests/collaboration.test.ts / tests/members.test.ts).
 ### Phase 3D - Advanced execution
 
 - Files affected: src/services/executionService.ts, src/queues/bullMqExecutionQueue.ts, src/workers/executionWorker.ts, src/workers/dlq.ts (new), src/engine/executeWorkflow.ts (timeout), src/schemas/executionSchema.ts (priority, retryPolicy, replay), src/types/execution.ts.
@@ -446,7 +446,7 @@ Each sub-phase builds, then validates with its suites plus `npm run typecheck`.
 
 - Files affected: src/api/routes/analyticsRoutes.ts, src/services/analyticsService.ts, src/workers/analyticsRollup.ts, src/schemas/analyticsSchema.ts, src/types/analytics.ts.
 - Models affected: WorkflowExecution (already added), AuditLog (already added), ExecutionDailyRollup (new).
-- Tests required: tests/analytics.test.ts (workflow/execution metrics), tests/analyticsUsage.test.ts (rollup + TTL), tests/analyticsIsolation.test.ts.
+- Tests: tests/analytics.test.ts (workflow/execution metrics; rollup/TTL and tenant-isolation coverage consolidated here — the separately planned analyticsUsage/analyticsIsolation files were not split out).
 ## 13. Risks and Decisions
 
 ### Technical risks

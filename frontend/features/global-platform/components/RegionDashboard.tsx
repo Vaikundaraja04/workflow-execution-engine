@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { apiClient } from '@/services/apiClient';
 
 interface Region {
   code: string;
@@ -19,10 +20,8 @@ const RegionDashboard: React.FC = () => {
   useEffect(() => {
     const fetchRegions = async () => {
       try {
-        const res = await fetch('/api/platform/regions');
-        if (!res.ok) throw new Error('Failed to fetch regions');
-        const data = await res.json();
-        setRegions(data.data);
+        const res = await apiClient.get('/api/v1/platform/regions');
+        setRegions(res.data.data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {

@@ -24,7 +24,7 @@ export const SuccessRate: React.FC<SuccessRateProps> = ({
 
   if (calculatedRate === undefined) {
     if (executions.length > 0) {
-      const completed = executions.filter((e) => e.status === 'COMPLETED').length;
+      const completed = executions.filter((e) => e.status === 'SUCCEEDED' || e.status === 'COMPLETED').length;
       calculatedRate = (completed / executions.length) * 100;
     } else {
       calculatedRate = 100;

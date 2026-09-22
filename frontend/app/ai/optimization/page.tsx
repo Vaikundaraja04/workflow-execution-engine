@@ -43,8 +43,11 @@ export default function AIOptimizationPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
-      return;
+      useAuthStore.getState().initFromStorage();
+      if (!useAuthStore.getState().isAuthenticated) {
+        router.push('/login');
+        return;
+      }
     }
     fetchWorkflows();
   }, [isAuthenticated, router, fetchWorkflows]);

@@ -108,6 +108,7 @@ export interface ActivityItem {
   metadata?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
+  timestamp?: string;
   createdAt: string;
 }
 

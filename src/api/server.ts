@@ -2,7 +2,8 @@ import { createApp } from './app.js';
 import { connectDB, disconnectDB } from '../db/connection.js';
 import { loadEnv } from '../config/env.js';
 import { BullMqExecutionQueue } from '../queues/bullMqExecutionQueue.js';
-import { recoverPendingExecutions } from '../services/executionService.js';
+import { BullMqWebhookQueue } from '../queues/bullMqWebhookQueue.js';
+import { configureWebhookDispatch, recoverPendingExecutions } from '../services/executionService.js';
 import { initializeSocketIO, closeSocketIO } from '../realtime/socketServer.js';
 import { observabilityCollectorService } from '../services/observabilityCollectorService.js';
 import { continuousReadinessService } from '../services/continuousReadinessService.js';
@@ -20,10 +21,14 @@ function readPositiveInt(name: string): number | undefined {
 
 async function startServer() {
   let queue: BullMqExecutionQueue | undefined;
+  let webhookQueue: BullMqWebhookQueue | undefined;
   try {
     await connectDB(env.MONGODB_URI);
     queue = new BullMqExecutionQueue(env.REDIS_URL);
     await queue.waitUntilReady();
+    webhookQueue = new BullMqWebhookQueue(env.REDIS_URL);
+    await webhookQueue.waitUntilReady();
+    configureWebhookDispatch(webhookQueue);
     const recovery = await recoverPendingExecutions(queue, {
       attempts: env.EXECUTION_ATTEMPTS,
       backoffMs: env.EXECUTION_BACKOFF_MS,
@@ -36,6 +41,7 @@ async function startServer() {
     const authRefreshLimit = readPositiveInt('AUTH_REFRESH_LIMIT');
     const app = createApp({
       executionQueue: queue,
+      webhookQueue,
       executionCreationOptions: {
         attempts: env.EXECUTION_ATTEMPTS,
         backoffMs: env.EXECUTION_BACKOFF_MS,
@@ -109,6 +115,7 @@ async function startServer() {
         subscriptionLifecycleService.stopScheduler();
         demoWorkspaceService.stopScheduler();
         await queue?.close();
+        await webhookQueue?.close();
         await closeSocketIO();
         await disconnectDB();
         process.exit(0);
@@ -120,6 +127,7 @@ async function startServer() {
   } catch (err) {
     console.error('Failed to start server', err);
     await queue?.close();
+    await webhookQueue?.close();
     await disconnectDB();
     process.exit(1);
   }

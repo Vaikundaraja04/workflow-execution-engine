@@ -200,7 +200,9 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
         error: { code: 'TEMPLATE_VALIDATION_ERROR', message: err.message, requestId },
       });
     }
-    const mapped = ERROR_MAP[err.message];
+    const rawCode = (err as { code?: unknown }).code;
+    const mapped =
+      ERROR_MAP[err.message] ?? (typeof rawCode === 'string' ? ERROR_MAP[rawCode] : undefined);
     if (mapped) {
       const emit = mapped.status >= 500 ? logger.error : logger.warn;
       emit('request_rejected', { ...context, code: mapped.code, status: mapped.status });

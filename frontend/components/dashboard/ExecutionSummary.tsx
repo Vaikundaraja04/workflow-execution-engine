@@ -21,7 +21,7 @@ export const ExecutionSummary: React.FC<ExecutionSummaryProps> = ({
   isLoading = false,
 }) => {
   const total = totalExecutions ?? metrics?.totalExecutions ?? executions.length;
-  const successful = metrics?.successfulExecutions ?? executions.filter((e) => e.status === 'COMPLETED').length;
+  const successful = metrics?.successfulExecutions ?? executions.filter((e) => e.status === 'SUCCEEDED' || e.status === 'COMPLETED').length;
   const failed = metrics?.failedExecutions ?? executions.filter((e) => e.status === 'FAILED').length;
 
   return (

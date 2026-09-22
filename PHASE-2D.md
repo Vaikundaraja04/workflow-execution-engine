@@ -2,7 +2,7 @@
 
 Phase 2D adds user accounts, bearer-token authentication, and per-user ownership enforcement to the existing API. The graph engine, queue layer, worker process, and execution lifecycle are not changed.
 
-Status: planned. No code changes are made until this plan is approved.
+Status: implemented and verified. (This decision header is retained for historical context; the phase shipped as described below, with the inline corrections noted where the plan diverged from the implementation.)
 
 ## Goals
 
@@ -44,7 +44,8 @@ Status: planned. No code changes are made until this plan is approved.
 5. Login errors: unknown email and wrong password both return 401 INVALID_CREDENTIALS. Unknown emails are still verified against a fixed dummy hash so response timing does not reveal account existence.
 6. Cross-user access returns 404, not 403. Queries are scoped by ownerId and reuse WORKFLOW_NOT_FOUND and EXECUTION_NOT_FOUND, so the API never reveals which ids exist.
 7. Ownership is stamped at creation. Executions copy ownerId from the workflow, and it never changes. Worker, retry, and recovery functions stay unscoped because they run in the trusted worker process.
-8. JWT library: jose (ESM-native, typed, no @types package). jsonwebtoken was considered and rejected because it needs a separate types package.
+8. JWT library: jsonwebtoken (with @types/jsonwebtoken), as shipped. (The plan originally chose
+   jose; implementation settled on jsonwebtoken. This record is corrected to match the code.)
 9. Configuration is injected through createApp options, matching the existing ExecutionQueue injection, so tests pass a fixed secret and services never read process env directly.
 10. Route protection is applied per route inside router factories, so unknown routes keep returning 404 NOT_FOUND (existing API test 16 stays valid).
 
@@ -176,14 +177,14 @@ New files:
 | src/api/routes/authRoutes.ts | createAuthRouter(config) factory |
 | tests/authApi.test.ts | auth integration suite |
 | tests/authz.test.ts | ownership integration suite |
-| tests/authHelpers.ts | shared test helpers (flat file, no new folder) |
-| tests/passwordService.test.ts, tests/tokenService.test.ts | unit suites |
+| tests/authHelpers.ts | shared test helpers (flat file, no new folder) — planned, not split out; inlined within the auth suites (see Updated suites below) |
+| tests/passwordService.test.ts, tests/tokenService.test.ts | unit suites — consolidated into tests/authApi.test.ts (password hashing and token sign/verify coverage live there) |
 
 Changed files:
 
 | File | Change |
 | --- | --- |
-| package.json | add argon2 and jose |
+| package.json | add argon2 and jsonwebtoken (this plan originally picked jose; the implementation settled on jsonwebtoken) |
 | .env.example | add the three AUTH_* variables |
 | src/config/env.ts | validate AUTH_JWT_SECRET and the two TTL values |
 | src/models/WorkflowModel.ts | ownerId required |
@@ -225,7 +226,9 @@ New suites:
 Updated suites:
 
 - tests/workflowApi.test.ts and tests/executionRuntime.test.ts register a user through the new helper and send Authorization headers; service-level calls pass ownerId.
-- tests/authHelpers.ts provides createUser and authHeader helpers so the updates stay small.
+- Auth test helpers (createUser / authHeader) are inlined within the auth suites
+   (e.g. tests/authApi.test.ts; authz.test.ts derives users inline) so the updates
+   stay small. The planned separate tests/authHelpers.ts module was not split out.
 - Suites that do not touch the API or the changed services need no changes.
 
 ## Security notes
@@ -257,7 +260,7 @@ Development databases contain workflows and executions without ownerId. After Ph
 
 ## Implementation order
 
-1. Dependencies (argon2, jose), env schema, .env.example.
+1. Dependencies (argon2, jsonwebtoken), env schema, .env.example.
 2. User model and passwordService; authService register and login with duplicate-key handling.
 3. tokenService and RefreshToken model: access sign/verify, refresh issue, rotate, revoke.
 4. Auth schemas, auth router factory, and app wiring; auth integration tests.
