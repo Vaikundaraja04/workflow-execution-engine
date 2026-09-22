@@ -1,4 +1,4 @@
-﻿import { EmailTemplateModel } from '../../models/EmailTemplateModel.js';
+import { EmailTemplateModel } from '../../models/EmailTemplateModel.js';
 import type { EmailTemplateKey, IEmailTemplate } from '../../models/EmailTemplateModel.js';
 
 /**
@@ -90,10 +90,41 @@ const LIFECYCLE_TEMPLATES: Pick<
   },
 };
 
+const AUTOMATION_TEMPLATES: Pick<
+  Record<EmailTemplateKey, EmailTemplateSeed>,
+  'TRIAL_STARTED' | 'UPGRADE_OPPORTUNITY' | 'INACTIVE_CUSTOMER'
+> = {
+  TRIAL_STARTED: {
+    key: 'TRIAL_STARTED',
+    name: 'Trial started',
+    subject: 'Your {{packageName}} trial is running',
+    html: layout('<p>Hi {{contactName}},</p><p>Your trial of <strong>{{packageName}}</strong> started today and runs until {{trialEndsAt}} ({{daysRemaining}} days). Everything in the package is unlocked - workflows, agents and analytics.</p>'),
+    text: 'Hi {{contactName}},\n\nYour {{packageName}} trial runs until {{trialEndsAt}} ({{daysRemaining}} days).\n\nWorkflow Execution Engine',
+    variables: ['contactName', 'packageName', 'trialEndsAt', 'daysRemaining'],
+  },
+  UPGRADE_OPPORTUNITY: {
+    key: 'UPGRADE_OPPORTUNITY',
+    name: 'Upgrade opportunity',
+    subject: 'You have used {{percent}}% of your {{metric}} allowance',
+    html: layout('<p>Hi {{contactName}},</p><p><strong>{{metric}}</strong> usage for {{periodKey}} is at {{percent}}% of the {{packageName}} allowance ({{used}} of {{limit}}). Moving to the next package raises the limit before the workload has to slow down.</p>'),
+    text: 'Hi {{contactName}},\n\n{{metric}} usage for {{periodKey}} is at {{percent}}% of the {{packageName}} allowance ({{used}} of {{limit}}).\n\nWorkflow Execution Engine',
+    variables: ['contactName', 'metric', 'percent', 'used', 'limit', 'packageName', 'periodKey'],
+  },
+  INACTIVE_CUSTOMER: {
+    key: 'INACTIVE_CUSTOMER',
+    name: 'Inactive customer',
+    subject: 'We have not seen {{companyName}} activity for {{idleDays}} days',
+    html: layout('<p>Hi {{contactName}},</p><p>Your workspace has not run an execution for {{idleDays}} days. If something is blocked, reply to this email and we will help you get the automation back on track.</p>'),
+    text: 'Hi {{contactName}},\n\nYour workspace has not run an execution for {{idleDays}} days. Reply to this email if something is blocked and we will help.\n\nWorkflow Execution Engine',
+    variables: ['contactName', 'companyName', 'idleDays'],
+  },
+};
+
 export const DEFAULT_EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateSeed> = {
   ...CORE_TEMPLATES,
   ...BILLING_TEMPLATES,
   ...LIFECYCLE_TEMPLATES,
+  ...AUTOMATION_TEMPLATES,
 };
 
 /** Seed the registry on first use; existing copies are never overwritten. */

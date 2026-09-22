@@ -16,6 +16,10 @@ export const EMAIL_TEMPLATE_KEYS = [
   'TRIAL_ENDING',
   'USAGE_LIMIT_WARNING',
   'SUBSCRIPTION_RENEWAL',
+  // Phase 16.5 - lifecycle automation
+  'TRIAL_STARTED',
+  'UPGRADE_OPPORTUNITY',
+  'INACTIVE_CUSTOMER',
 ] as const;
 export type EmailTemplateKey = (typeof EMAIL_TEMPLATE_KEYS)[number];
 

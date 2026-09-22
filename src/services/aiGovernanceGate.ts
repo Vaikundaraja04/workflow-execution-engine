@@ -18,6 +18,7 @@ export interface GovernedProviderResult {
 
 export interface GovernedExecutionContext {
   prompt?: string;
+  provider: AIProvider;
   model: string;
   providerName: string;
   throttled: boolean;
@@ -127,6 +128,7 @@ export class AIGovernanceGate {
     }
     const prompt = governed.prompt ?? input.prompt;
     const context: GovernedExecutionContext = {
+      provider: governed.provider,
       model: governed.model,
       providerName: governed.providerName,
       throttled: governed.throttled,

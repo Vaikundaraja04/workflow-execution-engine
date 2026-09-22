@@ -5,6 +5,7 @@ import type { AuthConfig } from '../../auth/jwt.service.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
 import { resolveTargetWorkspace } from '../middleware/requirePermission.js';
 import { demoWorkspaceService } from '../../services/demoWorkspaceService.js';
+import { demoScenarioService } from '../../services/demoScenarioService.js';
 
 const resetSchema = z.object({
   workspaceId: z.string().trim().min(1).optional(),
@@ -26,6 +27,41 @@ export function createDemoRouter(
           ipAddress: req.ip,
           userAgent: req.get('user-agent') ?? undefined,
         });
+        res.status(201).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // Phase 16.3 - Scenario demos: curated industry walkthroughs backed by the
+  // solution catalog. Listing is public; starting provisions a sandbox.
+  router.get('/scenarios', async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({ scenarios: await demoScenarioService.listScenarios() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/scenarios/:scenarioId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json(await demoScenarioService.getScenario(req.params.scenarioId as string));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post(
+    '/start/:scenarioId',
+    ...(createLimiter ? [createLimiter] : []),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await demoScenarioService.startScenario(
+          req.params.scenarioId as string,
+          config,
+          { ipAddress: req.ip, userAgent: req.get('user-agent') ?? undefined },
+        );
         res.status(201).json(result);
       } catch (error) {
         next(error);

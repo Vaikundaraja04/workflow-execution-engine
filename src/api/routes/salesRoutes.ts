@@ -3,6 +3,8 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { AuthConfig } from '../../auth/jwt.service.js';
 import { z } from 'zod';
 import { leadService } from '../../services/leadService.js';
+import { salesIntelligenceService } from '../../services/salesIntelligenceService.js';
+import { proposalGeneratorService } from '../../services/proposalGeneratorService.js';
 import { leadExportService, LEAD_EXPORT_FORMATS } from '../../services/leadExportService.js';
 import { conversionTrackingService } from '../../services/conversionTrackingService.js';
 import { demoWorkspaceService } from '../../services/demoWorkspaceService.js';
@@ -52,6 +54,19 @@ const exportQuerySchema = z.object({
   search: z.string().trim().max(160).optional(),
   limit: z.coerce.number().int().min(1).max(5000).default(1000),
 });
+const intelligenceQuerySchema = z.object({
+  status: z.enum(LEAD_STATUSES).optional(),
+  demoStatus: z.enum(LEAD_DEMO_STATUSES).optional(),
+  source: z.enum(LEAD_SOURCES).optional(),
+  search: z.string().trim().max(160).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+const proposalSchema = z.object({
+  leadId: z.string().trim().min(1),
+  notes: z.string().trim().max(2000).optional(),
+}).strict();
+
 export function createSalesRouter(config: AuthConfig, requireAuth: RequestHandler): Router {
   const router = Router();
   const admin = [requireAuth, requirePlatformAdmin()] as RequestHandler[];
@@ -133,5 +148,35 @@ export function createSalesRouter(config: AuthConfig, requireAuth: RequestHandle
     } catch (error) { next(error); }
   });
 
+  // Phase 16.2 - Pipeline intelligence: score and rank the open pipeline.
+  router.get('/intelligence', admin, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = intelligenceQuerySchema.safeParse(req.query);
+      if (!parsed.success) return res.status(400).json(badRequest('Invalid query parameters'));
+      res.json(await salesIntelligenceService.intelligence(parsed.data));
+    } catch (error) { next(error); }
+  });
+
+  router.get('/leads/:leadId/score', admin, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!leadId) return res.status(400).json({ error: { code: 'INVALID_LEAD_ID', message: 'Invalid lead ID' } });
+      res.json(await salesIntelligenceService.scoreLead(leadId));
+    } catch (error) { next(error); }
+  });
+  // Phase 16.8 - Proposal generation through the AI governance gate.
+  router.post('/proposals', admin, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = proposalSchema.safeParse(req.body ?? {});
+      if (!parsed.success) return res.status(400).json(badRequest('Invalid request body'));
+      const outcome = await proposalGeneratorService.generate({
+        leadId: parsed.data.leadId,
+        notes: parsed.data.notes,
+        actorUserId: getAuthUser(req).userId,
+      });
+      if (outcome.status === 'PENDING_APPROVAL') return res.status(202).json(outcome);
+      res.json(outcome);
+    } catch (error) { next(error); }
+  });
   return router;
 }

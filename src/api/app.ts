@@ -35,6 +35,9 @@ import { createEntitlementRouter } from './routes/entitlementRoutes.js';
 import { createCheckoutRouter } from './routes/checkoutRoutes.js';
 import { createOnboardingRouter } from './routes/onboardingRoutes.js';
 import { createBusinessAnalyticsRouter } from './routes/businessAnalyticsRoutes.js';
+import { createGrowthRouter } from './routes/growthRoutes.js';
+import { createCustomerSuccessRouter } from './routes/customerSuccessRoutes.js';
+import { createPartnerRouter } from './routes/partnerRoutes.js';
 import { createTemplateRouter } from './routes/templateRoutes.js';
 import { createMarketplaceRouter } from './routes/marketplaceRoutes.js';
 import { createGovernanceRouter } from './routes/governanceRoutes.js';
@@ -182,6 +185,10 @@ export function createApp(options: AppOptions) {
   app.use('/api/v1/billing', requireAuth, createCheckoutRouter(requireAuth));
   app.use('/api/v1/onboarding', createOnboardingRouter(requireAuth));
   app.use('/api/v1/analytics/business', requireAuth, createBusinessAnalyticsRouter(requireAuth));
+  // Phase 16 - Customer acquisition and SaaS growth engine
+  app.use('/api/v1/growth', requireAuth, createGrowthRouter(requireAuth));
+  app.use('/api/v1/customers', requireAuth, createCustomerSuccessRouter(requireAuth));
+  app.use('/api/v1/partners', requireAuth, createPartnerRouter(requireAuth));
   app.use('/api/v1', requireAuth, createAPIKeyRouter());
   app.use('/api/v1/subscription', requireAuth, createSubscriptionRouter());
   app.use(

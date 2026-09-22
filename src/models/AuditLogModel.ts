@@ -200,6 +200,11 @@ export const AUDIT_ACTIONS = [
   'TRIAL_CONVERTED',
   'CUSTOMER_EXPANDED',
   'CUSTOMER_CHURNED',
+  // Phase 16: Customer Acquisition & SaaS Growth Engine
+  'DEMO_SCENARIO_STARTED',
+  'LIFECYCLE_SWEEP_RUN',
+  'PARTNER_CREATED',
+  'PARTNER_REFERRAL_REGISTERED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

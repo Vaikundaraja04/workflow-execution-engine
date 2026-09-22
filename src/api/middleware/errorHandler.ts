@@ -120,6 +120,13 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   ONBOARDING_STEP_REQUIRED: { status: 400, code: 'ONBOARDING_STEP_REQUIRED', message: 'This onboarding step cannot be skipped' },
   EMAIL_TEMPLATE_NOT_FOUND: { status: 404, code: 'EMAIL_TEMPLATE_NOT_FOUND', message: 'Unknown notification template' },
   INVALID_WEBHOOK_SIGNATURE: { status: 400, code: 'INVALID_WEBHOOK_SIGNATURE', message: 'Webhook signature verification failed' },
+  // Phase 16: Customer Acquisition & SaaS Growth Engine
+  DEMO_SCENARIO_NOT_FOUND: { status: 404, code: 'DEMO_SCENARIO_NOT_FOUND', message: 'Demo scenario was not found' },
+  INVALID_PARTNER_ID: { status: 400, code: 'INVALID_PARTNER_ID', message: 'Invalid partner ID' },
+  PARTNER_NOT_FOUND: { status: 404, code: 'PARTNER_NOT_FOUND', message: 'Partner was not found' },
+  PARTNER_CODE_TAKEN: { status: 409, code: 'PARTNER_CODE_TAKEN', message: 'Partner code is already in use' },
+  INVALID_REFERRAL: { status: 400, code: 'INVALID_REFERRAL', message: 'Invalid referral input' },
+  PROPOSAL_NOT_ALLOWED: { status: 403, code: 'PROPOSAL_NOT_ALLOWED', message: 'The proposal cannot be generated for this lead' },
 };
 
 type JsonSyntaxError = SyntaxError & {
