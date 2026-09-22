@@ -104,6 +104,13 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   TEMPLATE_PUBLISH_ERROR: { status: 400, code: 'TEMPLATE_PUBLISH_ERROR', message: 'Template cannot be published' },
   TEMPLATE_VALIDATION_ERROR: { status: 400, code: 'TEMPLATE_VALIDATION_ERROR', message: 'Template validation failed' },
   INVALID_TEMPLATE_PACKAGE: { status: 400, code: 'INVALID_TEMPLATE_PACKAGE', message: 'Invalid template package' },
+  // Phase 14: Go-To-Market, Customer Acquisition & Revenue Engine
+  PRODUCT_PLAN_NOT_FOUND: { status: 404, code: 'PRODUCT_PLAN_NOT_FOUND', message: 'Product plan was not found' },
+  SOLUTION_NOT_FOUND: { status: 404, code: 'SOLUTION_NOT_FOUND', message: 'Solution package was not found' },
+  INVALID_LEAD_ID: { status: 400, code: 'INVALID_LEAD_ID', message: 'Invalid lead ID' },
+  LEAD_NOT_FOUND: { status: 404, code: 'LEAD_NOT_FOUND', message: 'Lead was not found' },
+  INVALID_PAYMENT_ID: { status: 400, code: 'INVALID_PAYMENT_ID', message: 'Invalid payment identifier' },
+  UNSUPPORTED_PROVIDER_OPERATION: { status: 501, code: 'UNSUPPORTED_PROVIDER_OPERATION', message: 'The billing provider does not support this operation' },
 };
 
 type JsonSyntaxError = SyntaxError & {

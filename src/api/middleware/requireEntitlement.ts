@@ -2,22 +2,23 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { Types } from 'mongoose';
 import { getAuthUser } from '../../auth/auth.middleware.js';
 import { getWorkspaceContext, resolveTargetWorkspace } from './requirePermission.js';
-import { billingService } from '../../services/billingService.js';
+import { featureEntitlementService } from '../../services/featureEntitlementService.js';
+import type { FeatureKey } from '../../models/ProductPlanModel.js';
 import { TenantAccountModel } from '../../models/TenantAccountModel.js';
 
 /**
- * Gate a route on a plan entitlement. Apply after a workspace guard
+ * Phase 14.2 - Gate a route on a plan entitlement. Apply after a workspace guard
  * (requirePermission / requireMembership) so the workspace context exists.
+ *
+ * The authoritative matrix now lives in featureEntitlementService: it composes
+ * the subscription plan, the sellable package limits and metered usage, and it
+ * re-checks the RBAC permission that maps to the feature when a role is known.
  */
-export function requireEntitlement(feature: string): RequestHandler {
+export function requireEntitlement(feature: FeatureKey): RequestHandler {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
-      const { workspaceId } = getWorkspaceContext(req);
-      const entitled = await billingService.checkFeatureEntitlement(workspaceId, feature);
-      if (!entitled) {
-        next(new Error('FEATURE_NOT_ENTITLED'));
-        return;
-      }
+      const { workspaceId, role } = getWorkspaceContext(req);
+      await featureEntitlementService.assertFeature(workspaceId, feature, { role });
       next();
     } catch (error) {
       next(error);

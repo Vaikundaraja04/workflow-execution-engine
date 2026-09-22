@@ -180,6 +180,12 @@ export const AUDIT_ACTIONS = [
   'CUSTOMER_NOTE_ADDED',
   'DEMO_WORKSPACE_CREATED',
   'DEMO_WORKSPACE_RESET',
+  // Phase 14: Go-To-Market, Customer Acquisition & Revenue Engine
+  'LEAD_CAPTURED',
+  'LEAD_UPDATED',
+  'LEAD_DEMO_LINKED',
+  'SOLUTION_INSTALLED',
+  'CUSTOMER_HEALTH_EVALUATED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

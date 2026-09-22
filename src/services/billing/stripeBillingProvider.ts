@@ -4,6 +4,7 @@ import type {
   BillingCustomer,
   BillingSubscription,
   BillingInvoice,
+  BillingPayment,
 } from './billingProvider.js';
 
 type BillingSubscriptionStatus = BillingSubscription['status'];
@@ -54,6 +55,26 @@ function mapSubscriptionStatus(status: unknown): BillingSubscriptionStatus {
       return 'past_due';
     default:
       return 'unpaid';
+  }
+}
+
+type BillingPaymentStatus = BillingPayment['status'];
+
+/** Stripe payment_intent.status -> normalized payment status (Phase 14.3). */
+function mapPaymentStatus(status: unknown): BillingPaymentStatus {
+  switch (status) {
+    case 'succeeded':
+      return 'succeeded';
+    case 'processing':
+      return 'processing';
+    case 'requires_action':
+    case 'requires_confirmation':
+    case 'requires_capture':
+      return 'requires_action';
+    case 'canceled':
+      return 'failed';
+    default:
+      return 'unknown';
   }
 }
 
@@ -319,5 +340,75 @@ export class StripeBillingProvider implements BillingProvider {
       id: String(intent.id ?? ''),
       status: String(intent.status ?? ''),
     };
+  }
+
+  async verifyPayment(params: { paymentId: string }): Promise<BillingPayment> {
+    if (!params.paymentId || params.paymentId.trim().length === 0) {
+      throw new Error('INVALID_PAYMENT_ID');
+    }
+    const intent = await this.request<Record<string, unknown>>(
+      'GET',
+      `/v1/payment_intents/${encodeURIComponent(params.paymentId)}`,
+    );
+    const methods = Array.isArray(intent.payment_method_types) ? intent.payment_method_types : [];
+    const method = methods.length > 0 && typeof methods[0] === 'string' ? methods[0] : null;
+    const amount = Number(intent.amount ?? 0);
+    const amountReceived = Number(intent.amount_received ?? 0);
+    const metadata = isRecord(intent.metadata) ? (intent.metadata as Record<string, string>) : undefined;
+    return {
+      id: String(intent.id ?? ''),
+      customerId: typeof intent.customer === 'string' ? intent.customer : null,
+      amount,
+      amountReceived,
+      currency: String(intent.currency ?? 'usd'),
+      status: mapPaymentStatus(intent.status),
+      method,
+      paid: amountReceived > 0,
+      refundedAmount: Math.max(0, amount - amountReceived),
+      created: Number(intent.created ?? Math.floor(Date.now() / 1000)),
+      ...(metadata ? { metadata } : {}),
+    };
+  }
+
+  async createInvoice(params: {
+    customerId: string;
+    description?: string;
+    amount?: number;
+    currency?: string;
+    daysUntilDue?: number;
+    metadata?: Record<string, string>;
+  }): Promise<BillingInvoice> {
+    if (!params.customerId) throw new Error('INVALID_REQUEST');
+    const amount = Number.isFinite(params.amount) && params.amount && params.amount > 0
+      ? Math.floor(params.amount)
+      : null;
+    const currency = params.currency ?? 'usd';
+    const daysUntilDue = Number.isFinite(params.daysUntilDue) && params.daysUntilDue && params.daysUntilDue > 0
+      ? Math.floor(params.daysUntilDue)
+      : 7;
+
+    if (amount !== null) {
+      const itemBody: Record<string, unknown> = {
+        customer: params.customerId,
+        amount,
+        currency,
+      };
+      if (params.description !== undefined) itemBody.description = params.description;
+      await this.request<Record<string, unknown>>('POST', '/v1/invoiceitems', itemBody);
+    }
+
+    const invoiceBody: Record<string, unknown> = {
+      customer: params.customerId,
+      collection_method: 'send_invoice',
+      days_until_due: daysUntilDue,
+      auto_advance: true,
+    };
+    if (params.metadata !== undefined) {
+      for (const [key, value] of Object.entries(params.metadata)) {
+        invoiceBody[`metadata[${key}]`] = value;
+      }
+    }
+    const invoice = await this.request<Record<string, unknown>>('POST', '/v1/invoices', invoiceBody);
+    return this.toInvoice(invoice);
   }
 }

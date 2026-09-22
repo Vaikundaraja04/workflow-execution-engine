@@ -57,10 +57,11 @@ export class SubscriptionLifecycleService {
         continue;
       }
 
-      if (subscription.status !== 'PAST_DUE') {
-        subscription.status = 'PAST_DUE';
-        await subscription.save();
-        await createAuditLog({
+      if (subscription.status === 'PAST_DUE') continue;
+
+      subscription.status = 'PAST_DUE';
+      await subscription.save();
+      await createAuditLog({
           action: 'PAYMENT_FAILED',
           workspaceId: subscription.workspaceId,
           resource: 'subscription',
@@ -71,12 +72,11 @@ export class SubscriptionLifecycleService {
             graceDays: readGraceDays(),
           },
         });
-        result.markedPastDue += 1;
-      }
+      result.markedPastDue += 1;
     }
-
-    return result;
+  return result;
   }
+
   private async expire(subscription: ISubscription, now: Date): Promise<void> {
     const previousPlan = subscription.plan;
     subscription.status = 'EXPIRED';

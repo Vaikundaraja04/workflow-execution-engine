@@ -4,9 +4,43 @@ import type {
   BillingCustomer,
   BillingSubscription,
   BillingInvoice,
+  BillingPayment,
 } from './billingProvider.js';
 
 type BillingSubscriptionStatus = BillingSubscription['status'];
+type BillingPaymentStatus = BillingPayment['status'];
+
+/**
+ * Razorpay payment method -> normalized rail. UPI and Google Pay are first-class
+ * rails for the India market (Phase 14.3).
+ */
+function mapPaymentMethod(method: unknown, wallet: unknown): string | null {
+  if (typeof method !== 'string' || method.length === 0) return null;
+  if (method === 'wallet' && typeof wallet === 'string' && wallet.toLowerCase() === 'google_pay') {
+    return 'google_pay';
+  }
+  if (method === 'upi') return 'upi';
+  if (method === 'card') return 'card';
+  if (method === 'netbanking') return 'netbanking';
+  return method;
+}
+
+function mapPaymentStatus(status: unknown): BillingPaymentStatus {
+  switch (status) {
+    case 'captured':
+      return 'succeeded';
+    case 'authorized':
+      return 'processing';
+    case 'created':
+      return 'requires_action';
+    case 'failed':
+      return 'failed';
+    case 'refunded':
+      return 'refunded';
+    default:
+      return 'unknown';
+  }
+}
 
 interface RazorpayBillingProviderOptions {
   apiBase?: string;
@@ -250,9 +284,99 @@ export class RazorpayBillingProvider implements BillingProvider {
       receipt: `rcpt_${Date.now()}`,
     };
     if (params.metadata !== undefined) body.notes = params.metadata;
+    // Razorpay orders accept UPI, Google Pay and cards on the same checkout.
+    body.payment_capture = true;
     const order = await this.request<Record<string, unknown>>('POST', '/v1/orders', body);
     const id = String(order.id ?? '');
     return { clientSecret: id, id, status: String(order.status ?? '') };
+  }
+
+  async verifyPayment(params: { paymentId: string }): Promise<BillingPayment> {
+    if (!params.paymentId || params.paymentId.trim().length === 0) {
+      throw new Error('INVALID_PAYMENT_ID');
+    }
+    const payment = await this.request<Record<string, unknown>>(
+      'GET',
+      `/v1/payments/${encodeURIComponent(params.paymentId)}`,
+    );
+    const amount = Number(payment.amount ?? 0);
+    const amountRefunded = Number(payment.amount_refunded ?? 0);
+    return {
+      id: String(payment.id ?? ''),
+      customerId: typeof payment.customer_id === 'string' ? payment.customer_id : null,
+      amount,
+      amountReceived: amount - amountRefunded,
+      currency: String(payment.currency ?? 'INR'),
+      status: mapPaymentStatus(payment.status),
+      method: mapPaymentMethod(payment.method, payment.wallet),
+      paid: String(payment.status ?? '') === 'captured',
+      refundedAmount: amountRefunded,
+      created: toUnixSeconds(payment.created_at) ?? Math.floor(Date.now() / 1000),
+      ...(isRecord(payment.notes) ? { metadata: payment.notes as Record<string, string> } : {}),
+    };
+  }
+
+  async createInvoice(params: {
+    customerId: string;
+    description?: string;
+    amount?: number;
+    currency?: string;
+    daysUntilDue?: number;
+    metadata?: Record<string, string>;
+  }): Promise<BillingInvoice> {
+    if (!params.customerId) throw new Error('INVALID_REQUEST');
+    const amount = Number.isFinite(params.amount) && params.amount && params.amount > 0
+      ? Math.floor(params.amount)
+      : null;
+    const body: Record<string, unknown> = {
+      customer_id: params.customerId,
+      type: 'invoice',
+      currency: params.currency ?? 'INR',
+      ...(amount !== null
+        ? {
+            line_items: [
+              {
+                amount,
+                currency: params.currency ?? 'INR',
+                name: params.description ?? 'Subscription charges',
+                quantity: 1,
+              },
+            ],
+          }
+        : {}),
+      ...(params.metadata !== undefined ? { notes: params.metadata } : {}),
+    };
+    const invoice = await this.request<Record<string, unknown>>('POST', '/v1/invoices', body);
+    const existing = await this.getInvoiceFromEntity(invoice);
+    return existing;
+  }
+
+  private async getInvoiceFromEntity(entity: Record<string, unknown>): Promise<BillingInvoice> {
+    const id = String(entity.id ?? '');
+    if (!id) throw new Error('RAZORPAY_API_ERROR: invoice id missing in response');
+    const allowed = ['draft', 'open', 'paid', 'void', 'uncollectible'] as const;
+    const status = typeof entity.status === 'string' ? entity.status : 'draft';
+    const normalized = status === 'issued'
+      ? 'open'
+      : (allowed as readonly string[]).includes(status)
+        ? (status as (typeof allowed)[number])
+        : 'draft';
+    const amount = Number(entity.amount ?? 0);
+    const amountPaid = Number(entity.amount_paid ?? 0);
+    return {
+      id,
+      customerId: String(entity.customer_id ?? ''),
+      status: normalized,
+      amountDue: amount - amountPaid,
+      amountPaid,
+      currency: String(entity.currency ?? 'INR'),
+      created: toUnixSeconds(entity.created_at) ?? Math.floor(Date.now() / 1000),
+      dueDate: toUnixSeconds(entity.due_date),
+      paid: Boolean(entity.paid_at),
+      attemptCount: 1,
+      nextPaymentAttempt: null,
+      ...(typeof entity.short_url === 'string' ? { hostedInvoiceUrl: entity.short_url } : {}),
+    };
   }
   async handleWebhook(requestBody: string, signature: string): Promise<{
     type: string;

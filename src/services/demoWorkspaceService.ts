@@ -18,6 +18,7 @@ import { billingService } from './billingService.js';
 import { createWorkflow } from './workflowService.js';
 import { createAuditLog } from './auditService.js';
 import { errorFields, logger } from '../observability/logger.js';
+import { productPackagingService } from './productPackagingService.js';
 import { isPlatformAdminEmail } from '../api/middleware/platformAdmin.js';
 import type { WorkflowDefinition } from '../types/workflow.js';
 
@@ -132,6 +133,7 @@ export class DemoWorkspaceService {
     );
 
     const seeded = await this.seedContent(workspace, user._id);
+    const packaging = await productPackagingService.packageWorkspace('STARTER', 'Sandbox evaluation');
 
     const tokens = await issueTokens(config, user._id, email, {
       ipAddress: options.ipAddress,

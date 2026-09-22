@@ -48,6 +48,24 @@ export interface BillingInvoice {
   invoicePdf?: string;
 }
 
+/**
+ * Normalized payment record used to verify a checkout (Phase 14.3).
+ * `method` keeps provider payment rails readable: card, upi, google_pay, ...
+ */
+export interface BillingPayment {
+  id: string;
+  customerId: string | null;
+  amount: number;
+  amountReceived: number;
+  currency: string;
+  status: 'succeeded' | 'processing' | 'requires_action' | 'failed' | 'refunded' | 'unknown';
+  method: string | null;
+  paid: boolean;
+  refundedAmount: number;
+  created: number; // Unix timestamp
+  metadata?: Record<string, string>;
+}
+
 export interface BillingProvider {
   /**
    * Create a customer in the billing system
@@ -126,4 +144,26 @@ export interface BillingProvider {
     id: string;
     status: string;
   }>;
+
+  /**
+   * Verify a payment/checkout with the provider and return its normalized state.
+   * Used to confirm a subscription purchase before provisioning entitlements.
+   */
+  verifyPayment(params: {
+    paymentId: string;
+  }): Promise<BillingPayment>;
+
+  /**
+   * Create an invoice for a customer (usage overage, add-ons, manual billing).
+   * Providers that cannot create invoices must throw
+   * UNSUPPORTED_PROVIDER_OPERATION instead of fabricating one.
+   */
+  createInvoice(params: {
+    customerId: string;
+    description?: string;
+    amount?: number; // in currency smallest unit
+    currency?: string;
+    daysUntilDue?: number;
+    metadata?: Record<string, string>;
+  }): Promise<BillingInvoice>;
 }

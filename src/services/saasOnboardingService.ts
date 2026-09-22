@@ -13,6 +13,8 @@ import type { SubscriptionPlan } from '../models/SubscriptionModel.js';
 import { billingService } from './billingService.js';
 import { usageMeteringService } from './usageMeteringService.js';
 import { createAuditLog } from './auditService.js';
+import { productPackagingService } from './productPackagingService.js';
+import { customerHealthService } from './customerHealthService.js';
 import type { WorkflowDefinition } from '../types/workflow.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;

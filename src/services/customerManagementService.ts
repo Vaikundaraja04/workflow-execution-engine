@@ -10,6 +10,8 @@ import { WorkspaceUsageModel } from '../models/WorkspaceUsageModel.js';
 import { UsageMeterModel } from '../models/UsageMeterModel.js';
 import { monthPeriodKey } from './usageMeteringService.js';
 import { createAuditLog } from './auditService.js';
+import { productPackagingService } from './productPackagingService.js';
+import { customerHealthService } from './customerHealthService.js';
 
 export interface CustomerListFilters {
   status?: TenantStatus | undefined;
@@ -20,6 +22,7 @@ export interface CustomerListFilters {
   offset?: number | undefined;
 }
 
+/** @deprecated use CustomerHealthReport from customerHealthService */
 export interface CustomerHealth {
   score: number;
   band: 'healthy' | 'watch' | 'at_risk';
@@ -303,6 +306,14 @@ export class CustomerManagementService {
 
     return { workspaceId: workspaceIdObj.toString(), status: 'ACTIVE' as const, tenantStatus };
   }
+  async getCustomerHealth(workspaceId: string) {
+    return customerHealthService.evaluate(workspaceId);
+  }
+
+  async getHealthPortfolio() {
+    return customerHealthService.portfolio();
+  }
+
   async addNote(
     workspaceId: Types.ObjectId | string,
     authorUserId: string,

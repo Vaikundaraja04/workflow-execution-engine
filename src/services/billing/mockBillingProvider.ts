@@ -1,4 +1,10 @@
-import type { BillingProvider, BillingCustomer, BillingSubscription, BillingInvoice } from './billingProvider.js';
+import type {
+  BillingProvider,
+  BillingCustomer,
+  BillingSubscription,
+  BillingInvoice,
+  BillingPayment,
+} from './billingProvider.js';
 
 /**
  * Mock Billing Provider for testing and development
@@ -9,6 +15,7 @@ import type { BillingProvider, BillingCustomer, BillingSubscription, BillingInvo
 const customers = new Map<string, BillingCustomer>();
 const subscriptions = new Map<string, BillingSubscription>();
 const invoices = new Map<string, BillingInvoice>();
+const payments = new Map<string, BillingPayment>();
 
 // Helper to generate unique IDs
 function generateId(prefix: string): string {
@@ -233,10 +240,81 @@ export class MockBillingProvider implements BillingProvider {
     }
 
     const id = generateId('pi');
+    const payment: BillingPayment = {
+      id,
+      customerId: params.customerId,
+      amount: params.amount,
+      amountReceived: 0,
+      currency: params.currency,
+      status: 'processing',
+      method: null,
+      paid: false,
+      refundedAmount: 0,
+      created: now(),
+    };
+    payments.set(id, payment);
     return {
       clientSecret: `pi_${id}_secret`,
       id,
       status: 'requires_payment_method',
     };
+  }
+
+  /**
+   * Mock verification: payments created through this provider keep their state,
+   * unknown identifiers are adopted as succeeded so local flows can complete.
+   */
+  async verifyPayment(params: { paymentId: string }): Promise<BillingPayment> {
+    const existing = payments.get(params.paymentId);
+    if (existing) return existing;
+    const adopted: BillingPayment = {
+      id: params.paymentId,
+      customerId: null,
+      amount: 2900,
+      amountReceived: 2900,
+      currency: 'usd',
+      status: 'succeeded',
+      method: 'card',
+      paid: true,
+      refundedAmount: 0,
+      created: now(),
+    };
+    payments.set(adopted.id, adopted);
+    return adopted;
+  }
+
+  async createInvoice(params: {
+    customerId: string;
+    description?: string;
+    amount?: number;
+    currency?: string;
+    daysUntilDue?: number;
+    metadata?: Record<string, string>;
+  }): Promise<BillingInvoice> {
+    if (!customers.has(params.customerId)) {
+      throw new Error('Customer not found');
+    }
+    const current = now();
+    const amount = Number.isFinite(params.amount) && params.amount && params.amount > 0
+      ? Math.floor(params.amount)
+      : 2900;
+    const daysUntilDue = Number.isFinite(params.daysUntilDue) && params.daysUntilDue && params.daysUntilDue > 0
+      ? Math.floor(params.daysUntilDue)
+      : 7;
+    const invoice: BillingInvoice = {
+      id: generateId('in'),
+      customerId: params.customerId,
+      status: 'open',
+      amountDue: amount,
+      amountPaid: 0,
+      currency: params.currency ?? 'usd',
+      created: current,
+      dueDate: current + daysUntilDue * 24 * 60 * 60,
+      paid: false,
+      attemptCount: 0,
+      nextPaymentAttempt: null,
+    };
+    invoices.set(invoice.id, invoice);
+    return invoice;
   }
 }
