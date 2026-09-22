@@ -146,6 +146,10 @@ export async function createWorkspace(
     resource: 'workspace',
     resourceId: workspace._id.toString(),
   });
+  await UserModel.updateOne(
+    { _id: userId, defaultWorkspaceId: null },
+    { $set: { defaultWorkspaceId: workspace._id } },
+  );
   return toWorkspaceView(workspace.toObject(), 'OWNER');
 }
 export async function getWorkspace(workspaceId: string, userId: string): Promise<WorkspaceView> {

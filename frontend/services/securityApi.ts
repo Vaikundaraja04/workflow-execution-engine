@@ -10,7 +10,6 @@ import type {
   WorkspaceSecurityPolicy,
   ComplianceFramework,
   ComplianceReportData,
-  AuditLogEntry,
 } from '../types/security.types';
 
 // Create axios instance with base URL and interceptors
@@ -28,10 +27,14 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+function workspaceConfig(workspaceId?: string) {
+  return workspaceId ? { headers: { 'X-Workspace-Id': workspaceId } } : undefined;
+}
+
 export const securityApi = {
   // Security Dashboard
-  getSecurityDashboard: async (): Promise<SecurityDashboardData> => {
-    const response = await apiClient.get('/security/dashboard');
+  getSecurityDashboard: async (workspaceId?: string): Promise<SecurityDashboardData> => {
+    const response = await apiClient.get('/security/dashboard', workspaceConfig(workspaceId));
     return response.data;
   },
 
