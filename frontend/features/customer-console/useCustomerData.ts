@@ -2,6 +2,8 @@
 
 import { useCallback } from 'react';
 import { customerApi } from '@/services/customerApi';
+import { billingConsoleApi } from '@/services/billingConsoleApi';
+import type { EntitlementSummaryDTO, PaymentRecordDTO } from '@/services/billingConsoleApi';
 import { useResource, type ResourceState } from '@/hooks/useResource';
 import type {
   AccountDTO,
@@ -30,4 +32,15 @@ export function useInvoices(): ResourceState<InvoiceDTO[]> {
 export function useUsageHistory(days: number): ResourceState<UsageHistoryDTO> {
   const load = useCallback(() => customerApi.getUsageHistory(days), [days]);
   return useResource(load);
+}
+
+const loadEntitlements = () => billingConsoleApi.getEntitlements();
+const loadPayments = () => billingConsoleApi.getPayments();
+
+export function useEntitlements(): ResourceState<EntitlementSummaryDTO> {
+  return useResource(loadEntitlements);
+}
+
+export function usePayments(): ResourceState<PaymentRecordDTO[]> {
+  return useResource(loadPayments);
 }

@@ -1,8 +1,9 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { AuthConfig } from '../../auth/jwt.service.js';
 import { z } from 'zod';
 import { leadService } from '../../services/leadService.js';
+import { leadExportService, LEAD_EXPORT_FORMATS } from '../../services/leadExportService.js';
 import { conversionTrackingService } from '../../services/conversionTrackingService.js';
 import { demoWorkspaceService } from '../../services/demoWorkspaceService.js';
 import { requirePlatformAdmin } from '../middleware/platformAdmin.js';
@@ -42,6 +43,15 @@ const listFiltersSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+
+const exportQuerySchema = z.object({
+  format: z.enum(LEAD_EXPORT_FORMATS).default('csv'),
+  status: z.enum(LEAD_STATUSES).optional(),
+  demoStatus: z.enum(LEAD_DEMO_STATUSES).optional(),
+  source: z.enum(LEAD_SOURCES).optional(),
+  search: z.string().trim().max(160).optional(),
+  limit: z.coerce.number().int().min(1).max(5000).default(1000),
+});
 export function createSalesRouter(config: AuthConfig, requireAuth: RequestHandler): Router {
   const router = Router();
   const admin = [requireAuth, requirePlatformAdmin()] as RequestHandler[];
@@ -59,6 +69,27 @@ export function createSalesRouter(config: AuthConfig, requireAuth: RequestHandle
     try { res.json(await leadService.pipeline()); } catch (error) { next(error); }
   });
 
+  router.get('/leads/export', admin, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = exportQuerySchema.safeParse(req.query);
+      if (!parsed.success) return res.status(400).json(badRequest('Invalid query parameters'));
+      const { format, limit, ...filters } = parsed.data;
+      const result = await leadExportService.export({
+        format,
+        limit,
+        filters,
+        actorUserId: getAuthUser(req).userId,
+      });
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Content-Disposition', 'attachment; filename="' + result.filename + '"');
+      res.setHeader('X-Export-Row-Count', String(result.rowCount));
+      if (result.format === 'csv') {
+        res.send(result.csv ?? '' );
+        return;
+      }
+      res.json({ leads: result.leads ?? [], rowCount: result.rowCount, generatedAt: result.generatedAt });
+    } catch (error) { next(error); }
+  });
   router.get('/leads/:leadId', admin, async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.params.leadId) return res.status(400).json({ error: { code: 'INVALID_LEAD_ID', message: 'Invalid lead ID' } });

@@ -111,6 +111,15 @@ const ERROR_MAP: Record<string, { status: number; code: string; message: string 
   LEAD_NOT_FOUND: { status: 404, code: 'LEAD_NOT_FOUND', message: 'Lead was not found' },
   INVALID_PAYMENT_ID: { status: 400, code: 'INVALID_PAYMENT_ID', message: 'Invalid payment identifier' },
   UNSUPPORTED_PROVIDER_OPERATION: { status: 501, code: 'UNSUPPORTED_PROVIDER_OPERATION', message: 'The billing provider does not support this operation' },
+  // Phase 15: SaaS Revenue Launch & Customer Acquisition Platform
+  ALREADY_ON_PACKAGE: { status: 409, code: 'ALREADY_ON_PACKAGE', message: 'The workspace is already on this package' },
+  CHECKOUT_NOT_SETTLED: { status: 402, code: 'CHECKOUT_NOT_SETTLED', message: 'The payment has not settled yet' },
+  ONBOARDING_STEP_NOT_FOUND: { status: 404, code: 'ONBOARDING_STEP_NOT_FOUND', message: 'Unknown onboarding step' },
+  ONBOARDING_NOT_STARTED: { status: 404, code: 'ONBOARDING_NOT_STARTED', message: 'The onboarding wizard has not been started' },
+  ONBOARDING_INCOMPLETE: { status: 409, code: 'ONBOARDING_INCOMPLETE', message: 'The required onboarding steps are not complete' },
+  ONBOARDING_STEP_REQUIRED: { status: 400, code: 'ONBOARDING_STEP_REQUIRED', message: 'This onboarding step cannot be skipped' },
+  EMAIL_TEMPLATE_NOT_FOUND: { status: 404, code: 'EMAIL_TEMPLATE_NOT_FOUND', message: 'Unknown notification template' },
+  INVALID_WEBHOOK_SIGNATURE: { status: 400, code: 'INVALID_WEBHOOK_SIGNATURE', message: 'Webhook signature verification failed' },
 };
 
 type JsonSyntaxError = SyntaxError & {

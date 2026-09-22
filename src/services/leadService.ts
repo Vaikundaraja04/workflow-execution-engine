@@ -85,6 +85,7 @@ export interface LeadRow {
   updatedAt: Date;
   score: LeadScore;
   nextAction: string;
+  followUpStatus: LeadFollowUpStatus;
 }
 
 export interface PipelineStage {
@@ -147,6 +148,27 @@ const INTEREST_SCORE: Record<LeadInterest, number> = {
   ENTERPRISE: 100,
   NOT_SURE: 40,
 };
+
+export type LeadFollowUpStatus = 'overdue' | 'due' | 'scheduled' | 'none';
+
+const FOLLOW_UP_DUE_DAYS = 3;
+const FOLLOW_UP_OVERDUE_DAYS = 7;
+
+/**
+ * Follow-up state sales works from: closed leads need nothing, and an open lead
+ * is scheduled, due or overdue against the last touch (or capture) date.
+ */
+export function followUpStatusFor(
+  lead: Pick<ILead, 'status' | 'lastContactedAt' | 'capturedAt'>,
+  now: Date = new Date(),
+): LeadFollowUpStatus {
+  if (lead.status === 'WON' || lead.status === 'LOST') return 'none';
+  const reference = lead.lastContactedAt ?? lead.capturedAt;
+  const days = (now.getTime() - new Date(reference).getTime()) / (24 * 60 * 60 * 1000);
+  if (days >= FOLLOW_UP_OVERDUE_DAYS) return 'overdue';
+  if (days >= FOLLOW_UP_DUE_DAYS) return 'due';
+  return 'scheduled';
+}
 
 const DEMO_SCORE: Record<LeadDemoStatus, number> = {
   NONE: 30,
@@ -232,6 +254,7 @@ export function toLeadRow(lead: ILead): LeadRow {
     updatedAt: lead.updatedAt,
     score: scoreLead(lead),
     nextAction: nextActionFor(lead),
+    followUpStatus: followUpStatusFor(lead),
   };
 }
 
@@ -298,6 +321,26 @@ export class LeadService {
     return { lead: toLeadDetail(lead), duplicateOf: existing ? existing._id.toString() : null };
   }
 
+  /** Shared filter translation for the sales board and the CRM export. */
+  private buildQuery(filters: LeadListFilters): Record<string, unknown> {
+    const query: Record<string, unknown> = {};
+    if (filters.status) query.status = filters.status;
+    if (filters.demoStatus) query.demoStatus = filters.demoStatus;
+    if (filters.source) query.source = filters.source;
+    if (filters.search) {
+      const pattern = new RegExp(escapeRegExp(filters.search.trim()), 'i');
+      query.$or = [{ company: pattern }, { contactName: pattern }, { contactEmail: pattern }];
+    }
+    return query;
+  }
+
+  /** Full pipeline fetch for the CRM export - not capped by board pagination. */
+  async exportRows(filters: LeadListFilters = {}, limit = 1000): Promise<LeadRow[]> {
+    const capped = Number.isFinite(limit) && limit > 0 ? Math.min(5000, Math.floor(limit)) : 1000;
+    const documents = await LeadModel.find(this.buildQuery(filters)).sort({ createdAt: -1 }).limit(capped);
+    return documents.map(toLeadRow);
+  }
+
   /** Sales list with filters plus the pipeline roll-up the board renders. */
   async list(filters: LeadListFilters = {}): Promise<LeadListResult> {
     const limit = Number.isFinite(filters.limit) && filters.limit && filters.limit > 0
@@ -307,14 +350,7 @@ export class LeadService {
       ? Math.floor(filters.offset)
       : 0;
 
-    const query: Record<string, unknown> = {};
-    if (filters.status) query.status = filters.status;
-    if (filters.demoStatus) query.demoStatus = filters.demoStatus;
-    if (filters.source) query.source = filters.source;
-    if (filters.search) {
-      const pattern = new RegExp(escapeRegExp(filters.search.trim()), 'i');
-      query.$or = [{ company: pattern }, { contactName: pattern }, { contactEmail: pattern }];
-    }
+    const query = this.buildQuery(filters);
 
     const [documents, total, pipeline] = await Promise.all([
       LeadModel.find(query).sort({ createdAt: -1 }).skip(offset).limit(limit),

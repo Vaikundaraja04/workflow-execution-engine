@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { MarketingShell } from '@/features/marketing/components/MarketingShell';
 import { CallToAction, FeatureGrid, MarketingHero } from '@/features/marketing/components/MarketingSections';
+import { LivePackageMatrix } from '@/features/marketing/components/LivePackageMatrix';
 
 const FEATURES = [
   {
@@ -50,6 +51,19 @@ export default function FeaturesPage() {
         description="The platform combines a durable workflow engine with an AI layer, agent runtime and the controls operations teams need to run them."
       />
       <FeatureGrid features={FEATURES} />
+
+      <section
+        className="mx-auto max-w-6xl px-4 pb-12 sm:px-6 lg:px-8"
+        aria-label="Package comparison"
+      >
+        <h2 className="text-lg font-semibold text-slate-900">What each package includes</h2>
+        <p className="mt-1 mb-6 text-sm text-slate-600">
+          Limits and support levels are read live from the sellable catalog, so this matrix always
+          matches what checkout charges.
+        </p>
+        <LivePackageMatrix />
+      </section>
+
       <CallToAction
         title="See the platform with your own data"
         description="Create a workspace, publish a workflow and watch the execution trail."

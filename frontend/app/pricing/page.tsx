@@ -1,72 +1,90 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import { useAuthStore } from '@/stores/authStore';
 import { MarketingShell } from '@/features/marketing/components/MarketingShell';
 import { CallToAction, MarketingHero } from '@/features/marketing/components/MarketingSections';
-import { usePlans } from '@/features/customer-console/useCustomerData';
-import { formatPrice } from '@/features/customer-console/components/PlanComparison';
-import { formatBytes } from '@/features/customer-console/components/UsageDashboard';
+import {
+  PackageCards,
+  UpgradeDeltas,
+} from '@/features/marketing/components/PackageCatalog';
+import { useResource } from '@/hooks/useResource';
+import { marketingApi } from '@/services/marketingApi';
+import type { MarketingPackageId, PlanComparisonDTO } from '@/services/marketingApi';
 import { Loading } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
 
+const COMPARISON_PAIRS: Array<{ from: MarketingPackageId; to: MarketingPackageId; label: string }> = [
+  { from: 'STARTER', to: 'BUSINESS', label: 'Starter to Business' },
+  { from: 'BUSINESS', to: 'ENTERPRISE', label: 'Business to Enterprise' },
+];
+
+const loadPricing = async () => {
+  const catalog = await marketingApi.getPlans();
+  const comparisons = await Promise.all(
+    COMPARISON_PAIRS.map(async (pair) => {
+      try {
+        return { label: pair.label, comparison: await marketingApi.comparePlans(pair.from, pair.to) };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return {
+    catalog,
+    comparisons: comparisons.filter(
+      (entry): entry is { label: string; comparison: PlanComparisonDTO } => entry !== null,
+    ),
+  };
+};
+
 export default function PricingPage() {
-  const plans = usePlans();
+  const pricing = useResource(loadPricing);
+  const { isAuthenticated } = useAuthStore();
 
   return (
     <MarketingShell>
       <MarketingHero
         eyebrow="Pricing"
         title="Plans priced against real limits"
-        description="Each plan sets workflow, execution, member, API key, webhook and storage limits. The catalog below is served live from the billing service."
+        description="Every package is served live from the billing catalog: workflow, execution, AI, agent and storage limits, the support level and the entitlements it unlocks."
       />
 
-      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8" aria-label="Plan catalog">
-        {plans.isLoading ? (
+      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8" aria-label="Package catalog">
+        {pricing.isLoading ? (
           <Loading message="Loading plans..." />
-        ) : plans.error || !plans.data ? (
+        ) : pricing.error || !pricing.data ? (
           <ErrorState
             title="Could not load the plan catalog"
-            message={plans.error?.message}
-            onRetry={plans.reload}
+            message={pricing.error?.message}
+            onRetry={pricing.reload}
           />
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {plans.data.plans.map((plan) => (
-              <div
-                key={plan.id}
-                className="flex flex-col justify-between rounded-xl border border-slate-200 p-5"
-              >
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">{plan.name}</h2>
-                  <p className="mt-1 text-sm text-slate-600">{plan.description}</p>
-                  <p className="mt-4 text-2xl font-semibold text-slate-900">
-                    {formatPrice(plan.priceMonthly)}
-                    <span className="text-sm font-normal text-slate-500">/mo</span>
-                  </p>
-                  <ul className="mt-4 space-y-1.5 text-sm text-slate-600">
-                    <li>{plan.limits.workflows.toLocaleString()} workflows</li>
-                    <li>{plan.limits.executionsPerMonth.toLocaleString()} executions / month</li>
-                    <li>{plan.limits.members.toLocaleString()} members</li>
-                    <li>{plan.limits.apiKeys.toLocaleString()} API keys</li>
-                    <li>{formatBytes(plan.limits.storageBytes)} storage</li>
-                  </ul>
-                </div>
-                <Link
-                  href="/register"
-                  className="mt-6 rounded-lg bg-emerald-600 px-3 py-2 text-center text-sm font-medium text-white transition-colors hover:bg-emerald-700"
-                >
-                  Start with {plan.name}
-                </Link>
-              </div>
-            ))}
-          </div>
+          <PackageCards
+            plans={pricing.data.catalog.plans}
+            freeTier={pricing.data.catalog.freeTier}
+            authenticated={isAuthenticated}
+          />
         )}
       </section>
 
+      {pricing.data && pricing.data.comparisons.length > 0 ? (
+        <section
+          className="mx-auto max-w-6xl px-4 pb-12 sm:px-6 lg:px-8"
+          aria-label="Upgrade comparison"
+        >
+          <h2 className="text-lg font-semibold text-slate-900">What changes when you grow</h2>
+          <p className="mt-1 mb-6 text-sm text-slate-600">
+            The price delta, new entitlements and higher limits between packages, straight from the
+            catalog comparison.
+          </p>
+          <UpgradeDeltas comparisons={pricing.data.comparisons} />
+        </section>
+      ) : null}
+
       <CallToAction
         title="Start on the free plan"
-        description="Upgrade, downgrade or cancel from the customer console whenever the plan stops fitting."
+        description="Upgrade, downgrade or cancel from the billing console whenever the plan stops fitting."
       />
     </MarketingShell>
   );

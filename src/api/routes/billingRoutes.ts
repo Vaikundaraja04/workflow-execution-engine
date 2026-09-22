@@ -1,8 +1,6 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { createAuditLog } from '../../services/auditService.js';
-import { SubscriptionModel } from '../../models/SubscriptionModel.js';
-import { Types } from 'mongoose';
 import { PlanModel, ensureDefaultPlans } from '../../models/PlanModel.js';
 import type { SubscriptionStatus } from '../../models/SubscriptionModel.js';
 import type { SubscriptionPlan } from '../../models/SubscriptionModel.js';
@@ -11,6 +9,7 @@ import { getAuthUser } from '../../auth/auth.middleware.js';
 import { requirePermission, getWorkspaceContext } from '../middleware/requirePermission.js';
 import { requireActiveTenant } from '../middleware/requireEntitlement.js';
 import { createBillingProvider } from '../../services/billing/billingProviderRegistry.js';
+import { billingWebhookService } from '../../services/billingWebhookService.js';
 import { z } from 'zod';
 
 /**
@@ -19,31 +18,6 @@ import { z } from 'zod';
  */
 
 const billingWebhookRouter = Router();
-
-function normalizeBillingEventType(type: string): string {
-  switch (type) {
-    case 'customer.subscription.created':
-    case 'subscription.authenticated':
-      return 'subscription.created';
-    case 'customer.subscription.updated':
-    case 'subscription.updated':
-    case 'subscription.activated':
-    case 'subscription.charged':
-    case 'subscription.paused':
-    case 'subscription.resumed':
-      return 'subscription.updated';
-    case 'customer.subscription.deleted':
-    case 'subscription.cancelled':
-    case 'subscription.halted':
-    case 'subscription.completed':
-      return 'subscription.cancelled';
-    case 'invoice.payment_failed':
-    case 'payment.failed':
-      return 'payment.failed';
-    default:
-      return type;
-  }
-}
 
 function rawRequestBody(req: Request): string {
   const raw = (req as Request & { rawBody?: string }).rawBody;
@@ -58,222 +32,24 @@ function webhookSignature(req: Request): string {
 
 billingWebhookRouter.post('/webhook', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const provider = createBillingProvider(
-      typeof req.query.provider === 'string' ? req.query.provider : undefined,
-    );
-
-    let event: { type: string; data: Record<string, unknown> };
-    try {
-      event = await provider.handleWebhook(rawRequestBody(req), webhookSignature(req));
-    } catch (error) {
-      if (
-        error instanceof Error
-        && (error.message === 'INVALID_WEBHOOK_SIGNATURE' || error.message === 'INVALID_WEBHOOK_PAYLOAD')
-      ) {
-        return res.status(400).json({
-          error: { code: error.message, message: 'Webhook verification failed' },
-        });
-      }
-      throw error;
-    }
-
-    const { type, data } = event;
-
-    if (!type || typeof type !== 'string' || !data) {
+    const result = await billingWebhookService.process({
+      provider: typeof req.query.provider === 'string' ? req.query.provider : undefined,
+      rawBody: rawRequestBody(req),
+      signature: webhookSignature(req),
+    });
+    res.status(200).json({ received: true, ...result });
+  } catch (error) {
+    if (
+      error instanceof Error
+      && (error.message === 'INVALID_WEBHOOK_SIGNATURE' || error.message === 'INVALID_WEBHOOK_PAYLOAD')
+    ) {
       return res.status(400).json({
-        error: { code: 'INVALID_WEBHOOK_PAYLOAD', message: 'Invalid webhook payload' },
+        error: { code: error.message, message: 'Webhook verification failed' },
       });
     }
-
-    switch (normalizeBillingEventType(type)) {
-      case 'subscription.created':
-        await handleSubscriptionCreated(data);
-        break;
-      case 'subscription.updated':
-        await handleSubscriptionUpdated(data);
-        break;
-      case 'subscription.cancelled':
-        await handleSubscriptionCancelled(data);
-        break;
-      case 'payment.failed':
-        await handlePaymentFailed(data);
-        break;
-      default:
-        console.log(`Unhandled billing webhook event: ${type}`);
-    }
-
-    res.status(200).json({ received: true });
-  } catch (err) {
-    next(err);
+    next(error);
   }
 });
-
-async function handleSubscriptionCreated(data: any) {
-  const {
-    id: externalSubscriptionId,
-    customer,
-    status,
-    current_period_start: currentPeriodStart,
-    current_period_end: currentPeriodEnd,
-    trial_end: trialEndsAt,
-    metadata = {},
-  } = data;
-
-  const externalCustomerId = customer?.id || customer;
-
-  let subscription = await SubscriptionModel.findOne({ externalCustomerId });
-  if (!subscription) {
-    const workspaceId = metadata.workspaceId || metadata.workspace_id;
-    if (workspaceId) {
-      subscription = await SubscriptionModel.create({
-        workspaceId: new Types.ObjectId(workspaceId),
-        plan: (metadata.plan as SubscriptionPlan) || 'FREE',
-        status: mapBillingStatusToInternal(status) ?? 'ACTIVE',
-        billingProvider: 'mock',
-        externalCustomerId,
-        externalSubscriptionId,
-        currentPeriodStart: new Date((currentPeriodStart || Date.now() / 1000) * 1000),
-        currentPeriodEnd: new Date((currentPeriodEnd || (Date.now() / 1000 + 30 * 86400)) * 1000),
-        ...(trialEndsAt ? { trialEndsAt: new Date(trialEndsAt * 1000) } : {}),
-      });
-    } else {
-      console.warn(`No subscription found for externalCustomerId: ${externalCustomerId}`);
-      return;
-    }
-  } else {
-    subscription.externalSubscriptionId = externalSubscriptionId;
-    subscription.status = mapBillingStatusToInternal(status) ?? subscription.status;
-    if (currentPeriodStart) subscription.currentPeriodStart = new Date(currentPeriodStart * 1000);
-    if (currentPeriodEnd) subscription.currentPeriodEnd = new Date(currentPeriodEnd * 1000);
-    if (trialEndsAt !== undefined) {
-      subscription.trialEndsAt = trialEndsAt ? new Date(trialEndsAt * 1000) : null;
-    }
-    await subscription.save();
-  }
-
-  await createAuditLog({
-    action: 'SUBSCRIPTION_CREATED',
-    workspaceId: subscription.workspaceId,
-    resource: 'subscription',
-    resourceId: subscription._id.toString(),
-    metadata: {
-      externalSubscriptionId,
-      externalCustomerId,
-      status: subscription.status,
-      plan: subscription.plan,
-    },
-  });
-}
-
-async function handleSubscriptionUpdated(data: any) {
-  const {
-    id: externalSubscriptionId,
-    status,
-    current_period_start: currentPeriodStart,
-    current_period_end: currentPeriodEnd,
-    trial_end: trialEndsAt,
-    metadata = {},
-  } = data;
-
-  const subscription = await SubscriptionModel.findOne({ externalSubscriptionId });
-  if (!subscription) {
-    console.warn(`Subscription not found for externalSubscriptionId: ${externalSubscriptionId}`);
-    return;
-  }
-
-  subscription.status = mapBillingStatusToInternal(status) ?? subscription.status;
-  if (currentPeriodStart) subscription.currentPeriodStart = new Date(currentPeriodStart * 1000);
-  if (currentPeriodEnd) subscription.currentPeriodEnd = new Date(currentPeriodEnd * 1000);
-  if (trialEndsAt !== undefined && trialEndsAt !== null) {
-    subscription.trialEndsAt = new Date(trialEndsAt * 1000);
-  } else if (trialEndsAt === null) {
-    subscription.trialEndsAt = null;
-  }
-
-  await subscription.save();
-
-  await createAuditLog({
-    action: 'SUBSCRIPTION_CHANGED',
-    workspaceId: subscription.workspaceId,
-    resource: 'subscription',
-    resourceId: subscription._id.toString(),
-    metadata: {
-      externalSubscriptionId,
-      status: subscription.status,
-      plan: subscription.plan,
-    },
-  });
-}
-
-async function handleSubscriptionCancelled(data: any) {
-  const {
-    id: externalSubscriptionId,
-  } = data;
-
-  const subscription = await SubscriptionModel.findOne({ externalSubscriptionId });
-  if (!subscription) {
-    console.warn(`Subscription not found for externalSubscriptionId: ${externalSubscriptionId}`);
-    return;
-  }
-
-  subscription.status = 'CANCELLED';
-  await subscription.save();
-
-  await createAuditLog({
-    action: 'SUBSCRIPTION_CANCELLED',
-    workspaceId: subscription.workspaceId,
-    resource: 'subscription',
-    resourceId: subscription._id.toString(),
-    metadata: {
-      externalSubscriptionId,
-    },
-  });
-}
-
-async function handlePaymentFailed(data: any) {
-  const {
-    id: externalSubscriptionId,
-  } = data;
-
-  const subscription = await SubscriptionModel.findOne({ externalSubscriptionId });
-  if (!subscription) {
-    console.warn(`Subscription not found for externalSubscriptionId: ${externalSubscriptionId}`);
-    return;
-  }
-
-  if (subscription.status !== 'PAST_DUE') {
-    subscription.status = 'PAST_DUE';
-    await subscription.save();
-  }
-
-  await createAuditLog({
-    action: 'PAYMENT_FAILED',
-    workspaceId: subscription.workspaceId,
-    resource: 'subscription',
-    resourceId: subscription._id.toString(),
-    metadata: {
-      externalSubscriptionId,
-    },
-  });
-}
-
-// Helper to map billing provider subscription status to our internal status
-function mapBillingStatusToInternal(billingStatus: string): SubscriptionStatus | null {
-  switch (billingStatus) {
-    case 'active':
-      return 'ACTIVE';
-    case 'trialing':
-      return 'TRIALING';
-    case 'past_due':
-      return 'PAST_DUE';
-    case 'canceled':
-      return 'CANCELLED';
-    case 'unpaid':
-      return 'PAST_DUE';
-    default:
-      return null;
-  }
-}
 
 export function createBillingRouter() {
   const router = Router();

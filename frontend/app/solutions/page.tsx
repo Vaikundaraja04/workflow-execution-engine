@@ -1,57 +1,47 @@
+'use client';
+
 import * as React from 'react';
 import { MarketingShell } from '@/features/marketing/components/MarketingShell';
-import { CallToAction, FeatureGrid, MarketingHero } from '@/features/marketing/components/MarketingSections';
+import { CallToAction, MarketingHero } from '@/features/marketing/components/MarketingSections';
+import { SolutionCatalog } from '@/features/marketing/components/SolutionCatalog';
+import { useResource } from '@/hooks/useResource';
+import { marketingApi } from '@/services/marketingApi';
+import { Loading } from '@/components/ui/Loading';
+import { ErrorState } from '@/components/ui/ErrorState';
 
-const SOLUTIONS = [
-  {
-    title: 'Operations teams',
-    description:
-      'Model approval and hand-off steps as workflows, schedule them, and monitor failures from the execution console and dead-letter queue.',
-  },
-  {
-    title: 'Platform engineering',
-    description:
-      'Run the engine in your own deployment, manage API keys and webhooks per workspace, and integrate through the REST API.',
-  },
-  {
-    title: 'AI and automation teams',
-    description:
-      'Generate workflow drafts with AI, publish reviewed versions, and give agents scoped tools with run history per agent.',
-  },
-  {
-    title: 'Security and compliance',
-    description:
-      'Enforce role-based access, workspace isolation and governance policies, and export the hash-chained audit log for review.',
-  },
-  {
-    title: 'Customer-facing SaaS',
-    description:
-      'Offer plans with metered limits, track usage against entitlements and let customers manage their own subscription.',
-  },
-  {
-    title: 'Internal platform teams',
-    description:
-      'Give product teams self-serve workspaces while platform operators keep a customer-level view of subscriptions and usage.',
-  },
-];
-
-export const metadata = {
-  title: 'Solutions — Workflow Execution Engine',
-  description: 'How teams use the workflow engine, AI layer and governance controls.',
-};
+const loadSolutions = () => marketingApi.getSolutions();
 
 export default function SolutionsPage() {
+  const solutions = useResource(loadSolutions);
+
   return (
     <MarketingShell>
       <MarketingHero
         eyebrow="Solutions"
-        title="Built for the teams that run automation"
-        description="From operations workflows to customer-facing automation products, the engine covers execution, oversight and billing in one place."
+        title="Start from a solution, adapt it to your process"
+        description="Every solution ships real workflows and agents you can install into your workspace: filter by industry or by the package it is sized for."
       />
-      <FeatureGrid features={SOLUTIONS} />
+
+      <section
+        className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8"
+        aria-label="Solution catalog"
+      >
+        {solutions.isLoading ? (
+          <Loading message="Loading solutions..." />
+        ) : solutions.error || !solutions.data ? (
+          <ErrorState
+            title="Could not load the solution catalog"
+            message={solutions.error?.message}
+            onRetry={solutions.reload}
+          />
+        ) : (
+          <SolutionCatalog solutions={solutions.data} />
+        )}
+      </section>
+
       <CallToAction
-        title="Start with a workspace"
-        description="Bring one workflow, then grow into agents, governance and metered plans."
+        title="Install a solution in minutes"
+        description="Pick a package, install the workflows and agents, then make the process yours."
       />
     </MarketingShell>
   );

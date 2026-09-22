@@ -12,6 +12,7 @@ const CUSTOMER_NAV = [
   { href: '/customer', label: 'Overview' },
   { href: '/customer/subscription', label: 'Subscription' },
   { href: '/customer/usage', label: 'Usage' },
+  { href: '/customer/billing', label: 'Billing' },
   { href: '/customer/settings', label: 'Settings' },
 ];
 

@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+﻿import { Types } from 'mongoose';
 import type { AuthConfig } from '../auth/jwt.service.js';
 import { issueTokens, registerUser } from '../auth/auth.service.js';
 import type { IssuedTokens } from '../auth/auth.service.js';
@@ -15,6 +15,7 @@ import { usageMeteringService } from './usageMeteringService.js';
 import { createAuditLog } from './auditService.js';
 import { productPackagingService } from './productPackagingService.js';
 import { customerHealthService } from './customerHealthService.js';
+import { emailNotificationService } from './notifications/emailNotificationService.js';
 import type { WorkflowDefinition } from '../types/workflow.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -172,6 +173,21 @@ export class SaasOnboardingService {
       },
       ipAddress: input.ipAddress,
       userAgent: input.userAgent,
+    });
+
+    // Phase 15.6 - welcome email (never blocks signup).
+    await emailNotificationService.sendSafely({
+      to: user.email,
+      template: 'WELCOME',
+      workspaceId: workspaceId.toString(),
+      userId: user._id.toString(),
+      actorUserId: user._id.toString(),
+      variables: {
+        contactName: input.name?.trim() || user.email,
+        companyName: input.companyName.trim(),
+        workspaceName: workspaceView.name,
+        onboardingUrl: `${process.env.APP_BASE_URL ?? 'http://localhost:3000'}/customer/onboarding`,
+      },
     });
 
     return {

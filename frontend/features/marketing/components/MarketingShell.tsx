@@ -5,6 +5,8 @@ const NAV_LINKS = [
   { href: '/features', label: 'Features' },
   { href: '/solutions', label: 'Solutions' },
   { href: '/pricing', label: 'Pricing' },
+  { href: '/demo', label: 'Demo' },
+  { href: '/contact-sales', label: 'Contact sales' },
   { href: '/enterprise', label: 'Enterprise' },
   { href: '/documentation', label: 'Documentation' },
 ];
@@ -13,6 +15,8 @@ const FOOTER_LINKS = [
   { href: '/pricing', label: 'Pricing' },
   { href: '/features', label: 'Features' },
   { href: '/solutions', label: 'Solutions' },
+  { href: '/demo', label: 'Demo' },
+  { href: '/contact-sales', label: 'Contact sales' },
   { href: '/enterprise', label: 'Enterprise' },
   { href: '/documentation', label: 'Documentation' },
   { href: '/login', label: 'Sign in' },

@@ -401,9 +401,12 @@ describe('Phase 14 customer entitlement and checkout endpoints', () => {
     await request.post('/api/v1/billing/checkout/verify').send({ paymentId: 'pay_test' }).expect(401);
 
     const verified = await scoped(request.post('/api/v1/billing/checkout/verify'))
-      .send({ paymentId: 'pay_test_123' })
+      .send({ paymentId: 'pay_test_123', packageId: 'STARTER' })
       .expect(200);
     expect(verified.body.payment.id).toBe('pay_test_123');
+    expect(verified.body.activated).toBe(true);
+    expect(verified.body.subscription.plan).toBe('STARTER');
+    expect(verified.body.entitlements.plan).toBe('STARTER');
 
     await scoped(request.post('/api/v1/billing/checkout/verify')).send({}).expect(400);
   });

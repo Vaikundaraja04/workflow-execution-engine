@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document, Types } from 'mongoose';
+﻿import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export const AUDIT_ACTIONS = [
   'AUTH_REGISTERED',
@@ -186,6 +186,20 @@ export const AUDIT_ACTIONS = [
   'LEAD_DEMO_LINKED',
   'SOLUTION_INSTALLED',
   'CUSTOMER_HEALTH_EVALUATED',
+  // Phase 15: SaaS Revenue Launch & Customer Acquisition Platform
+  'CHECKOUT_STARTED',
+  'CHECKOUT_COMPLETED',
+  'BILLING_WEBHOOK_RECEIVED',
+  'ONBOARDING_STARTED',
+  'ONBOARDING_STEP_COMPLETED',
+  'ONBOARDING_COMPLETED',
+  'LEAD_EXPORTED',
+  'EMAIL_SENT',
+  'EMAIL_FAILED',
+  'TRIAL_STARTED',
+  'TRIAL_CONVERTED',
+  'CUSTOMER_EXPANDED',
+  'CUSTOMER_CHURNED',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

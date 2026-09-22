@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 import type { Request, RequestHandler } from 'express';
@@ -33,6 +33,8 @@ import { createSalesRouter } from './routes/salesRoutes.js';
 import { createCustomerHealthRouter } from './routes/customerHealthRoutes.js';
 import { createEntitlementRouter } from './routes/entitlementRoutes.js';
 import { createCheckoutRouter } from './routes/checkoutRoutes.js';
+import { createOnboardingRouter } from './routes/onboardingRoutes.js';
+import { createBusinessAnalyticsRouter } from './routes/businessAnalyticsRoutes.js';
 import { createTemplateRouter } from './routes/templateRoutes.js';
 import { createMarketplaceRouter } from './routes/marketplaceRoutes.js';
 import { createGovernanceRouter } from './routes/governanceRoutes.js';
@@ -171,13 +173,15 @@ export function createApp(options: AppOptions) {
   app.use('/api/v1/usage', requireAuth, createUsageRouter());
   app.use('/api/v1/demo', createDemoRouter(options.auth, requireAuth, signupLimiter));
   // Phase 14 - Go-to-market marketing site endpoints
-  
   app.use('/api/v1/solutions', createSolutionRoutes(requireAuth));
   app.use('/api/v1/sales', createSalesRouter(options.auth, requireAuth));
   app.use('/api/v1/customer-health', createCustomerHealthRouter(requireAuth));
   app.use('/api/v1/entitlements', requireAuth, createEntitlementRouter(requireAuth));
+  app.use('/api/v1/marketing', createMarketingRouter(signupLimiter));
+  // Phase 15 - SaaS revenue launch: checkout, onboarding wizard and business analytics
   app.use('/api/v1/billing', requireAuth, createCheckoutRouter(requireAuth));
-app.use('/api/v1/marketing', createMarketingRouter(signupLimiter));
+  app.use('/api/v1/onboarding', createOnboardingRouter(requireAuth));
+  app.use('/api/v1/analytics/business', requireAuth, createBusinessAnalyticsRouter(requireAuth));
   app.use('/api/v1', requireAuth, createAPIKeyRouter());
   app.use('/api/v1/subscription', requireAuth, createSubscriptionRouter());
   app.use(
