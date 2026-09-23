@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { sessionService } from '../../services/sessionService.js';
 import { mfaService } from '../../services/mfaService.js';
+import { createAuditLog } from '../../services/auditService.js';
 import { WorkspaceSecurityPolicyModel } from '../../models/WorkspaceSecurityPolicyModel.js';
 import { requirePermission, getWorkspaceContext } from '../middleware/requirePermission.js';
 import { getAuthUser } from '../../auth/auth.middleware.js';
@@ -19,9 +20,8 @@ export function createSessionRouter(): Router {
     requirePermission('SECURITY_READ'),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const { workspaceId } = getWorkspaceContext(req);
-        const { userId } = getAuthUser(req);
-        const sessions = await sessionService.getUserSessions(userId);
+        const { userId, sessionId } = getAuthUser(req);
+        const sessions = await sessionService.listActiveSessions(userId, sessionId);
         res.json(sessions);
       } catch (error) {
         next(error);
@@ -32,29 +32,32 @@ export function createSessionRouter(): Router {
   /**
    * @route POST /api/v1/sessions/:id/revoke
    * @desc Revoke a specific session
-   * @access Private
+   * @access Private (requires SECURITY_MANAGE)
    */
   router.post(
     '/:id/revoke',
-    requirePermission('PRIVACY_MANAGE'), // Note: Using PRIVACY_MANAGE as it's related to user data/sessions
+    requirePermission('SECURITY_MANAGE'),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const { workspaceId } = getWorkspaceContext(req);
         const { userId } = getAuthUser(req);
         const id = req.params.id as string;
         const { reason } = req.body;
 
-        const session = await sessionService.revokeSession(
-          id,
-          userId,
-          reason || 'User initiated remote logout'
-        );
+        const revoked = await sessionService.revokeSessionById(userId, id);
 
-        if (!session) {
+        if (!revoked) {
           return res.status(404).json({ error: 'Session not found' });
         }
 
-        res.json(session);
+        await createAuditLog({
+          action: 'SESSION_REVOKED',
+          userId,
+          resource: 'session',
+          resourceId: id,
+          metadata: { reason: reason || 'User initiated remote logout' },
+        });
+
+        res.json({ revoked: true, sessionId: id });
       } catch (error) {
         next(error);
       }
@@ -64,21 +67,28 @@ export function createSessionRouter(): Router {
   /**
    * @route POST /api/v1/sessions/revoke-others
    * @desc Revoke all other active sessions for current user
-   * @access Private
+   * @access Private (requires SECURITY_MANAGE)
    */
   router.post(
     '/revoke-others',
-    requirePermission('PRIVACY_MANAGE'), // Note: Using PRIVACY_MANAGE as it's related to user data/sessions
+    requirePermission('SECURITY_MANAGE'),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const { workspaceId } = getWorkspaceContext(req);
-        const { userId } = getAuthUser(req);
-        const currentToken = req.headers.authorization?.replace('Bearer ', '') || '';
-        const count = await sessionService.revokeAllOtherSessions(
+        const { userId, sessionId } = getAuthUser(req);
+        if (!sessionId) {
+          return res.status(400).json({
+            error: { code: 'INVALID_REQUEST', message: 'The current session could not be identified' },
+          });
+        }
+
+        const count = await sessionService.revokeOtherSessions(userId, sessionId);
+
+        await createAuditLog({
+          action: 'SESSION_REVOKED',
           userId,
-          currentToken,
-          'Revoked all other sessions'
-        );
+          resource: 'session',
+          metadata: { reason: 'Revoked all other sessions', count },
+        });
 
         res.json({ message: `Successfully revoked ${count} other sessions`, count });
       } catch (error) {

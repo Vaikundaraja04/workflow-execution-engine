@@ -1,12 +1,35 @@
 import { Types } from 'mongoose';
 import crypto from 'crypto';
 import { UserSessionModel, type IUserSession } from '../models/UserSessionModel.js';
+import { RefreshTokenModel } from '../models/RefreshTokenModel.js';
 import { createAuditLog } from './auditService.js';
 
 export interface DeviceInfo {
   browser: string;
   os: string;
   deviceType: 'DESKTOP' | 'MOBILE' | 'TABLET' | 'UNKNOWN';
+}
+
+/**
+ * Read model for the Active Session Manager.
+ *
+ * Sessions are the refresh-token families issued by the auth layer: they are the
+ * only store that both carries device context and can actually be revoked, so an
+ * access token's `sessionId` claim resolves directly to `_id` here.
+ */
+export interface ActiveSessionView {
+  _id: string;
+  userId: string;
+  ipAddress?: string;
+  userAgent?: string;
+  browser: string;
+  os: string;
+  deviceType: DeviceInfo['deviceType'];
+  isActive: boolean;
+  isCurrent: boolean;
+  lastActiveAt: string;
+  expiresAt: string;
+  createdAt: string;
 }
 
 /**
@@ -103,7 +126,11 @@ export class SessionService {
   }
 
   /**
-   * List all active, non-revoked sessions for a user
+   * List all active, non-revoked sessions for a user.
+   *
+   * Legacy UserSession store: the auth layer records sessions as refresh-token
+   * families, so nothing writes this collection and it reads empty. The Active
+   * Session Manager uses {@link listActiveSessions} instead.
    */
   public async getUserSessions(userId: string | Types.ObjectId): Promise<IUserSession[]> {
     return UserSessionModel.find({
@@ -176,6 +203,112 @@ export class SessionService {
     });
 
     return result.modifiedCount;
+  }
+
+  /**
+   * List the active sessions (refresh-token families) for a user.
+   */
+  public async listActiveSessions(
+    userId: string | Types.ObjectId,
+    currentSessionId?: string,
+  ): Promise<ActiveSessionView[]> {
+    const userObjectId = new Types.ObjectId(userId.toString());
+    const tokens = await RefreshTokenModel.find({
+      userId: userObjectId,
+      revoked: false,
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: 1 });
+
+    const families = new Map<string, {
+      id: string;
+      createdAt: Date;
+      lastActiveAt: Date;
+      expiresAt: Date;
+      ipAddress?: string;
+      userAgent?: string;
+    }>();
+
+    for (const token of tokens) {
+      const lastActiveAt = token.lastUsedAt ?? token.createdAt;
+      const existing = families.get(token.familyId);
+      if (!existing) {
+        families.set(token.familyId, {
+          id: token.familyId,
+          createdAt: token.createdAt,
+          lastActiveAt,
+          expiresAt: token.expiresAt,
+          ...(token.ipAddress ? { ipAddress: token.ipAddress } : {}),
+          ...(token.userAgent ? { userAgent: token.userAgent } : {}),
+        });
+        continue;
+      }
+      if (lastActiveAt > existing.lastActiveAt) existing.lastActiveAt = lastActiveAt;
+      if (token.expiresAt > existing.expiresAt) existing.expiresAt = token.expiresAt;
+      if (token.ipAddress) existing.ipAddress = token.ipAddress;
+      if (token.userAgent) existing.userAgent = token.userAgent;
+    }
+
+    return [...families.values()]
+      .sort((left, right) => right.lastActiveAt.getTime() - left.lastActiveAt.getTime())
+      .map((family) => {
+        const device = parseUserAgent(family.userAgent);
+        return {
+          _id: family.id,
+          userId: userObjectId.toString(),
+          ...(family.ipAddress ? { ipAddress: family.ipAddress } : {}),
+          ...(family.userAgent ? { userAgent: family.userAgent } : {}),
+          browser: device.browser,
+          os: device.os,
+          deviceType: device.deviceType,
+          isActive: true,
+          isCurrent: family.id === currentSessionId,
+          lastActiveAt: family.lastActiveAt.toISOString(),
+          expiresAt: family.expiresAt.toISOString(),
+          createdAt: family.createdAt.toISOString(),
+        };
+      });
+  }
+
+  /**
+   * Revoke one session (refresh-token family) owned by the user.
+   */
+  public async revokeSessionById(
+    userId: string | Types.ObjectId,
+    sessionId: string,
+  ): Promise<boolean> {
+    const families = await RefreshTokenModel.distinct('familyId', {
+      userId: new Types.ObjectId(userId.toString()),
+      familyId: sessionId,
+      revoked: false,
+    });
+    if (families.length === 0) return false;
+    await RefreshTokenModel.updateMany(
+      { userId: new Types.ObjectId(userId.toString()), familyId: sessionId, revoked: false },
+      { revoked: true },
+    );
+    return true;
+  }
+
+  /**
+   * Revoke every session of the user except the one making the request.
+   */
+  public async revokeOtherSessions(
+    userId: string | Types.ObjectId,
+    currentSessionId: string,
+  ): Promise<number> {
+    const userObjectId = new Types.ObjectId(userId.toString());
+    const families = await RefreshTokenModel.distinct('familyId', {
+      userId: userObjectId,
+      familyId: { $ne: currentSessionId },
+      revoked: false,
+    });
+    if (families.length > 0) {
+      await RefreshTokenModel.updateMany(
+        { userId: userObjectId, familyId: { $in: families }, revoked: false },
+        { revoked: true },
+      );
+    }
+    return families.length;
   }
 
   /**
