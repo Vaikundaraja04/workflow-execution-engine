@@ -7,7 +7,7 @@ Checklist for confirming every fix from `AUDIT_GAP_REPORT.md`. Commands assume r
 - [ ] Backend typecheck: `npm run typecheck` → no errors
 - [ ] Frontend typecheck: `cd frontend; npm run typecheck` → no errors
 - [ ] Backend tests: `npm test` → 107 files / 1078 tests pass
-- [ ] Frontend tests: `cd frontend; npm test` → 21 files / 197 tests pass
+- [ ] Frontend tests: `cd frontend; npm test` → 23 files / 202 tests pass
 - [ ] Frontend build: `cd frontend; npm run build` → succeeds
 - [ ] No stale references remain:
   ```powershell

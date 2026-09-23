@@ -17,6 +17,13 @@ import type {
   CreateReportInput,
 } from '@/types/operations.types';
 
+// The reports API returns MongoDB `_id` (lean queries) rather than `id`,
+// so normalize to guarantee `ReportItem.id` is always populated.
+const normalizeReport = (report: ReportItem & { _id?: string }): ReportItem => ({
+  ...report,
+  id: report.id || report._id || '',
+});
+
 export const operationsApi = {
   // Analytics endpoints
   getOverviewAnalytics: async (workspaceId: string, timeframe = '30d'): Promise<OverviewAnalyticsData> => {
@@ -200,7 +207,7 @@ export const operationsApi = {
       '/api/v1/reports',
       { ...input, workspaceId, userId }
     );
-    return data;
+    return normalizeReport(data);
   },
 
   getReports: async (
@@ -210,7 +217,7 @@ export const operationsApi = {
     const { data } = await apiClient.get('/api/v1/reports', {
       params: { workspaceId, ...filters },
     });
-    return data.reports;
+    return (data.reports as Array<ReportItem & { _id?: string }>).map(normalizeReport);
   },
 
   getReportById: async (
@@ -221,7 +228,7 @@ export const operationsApi = {
       const { data } = await apiClient.get(`/api/v1/reports/${reportId}`, {
         params: { workspaceId },
       });
-      return data;
+      return normalizeReport(data);
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         return null;

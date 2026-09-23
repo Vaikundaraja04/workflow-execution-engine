@@ -1019,10 +1019,9 @@ const PATHS: JsonObject = {
       publicAccess: true,
       requestBody: jsonBody({ email: 'owner@example.com', password: 'correct-horse-battery-staple' }),
       responses: {
-        '201': jsonResponse('Account and personal workspace created', {
-          accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-          refreshToken: 'Yk9kZ0hYQ2Z...',
-          user: { id: '652f1f77bcf86cd799439011', email: 'owner@example.com' },
+        '201': jsonResponse('Account and personal workspace created. Tokens are not issued here; call POST /api/auth/login to authenticate.', {
+          id: '652f1f77bcf86cd799439011',
+          email: 'owner@example.com',
           defaultWorkspaceId: '652f1f77bcf86cd799439012',
         }),
         '400': invalidRequest['400'],

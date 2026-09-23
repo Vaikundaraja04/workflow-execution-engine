@@ -5,6 +5,7 @@ import type { IssuedTokens } from '../auth/auth.service.js';
 import { createWorkspace } from './workspaceService.js';
 import { createWorkflow } from './workflowService.js';
 import { WorkspaceModel } from '../models/WorkspaceModel.js';
+import { UserModel } from '../models/UserModel.js';
 import { TenantAccountModel } from '../models/TenantAccountModel.js';
 import type { TenantStatus } from '../models/TenantAccountModel.js';
 import { CustomerProfileModel } from '../models/CustomerProfileModel.js';
@@ -24,6 +25,13 @@ export const DEFAULT_SIGNUP_TRIAL_DAYS = 14;
 function readSignupTrialDays(): number {
   const raw = Number(process.env.SAAS_TRIAL_DAYS);
   return Number.isFinite(raw) && raw > 0 ? Math.min(90, Math.floor(raw)) : DEFAULT_SIGNUP_TRIAL_DAYS;
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && error.code === 11000;
 }
 
 export interface SignupInput {
@@ -204,14 +212,83 @@ export class SaasOnboardingService {
       tokens,
     };
   }
+  /**
+   * Workspaces created before the SaaS signup flow (or through the standard
+   * auth registration) have no tenant record. Provision a FREE trialing
+   * tenant on first access so the customer console works for them instead of
+   * failing with TENANT_NOT_FOUND.
+   */
+  private async ensureTenantAccount(workspaceIdObj: Types.ObjectId) {
+    const existing = await TenantAccountModel.findOne({ workspaceId: workspaceIdObj });
+    if (existing) return existing;
+
+    const workspace = await WorkspaceModel.findById(workspaceIdObj).select('name ownerId').lean();
+    if (!workspace) throw new Error('TENANT_NOT_FOUND');
+    const owner = await UserModel.findById(workspace.ownerId).select('email').lean();
+
+    const trialDays = readSignupTrialDays();
+    const trialEndsAt = new Date(Date.now() + trialDays * DAY_MS);
+
+    let tenant;
+    try {
+      tenant = await TenantAccountModel.create({
+        workspaceId: workspaceIdObj,
+        ownerUserId: workspace.ownerId,
+        companyName: workspace.name,
+        status: 'TRIALING',
+        plan: 'FREE',
+        region: (process.env.REGION ?? 'us-east-1').trim(),
+        trialEndsAt,
+        demo: false,
+        onboarding: { completed: false, steps: [], startedAt: new Date() },
+      });
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        const concurrent = await TenantAccountModel.findOne({ workspaceId: workspaceIdObj });
+        if (concurrent) return concurrent;
+      }
+      throw error;
+    }
+
+    await CustomerProfileModel.updateOne(
+      { tenantId: workspaceIdObj },
+      {
+        $setOnInsert: {
+          contactName: owner?.email ?? 'Workspace owner',
+          contactEmail: owner?.email ?? 'unknown@example.com',
+          company: workspace.name,
+        },
+      },
+      { upsert: true },
+    ).catch((error) => console.warn('Failed to provision customer profile for legacy workspace', error));
+
+    try {
+      const subscription = await billingService.subscribeWorkspace(workspaceIdObj, 'FREE', undefined, { trialDays });
+      tenant.subscriptionId = subscription?._id ?? null;
+      await tenant.save();
+    } catch (error) {
+      console.warn('Failed to provision default subscription for legacy workspace', error);
+    }
+
+    await createAuditLog({
+      action: 'TENANT_AUTO_PROVISIONED',
+      userId: workspace.ownerId.toString(),
+      workspaceId: workspaceIdObj,
+      resource: 'tenant_account',
+      resourceId: tenant._id.toString(),
+      metadata: { plan: 'FREE', trialDays, reason: 'legacy_workspace' },
+    }).catch((error) => console.warn('Failed to audit tenant auto-provisioning', error));
+
+    return tenant;
+  }
+
   async recordOnboarding(
     workspaceId: Types.ObjectId | string,
     userId: string,
     input: OnboardingInput,
   ): Promise<OnboardingResult> {
     const workspaceIdObj = typeof workspaceId === 'string' ? new Types.ObjectId(workspaceId) : workspaceId;
-    const tenant = await TenantAccountModel.findOne({ workspaceId: workspaceIdObj });
-    if (!tenant) throw new Error('TENANT_NOT_FOUND');
+    const tenant = await this.ensureTenantAccount(workspaceIdObj);
 
     if (input.steps !== undefined) {
       tenant.onboarding.steps = input.steps.filter((step) => typeof step === 'string' && step.length > 0);
@@ -241,14 +318,12 @@ export class SaasOnboardingService {
   }
   async getAccount(workspaceId: Types.ObjectId | string) {
     const workspaceIdObj = typeof workspaceId === 'string' ? new Types.ObjectId(workspaceId) : workspaceId;
-    const [tenant, profile, subscription, usage] = await Promise.all([
-      TenantAccountModel.findOne({ workspaceId: workspaceIdObj }).lean(),
+    const tenant = await this.ensureTenantAccount(workspaceIdObj);
+    const [profile, subscription, usage] = await Promise.all([
       CustomerProfileModel.findOne({ tenantId: workspaceIdObj }).lean(),
       SubscriptionModel.findOne({ workspaceId: workspaceIdObj }).lean(),
       usageMeteringService.getSummary(workspaceIdObj),
     ]);
-
-    if (!tenant) throw new Error('TENANT_NOT_FOUND');
 
     return {
       tenant: {

@@ -166,7 +166,7 @@ A final residual sweep also annotated the remaining plan-vs-code test-file names
 
 ## G. Closing note
 
-With the execution-pipeline fixes (A), API-contract fixes (B), and documentation audit (F), the codebase typechecks, passes its full suites (1078 backend + 197 frontend), and its docs now accurately describe what ships. Remaining items are tracked as engineering risks (R1-R5) rather than docs gaps.
+With the execution-pipeline fixes (A), API-contract fixes (B), and documentation audit (F), the codebase typechecks, passes its full suites (1078 backend + 202 frontend), and its docs now accurately describe what ships. Remaining items are tracked as engineering risks (R1-R5) rather than docs gaps.
 
 
 ---

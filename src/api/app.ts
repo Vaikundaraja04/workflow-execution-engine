@@ -27,6 +27,7 @@ import { createSaasRouter } from './routes/saasRoutes.js';
 import { createUsageRouter } from './routes/usageRoutes.js';
 import { createDemoRouter } from './routes/demoRoutes.js';
 import { createHealthChecks, createHealthRouter } from './routes/healthRoutes.js';
+import { createPingRouter } from './routes/pingRoutes.js';
 import { createMarketingRouter } from './routes/marketingRoutes.js';
 import { createSolutionRoutes } from './routes/solutionRoutes.js';
 import { createSalesRouter } from './routes/salesRoutes.js';
@@ -186,6 +187,7 @@ export function createApp(options: AppOptions) {
   app.use('/api/v1/customer-health', createCustomerHealthRouter(requireAuth));
   app.use('/api/v1/entitlements', requireAuth, createEntitlementRouter(requireAuth));
   app.use('/api/v1/marketing', createMarketingRouter(signupLimiter));
+  app.use('/api/ping', requireAuth, createPingRouter());
   // Phase 15 - SaaS revenue launch: checkout, onboarding wizard and business analytics
   app.use('/api/v1/billing', requireAuth, createCheckoutRouter(requireAuth));
   app.use('/api/v1/onboarding', createOnboardingRouter(requireAuth));

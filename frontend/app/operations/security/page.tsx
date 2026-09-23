@@ -1,7 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useOperationsStore } from '@/stores/operationsStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { useAuthStore } from '@/stores/authStore';
 import { SecurityRiskWidget } from '@/features/enterprise-operations/SecurityRiskWidget';
 import { ShieldAlert, Activity, BarChart3, Clock } from 'lucide-react';
 
@@ -10,8 +12,24 @@ export default function SecurityPage() {
     securityIntelligence,
     isLoading,
     error,
+    fetchSecurityIntelligence,
     scanSecurityIntelligence,
   } = useOperationsStore();
+
+  const { currentWorkspace } = useWorkspaceStore();
+  const { user } = useAuthStore();
+  const workspaceId = currentWorkspace?._id || currentWorkspace?.id || '';
+  const userId = user?.id || 'system';
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    fetchSecurityIntelligence(workspaceId);
+  }, [workspaceId, fetchSecurityIntelligence]);
+
+  const handleScan = () => {
+    if (!workspaceId) return;
+    scanSecurityIntelligence(workspaceId, userId);
+  };
 
   return (
     <div className="space-y-8">
@@ -28,13 +46,9 @@ export default function SecurityPage() {
             </p>
           </div>
           <button
-            onClick={() => {
-              if (securityIntelligence?.workspaceId) {
-                scanSecurityIntelligence(securityIntelligence.workspaceId, 'system');
-              }
-            }}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-xs transition"
+            onClick={handleScan}
+            disabled={isLoading || !workspaceId}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Activity className="w-4 h-4" />
             Run Security Scan
@@ -61,7 +75,9 @@ export default function SecurityPage() {
               </div>
               <button
                 onClick={() => {
-                  console.log('Refetching security intelligence...');
+                  if (workspaceId) {
+                    fetchSecurityIntelligence(workspaceId);
+                  }
                 }}
                 className="text-xs text-indigo-600 hover:text-indigo-500"
               >

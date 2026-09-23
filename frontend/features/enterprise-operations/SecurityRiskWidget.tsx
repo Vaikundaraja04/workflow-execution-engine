@@ -1,5 +1,7 @@
 import React from 'react';
 import { useOperationsStore } from '@/stores/operationsStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { useAuthStore } from '@/stores/authStore';
 import {
   ShieldAlert,
   AlertTriangle,
@@ -13,9 +15,13 @@ export const SecurityRiskWidget: React.FC = () => {
   const {
     securityIntelligence,
     isLoading,
-    error,
     scanSecurityIntelligence,
   } = useOperationsStore();
+
+  const { currentWorkspace } = useWorkspaceStore();
+  const { user } = useAuthStore();
+  const workspaceId = currentWorkspace?._id || currentWorkspace?.id || '';
+  const userId = user?.id || 'system';
 
   const getThreatColor = (level?: string) => {
     switch (level) {
@@ -56,12 +62,12 @@ export const SecurityRiskWidget: React.FC = () => {
             </span>
             <button
               onClick={() => {
-                if (securityIntelligence?.workspaceId) {
-                  scanSecurityIntelligence(securityIntelligence.workspaceId, 'system');
+                if (workspaceId) {
+                  scanSecurityIntelligence(workspaceId, userId);
                 }
               }}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition disabled:opacity-50"
+              disabled={isLoading || !workspaceId}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Scan className="w-3.5 h-3.5" />
               Scan Now

@@ -20,10 +20,15 @@ export const RecentExecutions: React.FC<RecentExecutionsProps> = ({
 }) => {
   const getStatusBadge = (status: ExecutionStatus) => {
     switch (status) {
-      case 'COMPLETED':
-        return <Badge variant="success">Completed</Badge>;
+      case 'QUEUING':
+        return <Badge variant="secondary">Queuing</Badge>;
+      case 'QUEUED':
+        return <Badge variant="secondary">Queued</Badge>;
       case 'RUNNING':
         return <Badge variant="info">Running</Badge>;
+      case 'SUCCEEDED':
+      case 'COMPLETED':
+        return <Badge variant="success">Succeeded</Badge>;
       case 'FAILED':
         return <Badge variant="destructive">Failed</Badge>;
       case 'CANCELLED':
