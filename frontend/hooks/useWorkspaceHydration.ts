@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { workspaceApi } from '@/services/workspaceApi';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
+import type { Workspace } from '@/types/workspace';
 
 /**
  * Ensures the active workspace (and its role) is loaded on pages that do not
@@ -35,17 +36,49 @@ export function useWorkspaceHydration(): boolean {
     }
 
     let mounted = true;
-    void workspaceApi
-      .getWorkspace(workspaceId)
-      .then((workspace) => {
+
+    const hydrate = async () => {
+      let workspace: Workspace | null = null;
+
+      try {
+        workspace = await workspaceApi.getWorkspace(workspaceId);
+      } catch {
+        workspace = null;
+        // Stored ID may be stale - fall back to the login-provided default.
+        const defaultWorkspaceId = localStorage.getItem('defaultWorkspaceId');
+        if (defaultWorkspaceId && defaultWorkspaceId !== workspaceId) {
+          try {
+            localStorage.removeItem('currentWorkspaceId');
+            workspace = await workspaceApi.getWorkspace(defaultWorkspaceId);
+          } catch {
+            workspace = null;
+          }
+        }
+      }
+
+      // Self-heal: stored IDs may point to a workspace that was deleted or
+      // recreated. Fall back to the first workspace and refresh localStorage.
+      if (!workspace) {
+        try {
+          const workspaces = await workspaceApi.listWorkspaces();
+          workspace = workspaces[0] ?? null;
+          const healedId = workspace?._id || workspace?.id;
+          if (healedId) {
+            localStorage.setItem('currentWorkspaceId', healedId);
+            localStorage.setItem('defaultWorkspaceId', healedId);
+          }
+        } catch {
+          workspace = null;
+        }
+      }
+
+      if (workspace) {
         useWorkspaceStore.getState().setCurrentWorkspace(workspace);
-      })
-      .catch(() => {
-        // Workspace unavailable - callers decide how to degrade.
-      })
-      .finally(() => {
-        if (mounted) setReady(true);
-      });
+      }
+      if (mounted) setReady(true);
+    };
+
+    void hydrate();
 
     return () => {
       mounted = false;

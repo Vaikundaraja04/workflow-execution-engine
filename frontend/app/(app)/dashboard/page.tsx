@@ -55,13 +55,31 @@ export default function DashboardPage() {
         if (workspaceId) {
           try {
             workspace = await workspaceApi.getWorkspace(workspaceId);
-          } catch (workspaceError) {
-            if (!defaultWorkspaceId || defaultWorkspaceId === workspaceId) {
-              throw workspaceError;
+          } catch {
+            workspace = null;
+            if (defaultWorkspaceId && defaultWorkspaceId !== workspaceId) {
+              try {
+                localStorage.removeItem('currentWorkspaceId');
+                workspace = await workspaceApi.getWorkspace(defaultWorkspaceId);
+              } catch {
+                workspace = null;
+              }
             }
-            localStorage.removeItem('currentWorkspaceId');
-            workspace = await workspaceApi.getWorkspace(defaultWorkspaceId);
           }
+        }
+        // Self-heal: stored IDs may be stale (e.g. the workspace was
+        // recreated by the backend tenant fix). Fall back to the user's
+        // first workspace and refresh localStorage.
+        if (!workspace) {
+          const workspaces = await workspaceApi.listWorkspaces();
+          workspace = workspaces[0] ?? null;
+          const healedId = workspace?._id || workspace?.id;
+          if (healedId) {
+            localStorage.setItem('currentWorkspaceId', healedId);
+            localStorage.setItem('defaultWorkspaceId', healedId);
+          }
+        }
+        if (workspace) {
           setCurrentWorkspace(workspace);
         }
       }
@@ -114,7 +132,7 @@ export default function DashboardPage() {
       }
     } catch (err: any) {
       console.error('Failed to fetch dashboard data:', err);
-      setError(err.response?.data?.error?.message || 'Failed to load dashboard');
+      setError(err?.message || err?.response?.data?.error?.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }

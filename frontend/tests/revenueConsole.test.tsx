@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CustomerBillingPage from '@/app/customer/billing/page';
-import BusinessAnalyticsPage from '@/app/analytics/business/page';
+import BusinessAnalyticsPage from '@/app/(app)/analytics/business/page';
 import { customerApi } from '@/services/customerApi';
 import { billingConsoleApi } from '@/services/billingConsoleApi';
 import { businessAnalyticsApi } from '@/services/businessAnalyticsApi';

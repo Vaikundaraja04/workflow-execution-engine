@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import AutonomousOperationsPage from '@/app/operations/autonomous/page';
-import AIGovernancePlatformPage from '@/app/platform/ai-governance/page';
+import AutonomousOperationsPage from '@/app/(app)/operations/autonomous/page';
+import AIGovernancePlatformPage from '@/app/(app)/platform/ai-governance/page';
 import { selfHealingApi } from '@/services/selfHealingApi';
 import { predictiveOpsApi } from '@/services/predictiveOpsApi';
 import { aiGovernanceApi } from '@/services/aiGovernanceApi';

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { useWorkspaceHydration } from '@/hooks/useWorkspaceHydration';
 
 function isItemActive(pathname: string, href: string): boolean {
   if (pathname === href) return true;
@@ -76,6 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { currentWorkspace } = useWorkspaceStore();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [ready, setReady] = React.useState(false);
+  const workspaceReady = useWorkspaceHydration();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -114,7 +116,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   };
 
-  if (!ready || !isAuthenticated) {
+  if (!ready || !isAuthenticated || !workspaceReady) {
     return <Loading fullScreen message="Loading..." />;
   }
 

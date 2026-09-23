@@ -9,7 +9,7 @@ import { PerformanceCard } from '@/features/release-readiness/components/Perform
 import { DeploymentStatus } from '@/features/release-readiness/components/DeploymentStatus';
 import { DatabaseHealth } from '@/features/release-readiness/components/DatabaseHealth';
 import { DRStatus } from '@/features/release-readiness/components/DRStatus';
-import ReadinessPage from '@/app/platform/readiness/page';
+import ReadinessPage from '@/app/(app)/platform/readiness/page';
 import type {
   SecurityAuditReportDTO,
   PerformanceBenchmarkReportDTO,

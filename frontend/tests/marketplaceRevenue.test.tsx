@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import PublisherPortalPage from '@/app/publisher/page';
-import MarketplaceAnalyticsPage from '@/app/analytics/marketplace/page';
+import PublisherPortalPage from '@/app/(app)/publisher/page';
+import MarketplaceAnalyticsPage from '@/app/(app)/analytics/marketplace/page';
 import { marketplaceEcosystemApi } from '@/services/marketplaceEcosystemApi';
 import type {
   MarketplaceAnalyticsReportDTO,

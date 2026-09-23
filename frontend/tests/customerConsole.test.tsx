@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import CustomerOverviewPage from '@/app/customer/page';
 import CustomerSubscriptionPage from '@/app/customer/subscription/page';
 import CustomerUsagePage from '@/app/customer/usage/page';
-import AdminCustomersPage from '@/app/admin/customers/page';
+import AdminCustomersPage from '@/app/(app)/admin/customers/page';
 import { customerApi } from '@/services/customerApi';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import type {

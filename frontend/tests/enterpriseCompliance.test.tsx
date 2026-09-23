@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import ComplianceCenterPage from '@/app/compliance/page';
+import ComplianceCenterPage from '@/app/(app)/compliance/page';
 import { enterpriseOperationsApi } from '@/services/enterpriseOperationsApi';
 import type { ComplianceReportDTO } from '@/services/enterpriseOperationsApi';
 

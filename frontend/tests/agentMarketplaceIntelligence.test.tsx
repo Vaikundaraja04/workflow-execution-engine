@@ -8,8 +8,8 @@ import { AgentHealthIndicator } from '@/features/agents/marketplace/AgentHealthI
 import { MarketplaceAnalyticsPanel } from '@/features/agents/marketplace/MarketplaceAnalyticsPanel';
 import { RecommendationFeed } from '@/features/agents/marketplace/RecommendationFeed';
 import { LifecycleNotifications } from '@/features/agents/marketplace/LifecycleNotifications';
-import AgentMarketplacePage from '@/app/agents/marketplace/page';
-import PublisherAnalyticsPage from '@/app/agents/marketplace/publisher/page';
+import AgentMarketplacePage from '@/app/(app)/agents/marketplace/page';
+import PublisherAnalyticsPage from '@/app/(app)/agents/marketplace/publisher/page';
 import type {
   AgentHealthReportDTO,
   MarketplaceAnalyticsDTO,

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import GrowthDashboardPage from '@/app/growth/page';
+import GrowthDashboardPage from '@/app/(app)/growth/page';
 import { growthApi } from '@/services/growthApi';
 import type {
   CustomerSuccessPortfolioDTO,

@@ -7,7 +7,7 @@ import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { LiveMetricsPanel } from '@/features/release-readiness/components/LiveMetricsPanel';
 import { ReadinessHistoryChart } from '@/features/release-readiness/components/ReadinessHistoryChart';
 import { AlertCenter } from '@/features/release-readiness/components/AlertCenter';
-import ReadinessPage from '@/app/platform/readiness/page';
+import ReadinessPage from '@/app/(app)/platform/readiness/page';
 import type {
   LiveMetricsDTO,
   MetricsHistoryDTO,

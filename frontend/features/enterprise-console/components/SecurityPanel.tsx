@@ -69,7 +69,7 @@ export function SecurityPanel({ workspaceId }: { workspaceId: string }) {
             <p>{data.activeSessionsCount}</p>
           </div>
         </div>
-        {data.recentEvents.length === 0 ? (
+        {!data.recentEvents || data.recentEvents.length === 0 ? (
           <p className="text-sm text-gray-500">No security events recorded.</p>
         ) : (
           <ul className="space-y-1 text-xs text-gray-500">
