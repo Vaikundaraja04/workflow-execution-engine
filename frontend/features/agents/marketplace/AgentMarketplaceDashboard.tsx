@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { hasPermission } from '@/types/permissions';
 import { agentMarketplaceApi } from '@/services/agentMarketplaceApi';
+import { isApiClientError } from '@/services/apiClient';
 import { AgentCard } from './AgentCard';
 import { AgentDetailsPanel } from './AgentDetailsPanel';
 import { AgentInstallModal } from './AgentInstallModal';
@@ -52,6 +53,12 @@ function workspaceIdOf(workspace: { _id?: string; id?: string } | null | undefin
   if (!workspace) return '';
   return workspace._id ?? workspace.id ?? '';
 }
+
+function marketplaceErrorMessage(err: unknown, fallback: string): string {
+  if (isApiClientError(err)) return err.message;
+  if (err instanceof Error) return err.message;
+  return fallback;
+}
 export function AgentMarketplaceDashboard() {
   const { currentWorkspace } = useWorkspaceStore();
   const workspaceId = workspaceIdOf(currentWorkspace);
@@ -88,12 +95,19 @@ export function AgentMarketplaceDashboard() {
       if (category) params.category = category;
       const result = await agentMarketplaceApi.searchAgents(workspaceId, params);
       setListings(result.items);
+      setInstalledIds((current) => {
+        const next = { ...current };
+        for (const item of result.items) {
+          next[item._id] = item.install?.status === 'ACTIVE';
+        }
+        return next;
+      });
       setDataSource('live');
       setError(null);
     } catch (err) {
       setListings([]);
       setDataSource('demo');
-      setError(err instanceof Error ? err.message : 'Failed to load the agent marketplace');
+      setError(marketplaceErrorMessage(err, 'Failed to load the agent marketplace'));
     } finally {
       setLoading(false);
     }
@@ -142,7 +156,7 @@ export function AgentMarketplaceDashboard() {
         [listingId]: detailResult.install?.status === 'ACTIVE',
       }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load listing details');
+      setError(marketplaceErrorMessage(err, 'Failed to load listing details'));
     }
   }, [workspaceId]);
   const confirmInstall = async (configuration: InstallAgentConfigurationDTO) => {
@@ -155,7 +169,14 @@ export function AgentMarketplaceDashboard() {
       if (selectedId === installTarget._id) await openDetails(installTarget._id);
       await loadListings();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to install the agent');
+      if (isApiClientError(err) && err.code === 'AGENT_ALREADY_INSTALLED') {
+        setInstalledIds((current) => ({ ...current, [installTarget._id]: true }));
+        setNotice(`${installTarget.name} is already installed in this workspace.`);
+        setInstallTarget(null);
+        await loadListings();
+        return;
+      }
+      setError(marketplaceErrorMessage(err, 'Failed to install the agent'));
     }
   };
 
@@ -168,7 +189,7 @@ export function AgentMarketplaceDashboard() {
       await openDetails(details.listing._id);
       await loadListings();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to uninstall the agent');
+      setError(marketplaceErrorMessage(err, 'Failed to uninstall the agent'));
     }
   };
 
@@ -180,7 +201,7 @@ export function AgentMarketplaceDashboard() {
       await openDetails(details.listing._id);
       await loadListings();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit the review');
+      setError(marketplaceErrorMessage(err, 'Failed to submit the review'));
     }
   };
 
@@ -189,7 +210,7 @@ export function AgentMarketplaceDashboard() {
     try {
       setComparison(await agentMarketplaceApi.compareVersions(details.listing._id, from, to, workspaceId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to compare versions');
+      setError(marketplaceErrorMessage(err, 'Failed to compare versions'));
     }
   };
 
@@ -200,7 +221,7 @@ export function AgentMarketplaceDashboard() {
       setNotice(`Rolled back ${details.listing.name} to v${version}.`);
       await openDetails(details.listing._id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to roll back the listing');
+      setError(marketplaceErrorMessage(err, 'Failed to roll back the listing'));
     }
   };
   return (

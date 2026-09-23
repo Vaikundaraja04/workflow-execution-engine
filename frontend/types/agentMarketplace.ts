@@ -23,6 +23,8 @@ export interface AgentMarketplaceListingDTO {
   rating: { average: number; count: number };
   versionCount: number;
   latestVersion?: string;
+  /** Install record for the requesting workspace, when the agent is installed. */
+  install?: InstalledAgentDTO | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -9,6 +9,16 @@ export interface ApiClientError {
   requestId?: string;
 }
 
+export function isApiClientError(error: unknown): error is ApiClientError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    typeof (error as ApiClientError).code === 'string' &&
+    typeof (error as ApiClientError).message === 'string' &&
+    typeof (error as ApiClientError).status === 'number'
+  );
+}
+
 const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 export const apiClient = axios.create({

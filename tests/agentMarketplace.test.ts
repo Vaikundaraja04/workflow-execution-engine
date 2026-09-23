@@ -335,6 +335,48 @@ describe('Phase 12.7 Agent Marketplace - discovery and installation', () => {
     expect(duplicate.status).toBe(409);
     expect(duplicate.body.error.code).toBe('AGENT_ALREADY_INSTALLED');
   });
+  it('annotates search results with the requesting workspace install state', async () => {
+    const { listingId } = await publishPublicAgent(workspaceId, ownerToken);
+
+    const before = await request
+      .get('/api/v1/agent-marketplace/agents')
+      .set(authHeader(otherOwnerToken))
+      .set('X-Workspace-Id', otherWorkspaceId);
+    expect(before.status).toBe(200);
+    const beforeItem = (before.body.data.items as Array<{ _id: string; install: unknown }>).find(
+      (item) => item._id === listingId,
+    );
+    expect(beforeItem).toBeDefined();
+    expect(beforeItem?.install).toBeNull();
+
+    const install = await request
+      .post(`/api/v1/agent-marketplace/agents/${listingId}/install`)
+      .set(authHeader(otherEditorToken))
+      .set('X-Workspace-Id', otherWorkspaceId)
+      .send({});
+    expect(install.status).toBe(201);
+    const localAgentId = install.body.data.agent._id as string;
+
+    const after = await request
+      .get('/api/v1/agent-marketplace/agents')
+      .set(authHeader(otherOwnerToken))
+      .set('X-Workspace-Id', otherWorkspaceId);
+    expect(after.status).toBe(200);
+    const afterItem = (
+      after.body.data.items as Array<{ _id: string; install: { status: string; agentId: string } | null }>
+    ).find((item) => item._id === listingId);
+    expect(afterItem?.install?.status).toBe('ACTIVE');
+    expect(afterItem?.install?.agentId).toBe(localAgentId);
+
+    const publisherView = await request
+      .get('/api/v1/agent-marketplace/agents')
+      .set(authHeader(ownerToken))
+      .set('X-Workspace-Id', workspaceId);
+    const publisherItem = (publisherView.body.data.items as Array<{ _id: string; install: unknown }>).find(
+      (item) => item._id === listingId,
+    );
+    expect(publisherItem?.install).toBeNull();
+  });
   it('blocks installs when the installing workspace disables the AI_AGENT feature', async () => {
     const { listingId } = await publishPublicAgent(workspaceId, ownerToken);
     await AIFeaturePolicyModel.create({

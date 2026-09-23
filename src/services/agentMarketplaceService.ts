@@ -384,8 +384,20 @@ export class AgentMarketplaceService {
       AgentMarketplaceModel.find(query).sort(sort).skip((page - 1) * limit).limit(limit).lean(),
       AgentMarketplaceModel.countDocuments(query),
     ]);
+    const listingIds = items.map((item) => item._id);
+    const installs = listingIds.length > 0
+      ? await InstalledAgentModel.find({
+          workspaceId: wsId,
+          agentMarketplaceId: { $in: listingIds },
+          status: { $in: ['ACTIVE', 'DISABLED'] },
+        }).lean()
+      : [];
+    const installByListing = new Map(installs.map((entry) => [entry.agentMarketplaceId.toString(), entry]));
     return {
-      items,
+      items: items.map((item) => ({
+        ...item,
+        install: installByListing.get(item._id.toString()) ?? null,
+      })),
       pagination: { page, limit, totalCount, totalPages: Math.ceil(totalCount / limit) },
     };
   }
