@@ -203,6 +203,8 @@ describe('AI Governance Platform (Module 12F)', () => {
     expect(screen.getByText('$250.00 / $1000.00 USD')).toBeInTheDocument();
     expect(screen.getByText('Anthropic Claude 3.5 Sonnet & Haiku')).toBeInTheDocument();
     expect(screen.getByText('Mock Provider (Local Sandbox)')).toBeInTheDocument();
+    // Failover chain follows the live config's providerPriority: anthropic → openai → mock.
+    expect(screen.getByText('Anthropic ➔ OpenAI ➔ Mock')).toBeInTheDocument();
   });
 
   it('falls back to the seeded governance snapshot when the APIs are unavailable', async () => {
@@ -214,7 +216,10 @@ describe('AI Governance Platform (Module 12F)', () => {
     await waitFor(() => expect(screen.getByText('Demo Data')).toBeInTheDocument());
 
     expect(screen.getByText('$1420.75 / $2500.00 USD')).toBeInTheDocument();
-    expect(screen.getByText('Google Gemini 1.5 Flash')).toBeInTheDocument();
+    // Demo rows and failover chain derive from the seeded router config, not hardcoded strings.
+    expect(screen.getByText('OpenAI GPT-4o & GPT-4o-mini')).toBeInTheDocument();
+    expect(screen.getByText('Anthropic Claude 3.5 Sonnet & Haiku')).toBeInTheDocument();
+    expect(screen.getByText('OpenAI ➔ Anthropic ➔ Mock')).toBeInTheDocument();
     expect(screen.queryByText('Live API Telemetry')).not.toBeInTheDocument();
   });
 });

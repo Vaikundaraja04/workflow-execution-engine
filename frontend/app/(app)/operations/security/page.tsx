@@ -31,11 +31,22 @@ export default function SecurityPage() {
     scanSecurityIntelligence(workspaceId, userId);
   };
 
+  const failedTrend = securityIntelligence?.failedAuthTrends?.trend ?? [];
+  const maxFailedCount = Math.max(1, ...failedTrend.map((bucket) => bucket.count));
+  const suspiciousActivities = securityIntelligence?.suspiciousActivities ?? [];
+  const activityDays = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date();
+    day.setDate(day.getDate() - (6 - index));
+    const key = day.toISOString().slice(0, 10);
+    return { key, count: suspiciousActivities.filter((activity) => activity.timestamp.slice(0, 10) === key).length };
+  });
+  const maxActivityCount = Math.max(1, ...activityDays.map((day) => day.count));
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-2xs">
-        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 pb-4">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <ShieldAlert className="w-6 h-6 text-indigo-600" />
@@ -45,50 +56,59 @@ export default function SecurityPage() {
               Real-time anomaly scoring, authentication monitoring, suspicious activity detection, and security insights.
             </p>
           </div>
-          <button
-            onClick={handleScan}
-            disabled={isLoading || !workspaceId}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Activity className="w-4 h-4" />
-            Run Security Scan
-          </button>
+          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+            {securityIntelligence?.lastScannedAt ? (
+              <span className="text-xs text-gray-500 dark:text-gray-400 text-right">
+                Last scan: {new Date(securityIntelligence.lastScannedAt).toLocaleTimeString()}
+              </span>
+            ) : null}
+            <button
+              onClick={handleScan}
+              disabled={isLoading || !workspaceId}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Activity className={`w-4 h-4${isLoading ? ' animate-pulse' : ''}`} />
+              {isLoading ? 'Scanning…' : 'Run Security Scan'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Security Intelligence Widget */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-2xs">
-        {isLoading ? (
-          <div className="text-center py-8">
-            <div className="w-12 h-12 mx-auto animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
-            <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading security intelligence...</p>
-          </div>
-        ) : error ? (
-          <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-700 rounded-lg p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <ShieldAlert className="w-5 h-5 text-rose-500" />
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-white">Error Loading Security Intelligence</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{error}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  if (workspaceId) {
-                    fetchSecurityIntelligence(workspaceId);
-                  }
-                }}
-                className="text-xs text-indigo-600 hover:text-indigo-500"
-              >
-                Retry
-              </button>
+      {/* Security Intelligence Widget (loading/error get their own card; the widget renders its own cards) */}
+      {isLoading || error ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-2xs">
+          {isLoading ? (
+            <div className="text-center py-8">
+              <div className="w-12 h-12 mx-auto animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading security intelligence...</p>
             </div>
-          </div>
-        ) : (
-          <SecurityRiskWidget />
-        )}
-      </div>
+          ) : (
+            <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-700 rounded-lg p-6">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <ShieldAlert className="w-5 h-5 text-rose-500" />
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">Error Loading Security Intelligence</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{error}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (workspaceId) {
+                      fetchSecurityIntelligence(workspaceId);
+                    }
+                  }}
+                  className="text-xs text-indigo-600 hover:text-indigo-500"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <SecurityRiskWidget />
+      )}
 
       {/* Additional Security Metrics Section (placeholder for future expansion) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -106,9 +126,22 @@ export default function SecurityPage() {
             </div>
           </div>
           <div className="h-40 bg-gray-50 dark:bg-gray-900 rounded-lg">
-            <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-              Chart placeholder - Authentication attempts over time
-            </div>
+            {failedTrend.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-xs text-gray-400 dark:text-gray-500">
+                No failed authentication attempts in the last 30 days
+              </div>
+            ) : (
+              <div className="flex h-full items-end gap-1 px-3 pb-3">
+                {failedTrend.slice(-40).map((bucket) => (
+                  <div
+                    key={bucket.timestamp}
+                    title={`${bucket.timestamp}: ${bucket.count} failed attempt(s)`}
+                    className="flex-1 max-w-[28px] rounded-t bg-indigo-500/80"
+                    style={{ height: `${Math.max(4, Math.round((bucket.count / maxFailedCount) * 92))}%` }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -126,9 +159,32 @@ export default function SecurityPage() {
             </div>
           </div>
           <div className="h-40 bg-gray-50 dark:bg-gray-900 rounded-lg">
-            <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-              Chart placeholder - Workflow execution security events
-            </div>
+            {suspiciousActivities.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-xs text-gray-400 dark:text-gray-500">
+                No sensitive workflow actions in the last 7 days
+              </div>
+            ) : (
+              <div className="flex h-full flex-col px-3 pb-2 pt-3">
+                <div className="flex flex-1 items-end gap-2">
+                  {activityDays.map((day) => (
+                    <div key={day.key} className="flex h-full flex-1 flex-col justify-end">
+                      <div
+                        title={`${day.key}: ${day.count} action(s)`}
+                        className="mx-auto w-full max-w-[28px] rounded-t bg-amber-500/80"
+                        style={{ height: `${Math.max(4, Math.round((day.count / maxActivityCount) * 92))}%` }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  {activityDays.map((day) => (
+                    <span key={day.key} className="flex-1 text-center text-[10px] text-gray-400 dark:text-gray-500">
+                      {day.key.slice(5)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -142,7 +198,7 @@ export default function SecurityPage() {
               System Security Metrics
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              API security, queue security, and infrastructure threat monitoring.
+              Live counts from the latest audit intelligence scan, refreshed on demand.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -155,32 +211,32 @@ export default function SecurityPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
           <div className="p-4 bg-gray-50 dark:bg-gray-900/60 rounded-lg">
-            <div className="text-xs text-gray-500 dark:text-gray-400">API Security Score</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Delivered Insights (30d)</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-              {securityIntelligence?.apiSecurityScore ?? 0}/100
+              {securityIntelligence?.insights?.length ?? 0}
             </div>
             <p className="text-[11px] text-gray-500 mt-1">
-              Based on rate limiting, injection attempts, and anomalous payloads.
+              Anomalies and attack patterns detected from workspace audit data.
             </p>
           </div>
 
           <div className="p-4 bg-gray-50 dark:bg-gray-900/60 rounded-lg">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Queue Threat Level</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Sensitive Actions (7d)</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-              {securityIntelligence?.queueThreatLevel ?? 'LOW'}
+              {suspiciousActivities.length}
             </div>
             <p className="text-[11px] text-gray-500 mt-1">
-              Suspicious job patterns and queue manipulation attempts.
+              Role changes, secret removals, and policy updates.
             </p>
           </div>
 
           <div className="p-4 bg-gray-50 dark:bg-gray-900/60 rounded-lg">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Infrastructure Alerts</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Failed Auth Attempts (30d)</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-              {securityIntelligence?.infrastructureAlertsCount ?? 0}
+              {securityIntelligence?.failedAuthTrends?.totalFailedAttempts ?? 0}
             </div>
             <p className="text-[11px] text-gray-500 mt-1">
-              Database, cache, and worker node security events.
+              From {securityIntelligence?.failedAuthTrends?.uniqueIpCount ?? 0} unique IP sources.
             </p>
           </div>
         </div>

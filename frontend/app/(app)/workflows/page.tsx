@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '@/components/layout/AppShell';
+
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Loading } from '@/components/ui/Loading';
@@ -16,6 +16,9 @@ import { workspaceApi } from '@/services/workspaceApi';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import type { Workflow } from '@/types/workflow';
 import { Bug, History, Pencil, Play, Plus, RefreshCw } from 'lucide-react';
+
+const hasPublishedVersion = (workflow: Workflow): boolean =>
+  Boolean(workflow.publishedVersionId) || (workflow.publishedVersion ?? 0) > 0;
 
 function WorkflowsContent() {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
@@ -69,6 +72,10 @@ function WorkflowsContent() {
     if (!runTarget) return;
     const workflowId = runTarget._id || runTarget.id || '';
     if (!workflowId) return;
+    if (!hasPublishedVersion(runTarget)) {
+      setRunError('Publish the workflow before running it');
+      return;
+    }
     let initialInput: Record<string, unknown> = {};
     const raw = runInput.trim();
     if (raw) {
@@ -148,7 +155,7 @@ function WorkflowsContent() {
             <TableBody>
               {workflows.map((workflow) => {
                 const workflowId = workflow._id || workflow.id || '';
-                const published = (workflow.publishedVersion ?? 0) > 0;
+                const published = hasPublishedVersion(workflow);
                 return (
                   <TableRow key={workflowId || workflow.name}>
                     <TableCell className="font-medium text-gray-900">{workflow.name}</TableCell>
@@ -160,7 +167,7 @@ function WorkflowsContent() {
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-gray-500">
-                      v{workflow.publishedVersion || workflow.currentVersion || 1}
+                      v{workflow.publishedVersion || workflow.latestVersionNumber || workflow.currentVersion || 1}
                     </TableCell>
                     <TableCell className="text-xs text-gray-500">
                       {workflow.updatedAt ? new Date(workflow.updatedAt).toLocaleString() : '-'}
@@ -226,6 +233,11 @@ function WorkflowsContent() {
               spellCheck={false}
               className="mt-3 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
+            {!hasPublishedVersion(runTarget) && (
+              <p className="mt-2 text-xs font-medium text-amber-600">
+                This workflow has no published version. Open the editor and click Publish before running it.
+              </p>
+            )}
             {runError && <p className="mt-2 text-xs font-medium text-red-600">{runError}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setRunTarget(null)}>
@@ -234,7 +246,7 @@ function WorkflowsContent() {
               <Button
                 size="sm"
                 onClick={() => void confirmRun()}
-                disabled={runningId === (runTarget._id || runTarget.id)}
+                disabled={!hasPublishedVersion(runTarget) || runningId === (runTarget._id || runTarget.id)}
               >
                 {runningId === (runTarget._id || runTarget.id) ? 'Starting...' : 'Run Workflow'}
               </Button>
@@ -247,9 +259,7 @@ function WorkflowsContent() {
 }
 
 export default function WorkflowsPage() {
-  return (
-    <AppShell>
-      <WorkflowsContent />
-    </AppShell>
-  );
+  // AppShell comes from the (app) route group layout; wrapping again here
+  // would render the header/workspace switcher twice.
+  return <WorkflowsContent />;
 }

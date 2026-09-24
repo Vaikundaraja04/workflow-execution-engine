@@ -3,6 +3,7 @@ import { requirePermission, requireMembership, type PermissionResolver, type Wor
 import type { Request, Response, NextFunction } from 'express';
 import mongoose, { Types } from 'mongoose';
 import { AIWorkflowService } from '../../services/aiWorkflowService.js';
+import { AIProviderFactory } from '../../services/ai/AIProviderFactory.js';
 import { AIFailureAnalysisService } from '../../services/aiFailureAnalysisService.js';
 import { AIOptimizationService } from '../../services/aiOptimizationService.js';
 import { AIOperationsAssistantService } from '../../services/aiOperationsAssistantService.js';
@@ -604,7 +605,7 @@ aiConfigRouter.get(
 
       // Don't return the encrypted API key
       const { apiKeyEncrypted, ...configWithoutSecret } = config.toObject();
-      res.json(configWithoutSecret);
+      res.json({ ...configWithoutSecret, hasApiKey: Boolean(config.apiKeyEncrypted) });
     } catch (error) {
       next(error);
     }
@@ -623,7 +624,7 @@ aiConfigRouter.patch(
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const { provider, model, temperature, maxTokens, features, apiKey } = req.body;
+      const { provider, model, temperature, maxTokens, features, apiKey, enabled } = req.body;
 
       // Find existing config or create new one
       let config = await AIConfigurationModel.findOne({
@@ -638,7 +639,12 @@ aiConfigRouter.patch(
       }
 
       // Update fields
-      if (provider) config.provider = provider;
+      if (provider) {
+        if (!['mock', 'openai', 'anthropic', 'gemini', 'openrouter'].includes(provider)) {
+          return res.status(400).json({ error: { code: 'INVALID_PROVIDER', message: 'Unsupported AI provider' } });
+        }
+        config.provider = provider;
+      }
       if (model) config.model = model;
       if (temperature !== undefined) config.temperature = temperature;
       if (maxTokens !== undefined) config.maxTokens = maxTokens;
@@ -646,13 +652,18 @@ aiConfigRouter.patch(
       if (apiKey) {
         config.apiKeyEncrypted = apiKey;
       }
+      if (enabled !== undefined) config.enabled = Boolean(enabled);
+      const effectiveProvider = provider || config.provider;
+      if (effectiveProvider !== 'mock' && !config.apiKeyEncrypted) {
+        return res.status(400).json({ error: { code: 'API_KEY_REQUIRED', message: 'An API key is required for this provider' } });
+      }
       config.updatedBy = new Types.ObjectId(workspaceContext.userId);
 
       await config.save();
 
       // Don't return the encrypted API key in the response
       const { apiKeyEncrypted, ...configWithoutSecret } = config.toObject();
-      res.json(configWithoutSecret);
+      res.json({ ...configWithoutSecret, hasApiKey: Boolean(config.apiKeyEncrypted) });
 
       // Create audit log
       await createAuditLog({
@@ -667,6 +678,22 @@ aiConfigRouter.patch(
       });
     } catch (error) {
       next(error);
+    }
+  }
+);
+
+aiConfigRouter.post(
+  '/test',
+  requirePermission('AI_CONFIGURATION_MANAGE', {}),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaceContext = (req as any).workspaceContext;
+      const result = await AIProviderFactory.getProviderForWorkspace(workspaceContext.workspaceId);
+      const sample = await result.provider.generateText('Reply with exactly: OK');
+      res.json({ data: { ok: true, provider: result.providerName, model: result.model, sample } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI provider test failed';
+      res.status(400).json({ error: { code: 'AI_PROVIDER_TEST_FAILED', message } });
     }
   }
 );

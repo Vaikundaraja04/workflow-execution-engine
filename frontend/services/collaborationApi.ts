@@ -26,10 +26,19 @@ export const collaborationApi = {
     },
     workspaceId?: string
   ): Promise<{ comments: WorkflowComment[]; total: number }> => {
+    // The backend list route reads `status` and `includeReplies`; the previous
+    // `includeResolved`/`parentId` names were ignored, which defaulted
+    // includeReplies to false and filtered every reply out of the response.
+    const { includeResolved, limit, offset } = params ?? {};
     const res = await apiClient.get<{ comments: WorkflowComment[]; total: number }>(
       `/api/v1/comments/workflow/${workflowId}`,
       {
-        params,
+        params: {
+          limit,
+          offset,
+          includeReplies: true,
+          ...(includeResolved === false ? { status: 'OPEN' } : {}),
+        },
         ...workspaceConfig(workspaceId),
       }
     );
@@ -42,8 +51,8 @@ export const collaborationApi = {
     workspaceId?: string
   ): Promise<WorkflowComment> => {
     const res = await apiClient.post<WorkflowComment>(
-      `/api/v1/comments/workflow/${workflowId}`,
-      data,
+      '/api/v1/comments',
+      { ...data, workflowId },
       workspaceConfig(workspaceId)
     );
     return res.data;

@@ -2,7 +2,9 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { z } from 'zod';
 import type { AuthConfig } from './jwt.service.js';
 import type { IUser } from '../models/UserModel.js';
+import { UserModel } from '../models/UserModel.js';
 import { createAuditLog } from '../services/auditService.js';
+import type { CreateAuditLogInput } from '../services/auditService.js';
 import {
   issueTokens,
   listUserSessions,
@@ -16,7 +18,7 @@ import {
 } from './auth.service.js';
 import type { SessionContext } from './auth.service.js';
 import { getAuthUser } from './auth.middleware.js';
-import { ensureUserWorkspace } from '../services/workspaceService.js';
+import { ensureUserWorkspace, resolveWorkspaceId } from '../services/workspaceService.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 
@@ -82,7 +84,13 @@ export function createAuthController(config: AuthConfig): AuthController {
           user = await loginUser(parsed.data.email, parsed.data.password);
         } catch (error) {
           if (error instanceof Error && error.message === 'INVALID_CREDENTIALS') {
-            await createAuditLog({ action: 'AUTH_LOGIN_FAILED', ...requestContext(req) });
+            const failureLog: CreateAuditLogInput = { action: 'AUTH_LOGIN_FAILED', ...requestContext(req) };
+            const failedUser = await UserModel.findOne({ email: parsed.data.email }).select('_id').lean().catch(() => null);
+            if (failedUser) {
+              failureLog.userId = failedUser._id;
+              failureLog.workspaceId = await resolveWorkspaceId(failedUser._id.toString()).catch(() => undefined);
+            }
+            await createAuditLog(failureLog);
           }
           throw error;
         }

@@ -57,6 +57,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/ai/template-generator', label: 'AI Templates', icon: Boxes },
       { href: '/ai/optimization', label: 'AI Optimization', icon: Gauge },
       { href: '/ai/usage', label: 'AI Usage', icon: BarChart3 },
+      { href: '/ai/settings', label: 'AI Settings', icon: Settings },
     ],
   },
   {

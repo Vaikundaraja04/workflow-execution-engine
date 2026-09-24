@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { hasPermission } from '@/types/permissions';
 import { agentApi } from '@/services/agentApi';
+import { useWorkspaceHydration } from '@/hooks/useWorkspaceHydration';
 import { AgentBuilder } from '@/features/agents/components/AgentBuilder';
 import { ToolPermissionPanel } from '@/features/agents/components/ToolPermissionPanel';
 import { AgentMemoryViewer } from '@/features/agents/components/AgentMemoryViewer';
@@ -24,8 +25,9 @@ export default function AgentDetailPage() {
   const agentId = params?.id as string;
   const router = useRouter();
   const { currentWorkspace } = useWorkspaceStore();
-  const workspaceId = currentWorkspace?._id ?? '';
+  const workspaceId = currentWorkspace?._id || currentWorkspace?.id || '';
   const role = currentWorkspace?.role ?? null;
+  const hydrated = useWorkspaceHydration();
 
   const [agent, setAgent] = React.useState<Agent | null>(null);
   const [runs, setRuns] = React.useState<AgentRun[]>([]);
@@ -42,7 +44,8 @@ export default function AgentDetailPage() {
   const canExecute = hasPermission(role, 'AGENT_TOOL_EXECUTE');
 
   const fetchAgent = React.useCallback(async () => {
-    if (!workspaceId || !agentId) return;
+    if (!agentId) return;
+    if (!workspaceId) { setLoading(false); return; }
     setLoading(true);
     try {
       const data = await agentApi.getAgent(workspaceId, agentId);
@@ -65,8 +68,8 @@ export default function AgentDetailPage() {
     }
   }, [workspaceId, agentId]);
 
-  React.useEffect(() => { void fetchAgent(); }, [fetchAgent]);
-  React.useEffect(() => { void fetchRuns(); }, [fetchRuns]);
+  React.useEffect(() => { if (!hydrated) return; void fetchAgent(); }, [hydrated, fetchAgent]);
+  React.useEffect(() => { if (!hydrated) return; void fetchRuns(); }, [hydrated, fetchRuns]);
 
   const handleSave = (updated: Agent) => {
     setAgent(updated);
@@ -106,6 +109,16 @@ export default function AgentDetailPage() {
 
   if (loading) return <div className="p-6"><div className="h-8 bg-muted animate-pulse rounded w-48 mb-4" /><div className="h-64 bg-muted animate-pulse rounded" /></div>;
   if (!agent) return <div className="p-6"><div className="p-3 rounded-lg bg-rose-500/10 text-rose-400">{error ?? 'Agent not found'}</div></div>;
+
+  const approvalsPending =
+    Boolean(testResult) &&
+    typeof testResult === 'object' &&
+    testResult !== null &&
+    (testResult as { approvalRequired?: unknown }).approvalRequired === true;
+
+  const displayResult = testResult
+    ? (testResult as { toolResult?: unknown }).toolResult ?? (testResult as { output?: unknown }).output ?? testResult
+    : null;
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Bot },
@@ -185,14 +198,14 @@ export default function AgentDetailPage() {
               <Button onClick={handleTest} isLoading={testLoading} disabled={testLoading || (!testInput && !testInvocation)}>
                 <Play className="h-4 w-4 mr-1" /> Run Test
               </Button>
-              {Boolean(testResult) && typeof testResult === 'object' && testResult !== null && 'approvalRequired' in testResult && (
+              {approvalsPending && (
                 <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
                   Approval required. Check the Approvals tab.
                 </div>
               )}
-              {Boolean(testResult) && typeof testResult !== 'object' && (
+              {Boolean(testResult) && !approvalsPending && (
                 <pre className="mt-4 text-xs text-foreground whitespace-pre-wrap break-all font-mono bg-muted/30 p-3 rounded-lg">
-                  {JSON.stringify(testResult, null, 2)}
+                  {typeof displayResult === 'string' ? displayResult : JSON.stringify(displayResult, null, 2)}
                 </pre>
               )}
             </CardContent>

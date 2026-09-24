@@ -116,7 +116,7 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
   React.useEffect(() => {
     if (workflowId) {
       fetchWorkflowPresences(workflowId);
-      fetchWorkflowComments(workflowId, { limit: 50, offset: 0, includeResolved: true });
+      fetchWorkflowComments(workflowId, { limit: 50, offset: 0, includeResolved: true }).catch(() => {});
       fetchWorkflowLock(workflowId).then(lock => {
         if (lock && lock.userId !== useAuthStore.getState().user?.id) {
           setConflictLock(lock);
@@ -294,7 +294,11 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
   const errorCount = validationErrors.length;
 
   return (
-    <div className="flex h-screen flex-col bg-gray-50 overflow-hidden">
+    // The builder sits inside AppShell, whose sticky header (h-14 = 3.5rem) and
+    // main padding (py-6 = 1.5rem top + 1.5rem bottom) already consume 6.5rem.
+    // Using h-screen here would make the page 100vh + 6.5rem tall, pushing the
+    // canvas MiniMap and zoom Controls below the fold.
+    <div className="flex h-[calc(100vh_-_6.5rem)] flex-col bg-gray-50 overflow-hidden">
       {/* Top Toolbar */}
       <WorkflowToolbar
         onSave={handleSave}

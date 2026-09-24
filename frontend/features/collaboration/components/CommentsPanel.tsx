@@ -17,12 +17,15 @@ export const CommentsPanel: React.FC<{ workflowId: string }> = ({ workflowId }) 
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const workspaceId = currentWorkspace?.id || '';
 
   useEffect(() => {
     if (workflowId) {
-      fetchWorkflowComments(workflowId, { limit: 50, offset: 0, includeResolved: true });
+      // The store rethrows with a readable message; swallow it here so a
+      // failed list load does not become an unhandled promise rejection.
+      fetchWorkflowComments(workflowId, { limit: 50, offset: 0, includeResolved: true }).catch(() => {});
     }
   }, [workflowId, fetchWorkflowComments]);
 
@@ -30,8 +33,11 @@ export const CommentsPanel: React.FC<{ workflowId: string }> = ({ workflowId }) 
     if (!workflowId) return;
     try {
       await createComment(workflowId, { content, nodeId: undefined, parentCommentId: undefined, mentions });
+      setErrorMessage(null);
     } catch (error) {
-      console.error('Failed to create comment:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create comment';
+      console.error('Failed to create comment:', message);
+      setErrorMessage(message);
     }
   };
 
@@ -40,8 +46,11 @@ export const CommentsPanel: React.FC<{ workflowId: string }> = ({ workflowId }) 
     try {
       await createComment(workflowId, { content, nodeId: undefined, parentCommentId, mentions });
       setReplyingTo(null);
+      setErrorMessage(null);
     } catch (error) {
-      console.error('Failed to create reply:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create reply';
+      console.error('Failed to create reply:', message);
+      setErrorMessage(message);
     }
   };
 
@@ -119,6 +128,12 @@ export const CommentsPanel: React.FC<{ workflowId: string }> = ({ workflowId }) 
 
   return (
     <div className="space-y-4">
+      {errorMessage && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {errorMessage}
+        </div>
+      )}
+
       <div className="border-b pb-2">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           Discussion ({comments.length})

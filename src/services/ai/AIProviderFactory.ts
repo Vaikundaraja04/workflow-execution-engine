@@ -93,6 +93,24 @@ export class AIProviderFactory {
         };
       }
 
+      if (config.provider === 'gemini') {
+        const apiKey = config.getDecryptedApiKey();
+        return {
+          provider: new OpenAIProvider(apiKey, config.model, 'https://generativelanguage.googleapis.com/v1beta/openai'),
+          model: config.model,
+          providerName: 'gemini',
+        };
+      }
+
+      if (config.provider === 'openrouter') {
+        const apiKey = config.getDecryptedApiKey();
+        return {
+          provider: new OpenAIProvider(apiKey, config.model, 'https://openrouter.ai/api/v1'),
+          model: config.model,
+          providerName: 'openrouter',
+        };
+      }
+
       return { provider: this.mockInstance, model, providerName: 'mock' };
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('AI_FEATURE_DISABLED')) {

@@ -22,6 +22,7 @@ export class AuditIntelligenceService {
       suspiciousLogs,
       recentSecurityEvents,
       activeSessions,
+      lastScanLogs,
     ] = await Promise.all([
       securityCenterService.getRiskScore(workspaceId),
 
@@ -73,6 +74,15 @@ export class AuditIntelligenceService {
         createdAt: { $gte: sevenDaysAgo },
       })
         .limit(50)
+        .lean(),
+
+      // Most recent on-demand scan timestamp
+      AuditLogModel.find({
+        workspaceId: wsId as any,
+        action: 'SECURITY_INTELLIGENCE_SCANNED' as any,
+      })
+        .sort({ createdAt: -1 })
+        .limit(1)
         .lean(),
     ]);
 
@@ -186,6 +196,9 @@ export class AuditIntelligenceService {
       riskScore: calculatedRiskScore,
       anomalyScore: anomalyPoints,
       threatLevel,
+      lastScannedAt: lastScanLogs[0]?.createdAt
+        ? new Date(lastScanLogs[0].createdAt).toISOString()
+        : undefined,
       insights,
       suspiciousActivities,
       failedAuthTrends: {
@@ -206,7 +219,7 @@ export class AuditIntelligenceService {
   ): Promise<SecurityIntelligenceData> {
     const intelligence = await this.getSecurityIntelligence(workspaceId);
 
-    await AuditLogModel.create({
+    const scanLog = await AuditLogModel.create({
       workspaceId: new Types.ObjectId(workspaceId),
       userId: new Types.ObjectId(userId),
       action: 'SECURITY_INTELLIGENCE_SCANNED',
@@ -219,7 +232,10 @@ export class AuditIntelligenceService {
       },
     });
 
-    return intelligence;
+    return {
+      ...intelligence,
+      lastScannedAt: new Date(scanLog.createdAt ?? Date.now()).toISOString(),
+    };
   }
 }
 

@@ -27,7 +27,7 @@ const toExecutionTableRow = (execution: WorkflowExecution, workflowName: string)
     : null,
   startedAt: execution.startedAt || '',
   finishedAt: execution.finishedAt || null,
-  retries: execution.attemptsMade ?? execution.retryCount ?? 0,
+  retries: execution.retryCount ?? execution.attemptsMade ?? 0,
   triggeredBy: execution.triggerType || 'unknown',
 });
 

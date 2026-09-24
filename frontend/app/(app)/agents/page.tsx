@@ -11,12 +11,14 @@ import { Modal } from '@/components/ui/Modal';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { hasPermission } from '@/types/permissions';
 import { agentApi } from '@/services/agentApi';
+import { useWorkspaceHydration } from '@/hooks/useWorkspaceHydration';
 import { AgentBuilder } from '@/features/agents/components/AgentBuilder';
 import type { Agent, AgentStatus } from '@/types/agent';
 
 export default function AgentsPage() {
   const { currentWorkspace } = useWorkspaceStore();
-  const workspaceId = currentWorkspace?._id ?? '';
+  const workspaceId = currentWorkspace?._id || currentWorkspace?.id || '';
+  const hydrated = useWorkspaceHydration();
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -26,7 +28,7 @@ export default function AgentsPage() {
   const canManage = hasPermission(currentWorkspace?.role ?? null, 'AGENT_MANAGE');
 
   const fetchAgents = React.useCallback(async () => {
-    if (!workspaceId) return;
+    if (!workspaceId) { setLoading(false); return; }
     setLoading(true);
     try {
       const data = await agentApi.listAgents(workspaceId);
@@ -40,8 +42,9 @@ export default function AgentsPage() {
   }, [workspaceId]);
 
   React.useEffect(() => {
+    if (!hydrated) return;
     void fetchAgents();
-  }, [fetchAgents]);
+  }, [hydrated, fetchAgents]);
 
   const handleSave = (agent: Agent) => {
     setAgents((prev) => {

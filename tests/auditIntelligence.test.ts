@@ -52,5 +52,20 @@ describe('AuditIntelligenceService', () => {
       expect(typeof result.failedAuthTrends.targetedAccountsCount).toBe('number');
       expect(Array.isArray(result.failedAuthTrends.trend)).toBe(true);
     });
+
+    it('records the on-demand scan timestamp in lastScannedAt', async () => {
+      const userId = new Types.ObjectId().toString();
+
+      const before = await AuditIntelligenceService.getSecurityIntelligence(workspaceId);
+      expect(before.lastScannedAt).toBeUndefined();
+
+      const scanned = await AuditIntelligenceService.scanWorkspace(workspaceId, userId);
+      expect(scanned.lastScannedAt).toBeDefined();
+      expect(Number.isNaN(Date.parse(scanned.lastScannedAt as string))).toBe(false);
+
+      // Subsequent reads surface the stored scan time so the UI can show "Last scan".
+      const after = await AuditIntelligenceService.getSecurityIntelligence(workspaceId);
+      expect(after.lastScannedAt).toBe(scanned.lastScannedAt);
+    });
   });
 });

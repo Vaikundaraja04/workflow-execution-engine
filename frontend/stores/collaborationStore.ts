@@ -9,6 +9,21 @@ import type {
   WorkflowLockState
 } from '@/types/collaboration';
 
+/**
+ * AxiosError serializes to `{}` in the console because its fields are
+ * non-enumerable, which is why failures were logged with no message at all.
+ * Surface the API's `{ error: { code, message } }` body when present.
+ */
+function describeApiError(error: unknown): string {
+  const response = (error as { response?: { data?: { error?: { code?: string; message?: string } } } })?.response;
+  if (response?.data?.error) {
+    const { code, message } = response.data.error;
+    return code ? `${code}: ${message ?? 'Request failed'}` : message ?? 'Request failed';
+  }
+  if (error instanceof Error) return error.message;
+  return 'Unknown error';
+}
+
 interface CollaborationState {
   // Presence
   workspacePresences: Record<string, PresenceState[]>; // workspaceId -> presences
@@ -220,13 +235,14 @@ export const useCollaborationStore = create<CollaborationState>()(
             },
           }));
         } catch (error) {
-          console.error('Failed to fetch workflow comments:', error);
+          console.error('Failed to fetch workflow comments:', describeApiError(error), error);
           set((state) => ({
             commentLoading: {
               ...state.commentLoading,
               [workflowId]: false,
             },
           }));
+          throw new Error(describeApiError(error));
         }
       },
 
@@ -242,7 +258,11 @@ export const useCollaborationStore = create<CollaborationState>()(
           // Optionally, refetch comments to ensure consistency
           await get().fetchWorkflowComments(workflowId);
         } catch (error) {
-          console.error('Failed to create comment:', error);
+          // Rethrow with a readable message: AxiosError has non-enumerable
+          // fields, so the raw catch value logs as `{}` and gives no clue.
+          const message = describeApiError(error);
+          console.error('Failed to create comment:', message, error);
+          throw new Error(message);
         }
       },
 

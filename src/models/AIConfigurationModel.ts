@@ -3,7 +3,7 @@ import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'node:
 
 export interface IAIConfiguration {
   workspaceId: Types.ObjectId;
-  provider: 'openai' | 'anthropic' | 'mock';
+  provider: 'openai' | 'anthropic' | 'gemini' | 'openrouter' | 'mock';
   enabled: boolean;
   model: string;
   temperature: number;
@@ -75,7 +75,7 @@ const AIConfigurationSchema = new Schema<IAIConfiguration, mongoose.Model<IAICon
   },
   provider: {
     type: String,
-    enum: ['openai', 'anthropic', 'mock'],
+    enum: ['openai', 'anthropic', 'gemini', 'openrouter', 'mock'],
     required: true,
   },
   enabled: {

@@ -38,71 +38,88 @@ type GovernanceTab = (typeof TABS)[number]['id'];
 interface AIProviderRow {
   id: string;
   name: string;
-  status: string;
-  avgLatencyMs: number;
-  costPer1kTokens: string;
-  currentTrafficPercent: number;
+  /** Configured latency for this provider, or null when no per-model config exists. */
+  latencyMs: number | null;
+  /** Configured cost per 1k tokens, or null when no per-model config exists. */
+  costPer1kTokens: string | null;
+  /** Highest cost cap the router allows for this provider's complexity rules. */
+  costCapPer1kTokens: number | null;
+  /** Share of routing weight derived from the configured provider priority. */
+  routingWeightPercent: number;
   isPrimary: boolean;
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
-  anthropic: 'Anthropic Claude 3.5 Sonnet & Haiku',
   openai: 'OpenAI GPT-4o & GPT-4o-mini',
+  anthropic: 'Anthropic Claude 3.5 Sonnet & Haiku',
   mock: 'Mock Provider (Local Sandbox)',
 };
 
-const DEMO_PROVIDERS: AIProviderRow[] = [
-  {
-    id: 'anthropic',
-    name: 'Anthropic Claude 3.5 Sonnet & Haiku',
-    status: 'healthy',
-    avgLatencyMs: 380,
-    costPer1kTokens: '$0.003',
-    currentTrafficPercent: 55,
-    isPrimary: true,
+const PROVIDER_SHORT_LABELS: Record<string, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  mock: 'Mock',
+};
+
+const DEFAULT_PROVIDER_PRIORITY: AIModelRouterConfigDTO['providerPriority'] = ['openai', 'anthropic', 'mock'];
+
+/**
+ * Router defaults mirrored from the backend so the console renders the same shape
+ * when the governance API is unreachable. No measured latency, cost or traffic is
+ * invented here: every value comes from the router configuration itself.
+ */
+const DEMO_ROUTER_CONFIG: AIModelRouterConfigDTO = {
+  providerPriority: DEFAULT_PROVIDER_PRIORITY,
+  modelConfigs: {},
+  complexityRules: {
+    simple: { preferredProvider: 'openai', fallbackProvider: 'anthropic', maxCostPer1KTokens: 0.5 },
+    medium: { preferredProvider: 'openai', fallbackProvider: 'anthropic', maxCostPer1KTokens: 1 },
+    complex: { preferredProvider: 'openai', fallbackProvider: 'anthropic', maxCostPer1KTokens: 2 },
   },
-  {
-    id: 'openai',
-    name: 'OpenAI GPT-4o & GPT-4o-mini',
-    status: 'healthy',
-    avgLatencyMs: 410,
-    costPer1kTokens: '$0.005',
-    currentTrafficPercent: 30,
-    isPrimary: false,
-  },
-  {
-    id: 'gemini',
-    name: 'Google Gemini 1.5 Flash',
-    status: 'healthy',
-    avgLatencyMs: 290,
-    costPer1kTokens: '$0.001',
-    currentTrafficPercent: 15,
-    isPrimary: false,
-  },
-];
+  enableFallback: true,
+  enableCostOptimization: true,
+  enableLatencyOptimization: false,
+};
+
+function providerLabel(provider: string): string {
+  return PROVIDER_LABELS[provider] ?? provider;
+}
+
+function providerShortLabel(provider: string): string {
+  return PROVIDER_SHORT_LABELS[provider] ?? provider;
+}
 
 /**
  * Derives the provider load-balancing table from the workspace router config.
- * Traffic share is weighted by provider priority order (first = highest).
+ *
+ * Only configured values are surfaced: per-model latency/cost when the workspace
+ * has a model config entry, otherwise the cost cap from the complexity rules that
+ * route to that provider. The percentage is the configured routing weight taken
+ * from the provider priority order — it is not measured traffic.
  */
 function buildProviderRows(config: AIModelRouterConfigDTO): AIProviderRow[] {
   const priority =
     config.providerPriority && config.providerPriority.length > 0
       ? config.providerPriority
-      : (['openai', 'anthropic', 'mock'] as AIModelRouterConfigDTO['providerPriority']);
+      : DEFAULT_PROVIDER_PRIORITY;
 
   const weightTotal = priority.reduce((total, _provider, index) => total + (priority.length - index), 0);
   const modelEntries = Object.values(config.modelConfigs ?? {});
+  const complexityRules = Object.values(config.complexityRules ?? {});
 
   return priority.map((provider, index) => {
     const modelEntry = modelEntries.find((entry) => entry.provider === provider);
+    const costCaps = complexityRules
+      .filter((rule) => rule.preferredProvider === provider || rule.fallbackProvider === provider)
+      .map((rule) => rule.maxCostPer1KTokens);
+
     return {
       id: provider,
-      name: PROVIDER_LABELS[provider] ?? provider,
-      status: 'healthy',
-      avgLatencyMs: modelEntry?.latencyMs ?? 0,
-      costPer1kTokens: modelEntry ? `$${modelEntry.costPer1KTokens}` : '--',
-      currentTrafficPercent: Math.round(((priority.length - index) / weightTotal) * 100),
+      name: providerLabel(provider),
+      latencyMs: modelEntry?.latencyMs ?? null,
+      costPer1kTokens: modelEntry ? `$${modelEntry.costPer1KTokens}` : null,
+      costCapPer1kTokens: costCaps.length > 0 ? Math.max(...costCaps) : null,
+      routingWeightPercent: Math.round(((priority.length - index) / weightTotal) * 100),
       isPrimary: index === 0,
     };
   });
@@ -161,6 +178,7 @@ export default function AIGovernancePlatformPage() {
       hasLiveData = true;
     }
     if (routerResult.status === 'fulfilled') {
+      setRouterConfig(routerResult.value);
       setRoutingStrategy(routingStrategyFromConfig(routerResult.value));
       setModelProviders(buildProviderRows(routerResult.value));
       hasLiveData = true;
@@ -206,6 +224,7 @@ export default function AIGovernancePlatformPage() {
 
     try {
       const updated = await aiGovernanceApi.updateRouterConfig(toRouterConfigPayload(strategy));
+      setRouterConfig(updated);
       setModelProviders(buildProviderRows(updated));
       setDataSource('live');
     } catch {
@@ -213,7 +232,17 @@ export default function AIGovernancePlatformPage() {
     }
   };
 
-  const [modelProviders, setModelProviders] = React.useState<AIProviderRow[]>(DEMO_PROVIDERS);
+  const [modelProviders, setModelProviders] = React.useState<AIProviderRow[]>(() =>
+    buildProviderRows(DEMO_ROUTER_CONFIG),
+  );
+  const [routerConfig, setRouterConfig] = React.useState<AIModelRouterConfigDTO | null>(null);
+
+  const failoverChain = React.useMemo(() => {
+    const config = routerConfig ?? DEMO_ROUTER_CONFIG;
+    if (!config.enableFallback) return 'Failover disabled';
+    const priority = config.providerPriority?.length ? config.providerPriority : DEFAULT_PROVIDER_PRIORITY;
+    return priority.map(providerShortLabel).join(' ➔ ');
+  }, [routerConfig]);
 
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -357,15 +386,17 @@ export default function AIGovernancePlatformPage() {
                         )}
                       </div>
                       <p className="text-[10px] text-slate-400 font-mono">
-                        Latency: {provider.avgLatencyMs}ms • Cost: {provider.costPer1kTokens}/1k
+                        {provider.latencyMs !== null && provider.costPer1kTokens !== null
+                          ? `Latency: ${provider.latencyMs}ms • Cost: ${provider.costPer1kTokens}/1k`
+                          : `No per-model config${provider.costCapPer1kTokens !== null ? ` • Cost cap ≤ $${provider.costCapPer1kTokens}/1k` : ''}`}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3 text-right">
                     <div className="space-y-0.5">
-                      <span className="text-xs font-bold font-mono text-indigo-400">{provider.currentTrafficPercent}%</span>
-                      <p className="text-[10px] text-slate-500">Traffic Share</p>
+                      <span className="text-xs font-bold font-mono text-indigo-400">{provider.routingWeightPercent}%</span>
+                      <p className="text-[10px] text-slate-500">Routing Weight</p>
                     </div>
                   </div>
                 </div>
@@ -378,7 +409,7 @@ export default function AIGovernancePlatformPage() {
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 Automatic Failover Chain:
               </span>
-              <span className="font-mono text-indigo-300 text-[11px]">Anthropic ➔ OpenAI ➔ Gemini ➔ Mock</span>
+              <span className="font-mono text-indigo-300 text-[11px]">{failoverChain}</span>
             </div>
           </div>
         </div>

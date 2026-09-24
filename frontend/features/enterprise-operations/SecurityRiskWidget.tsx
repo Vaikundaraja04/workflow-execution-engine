@@ -1,27 +1,15 @@
 import React from 'react';
 import { useOperationsStore } from '@/stores/operationsStore';
-import { useWorkspaceStore } from '@/stores/workspaceStore';
-import { useAuthStore } from '@/stores/authStore';
 import {
   ShieldAlert,
   AlertTriangle,
   Lock,
   UserX,
-  Scan,
   CheckCircle2,
 } from 'lucide-react';
 
 export const SecurityRiskWidget: React.FC = () => {
-  const {
-    securityIntelligence,
-    isLoading,
-    scanSecurityIntelligence,
-  } = useOperationsStore();
-
-  const { currentWorkspace } = useWorkspaceStore();
-  const { user } = useAuthStore();
-  const workspaceId = currentWorkspace?._id || currentWorkspace?.id || '';
-  const userId = user?.id || 'system';
+  const { securityIntelligence } = useOperationsStore();
 
   const getThreatColor = (level?: string) => {
     switch (level) {
@@ -46,33 +34,19 @@ export const SecurityRiskWidget: React.FC = () => {
           <div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-indigo-600" />
-              Enterprise Audit & Threat Intelligence
+              Security Posture Overview
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Real-time anomaly scoring, authentication monitoring, and suspicious activity detection.
+              Calculated risk, authentication anomalies, and behavioral drift for this workspace.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-semibold ${getThreatColor(
-                securityIntelligence?.threatLevel
-              )}`}
-            >
-              Threat Level: {securityIntelligence?.threatLevel ?? 'LOW'}
-            </span>
-            <button
-              onClick={() => {
-                if (workspaceId) {
-                  scanSecurityIntelligence(workspaceId, userId);
-                }
-              }}
-              disabled={isLoading || !workspaceId}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Scan className="w-3.5 h-3.5" />
-              Scan Now
-            </button>
-          </div>
+          <span
+            className={`self-start sm:self-auto px-3 py-1 rounded-full text-xs font-semibold ${getThreatColor(
+              securityIntelligence?.threatLevel
+            )}`}
+          >
+            Threat Level: {securityIntelligence?.threatLevel ?? 'LOW'}
+          </span>
         </div>
 
         {/* Metric tiles */}

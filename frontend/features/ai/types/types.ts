@@ -6,7 +6,7 @@ export type AIFeature =
   | 'optimization'
   | 'template_generation';
 
-export type AIProviderName = 'openai' | 'anthropic' | 'mock';
+export type AIProviderName = 'openai' | 'anthropic' | 'gemini' | 'openrouter' | 'mock';
 
 export interface AIValidationError {
   type: string;
@@ -127,6 +127,7 @@ export interface AIConfiguration {
   workspaceId?: string;
   provider: AIProviderName;
   enabled?: boolean;
+  hasApiKey?: boolean;
   model: string;
   temperature?: number;
   maxTokens?: number;
@@ -140,6 +141,7 @@ export interface AIConfiguration {
 }
 
 export interface AIUpdateConfigurationPayload {
+  enabled?: boolean;
   provider?: AIProviderName;
   model?: string;
   temperature?: number;
