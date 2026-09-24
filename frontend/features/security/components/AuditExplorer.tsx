@@ -29,9 +29,10 @@ export const AuditExplorer: React.FC = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [chainStatus, setChainStatus] = useState<{
-    isValid: boolean;
-    breaks: Array<{ index: number; message: string }>;
-    totalRecords: number;
+    valid: boolean;
+    totalChecked: number;
+    brokenAtLogId?: string;
+    reason?: string;
   } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
@@ -68,9 +69,9 @@ export const AuditExplorer: React.FC = () => {
     } catch (err) {
       console.error('Audit chain verification failed:', err);
       setChainStatus({
-        isValid: false,
-        breaks: [{ index: 0, message: 'Verification endpoint error' }],
-        totalRecords: 0,
+        valid: false,
+        totalChecked: 0,
+        reason: 'Verification endpoint error',
       });
     } finally {
       setIsVerifying(false);
@@ -147,27 +148,27 @@ export const AuditExplorer: React.FC = () => {
       {chainStatus && (
         <div
           className={`p-4 rounded-xl border flex items-center justify-between ${
-            chainStatus.isValid
+            chainStatus.valid
               ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
               : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
           }`}
         >
           <div className="flex items-center gap-3">
-            {chainStatus.isValid ? (
+            {chainStatus.valid ? (
               <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
             ) : (
               <AlertTriangle className="w-6 h-6 text-rose-600 dark:text-rose-400" />
             )}
             <div>
               <div className="text-sm font-bold">
-                {chainStatus.isValid
+                {chainStatus.valid
                   ? 'Cryptographic Chain Verified: 100% Tamper-Evident'
                   : 'Chain Integrity Warning Detected'}
               </div>
               <div className="text-xs opacity-90">
-                {chainStatus.isValid
-                  ? `Successfully validated ${chainStatus.totalRecords} sequential SHA-256 log blocks with zero mutations.`
-                  : `Detected ${chainStatus.breaks.length} broken hashes in chain sequence.`}
+                {chainStatus.valid
+                  ? `Successfully validated ${chainStatus.totalChecked} sequential SHA-256 log blocks with zero mutations.`
+                  : `Broken link at log ${chainStatus.brokenAtLogId ?? 'unknown'}: ${chainStatus.reason ?? 'hash mismatch'}.`}
               </div>
             </div>
           </div>

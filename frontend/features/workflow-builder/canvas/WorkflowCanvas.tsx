@@ -497,7 +497,7 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
               const workflow = await workflowApi.getWorkflow(workflowId);
               loadFromBackendDefinition(
                 workflow.name,
-                workflow.draft?.definition || workflow.definition,
+                workflow.draft?.definition || workflow.draftDefinition || workflow.definition,
                 workflow.id || workflow._id,
                 workflow.currentVersion ?? currentVersion,
                 workflow.publishedVersion ?? publishedVersion,

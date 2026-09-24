@@ -65,7 +65,7 @@ export const aiApi = {
     const response = await apiClient.post<AIGenerateWorkflowResult>(
       '/api/v1/ai/workflows/generate',
       { prompt },
-      workspaceConfig(workspaceId)
+      { ...(workspaceConfig(workspaceId) ?? {}), timeout: 180000 }
     );
     return response.data;
   },
@@ -77,7 +77,7 @@ export const aiApi = {
     const response = await apiClient.post<AIGenerateTemplateResult>(
       '/api/v1/ai/templates/generate',
       { prompt },
-      workspaceConfig(workspaceId)
+      { ...(workspaceConfig(workspaceId) ?? {}), timeout: 180000 }
     );
     return response.data;
   },

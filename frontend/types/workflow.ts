@@ -34,6 +34,7 @@ export interface Workflow {
   };
   publishedVersion?: number;
   publishedVersionId?: string;
+  draftDefinition?: WorkflowDefinition;
   definition?: WorkflowDefinition;
   createdAt: string;
   updatedAt: string;

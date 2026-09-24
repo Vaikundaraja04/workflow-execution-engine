@@ -220,9 +220,10 @@ export const securityApi = {
   },
 
   verifyAuditChain: async (): Promise<{
-    isValid: boolean;
-    breaks: Array<{ index: number; message: string }>;
-    totalRecords: number;
+    valid: boolean;
+    totalChecked: number;
+    brokenAtLogId?: string;
+    reason?: string;
   }> => {
     const response = await apiClient.get('/api/v1/audit/verify-chain');
     return response.data;

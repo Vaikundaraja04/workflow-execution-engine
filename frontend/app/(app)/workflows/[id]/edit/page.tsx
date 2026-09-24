@@ -48,7 +48,7 @@ export default function EditWorkflowPage() {
           setIsReadOnly(isWorkflowReadOnly);
           loadFromBackendDefinition(
             workflow.name,
-            workflow.draft?.definition || workflow.definition,
+            workflow.draft?.definition || workflow.draftDefinition || workflow.definition,
             workflow.id || workflow._id,
             workflow.currentVersion,
             workflow.publishedVersion ??

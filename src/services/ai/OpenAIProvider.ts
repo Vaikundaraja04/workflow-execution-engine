@@ -37,6 +37,7 @@ export class OpenAIProvider implements AIProvider {
           temperature: options.temperature ?? 0.7,
           max_tokens: options.maxTokens ?? 2000,
         }),
+        signal: AbortSignal.timeout(150000),
       });
 
       if (!response.ok) {
