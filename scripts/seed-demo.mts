@@ -1,11 +1,11 @@
 // Seeds a demo account with real, executable workflows so the UI has content.
 // Only uses node types accepted by the engine schema: webhook | condition | log | agent.
 //
-// Usage:  npx tsx scripts/seed-demo.mts
+// Usage:  npx tsx scripts/seed-demo.mts   (set API_URL to target a deployed API)
 // Login:  demo@workflow.test / DemoPass123!
 import { randomUUID } from 'node:crypto';
 
-const base = 'http://localhost:3000';
+const base = process.env.API_URL ?? 'http://localhost:3000';
 const EMAIL = 'demo@workflow.test';
 const PASSWORD = 'DemoPass123!';
 
