@@ -1,0 +1,58 @@
+# Render Blueprint for the Workflow Execution Engine (free tier).
+# Creates: API + worker web service, web console, and a free Key Value (Redis) instance.
+# MongoDB is external (MongoDB Atlas) - you are prompted for MONGODB_URI when the Blueprint syncs.
+# Full step-by-step guide: docs/RENDER_DEPLOY.md
+
+services:
+  - type: web
+    name: workflow-engine-api
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: "node dist/workers/startWorker.js & exec node dist/api/server.js"
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: workflow-engine-kv
+          property: connectionString
+      - key: AUTH_JWT_SECRET
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AUDIT_HMAC_SECRET
+        generateValue: true
+      - key: WEBHOOK_SECRET_KEY
+        generateValue: true
+      - key: IDP_SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "https://workflow-engine-web.onrender.com"
+      - key: APP_BASE_URL
+        value: "https://workflow-engine-web.onrender.com"
+
+  - type: web
+    name: workflow-engine-web
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NEXT_PUBLIC_API_URL
+        value: "https://workflow-engine-api.onrender.com"
+
+  - type: keyvalue
+    name: workflow-engine-kv
+    plan: free
+    region: singapore
+    maxmemoryPolicy: noeviction
