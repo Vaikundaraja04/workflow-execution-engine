@@ -12,6 +12,23 @@ This is a workflow execution engine that allows users to create, manage, and exe
 - Audit logging
 - AI-powered workflow intelligence (Phase 6D)
 
+## Repository structure
+
+```
+src/                  Express API, execution engine, BullMQ workers, models, services
+frontend/             Next.js 16 console (App Router, Tailwind, Zustand)
+tests/                Backend suites (vitest + supertest + in-memory Mongo)
+packages/             JavaScript and Python SDKs
+docs/                 Run guide, production readiness, launch checklists
+docs/phases/          Per-phase architecture documents (design-first development record)
+deploy/               Kubernetes manifests and production overlay
+examples/             Integration examples (webhooks, retries)
+scripts/              Demo seeding and CI helper scripts
+render.yaml           Render Blueprint for free-tier deployment
+docker-compose.yml    Local MongoDB + Redis for development
+Dockerfile*           Container images for the API and the frontend
+```
+
 ## Phase 6D: AI Workflow Intelligence Platform
 
 This phase adds an AI layer over the existing workflow execution engine with the following capabilities:

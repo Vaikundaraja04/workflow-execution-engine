@@ -149,4 +149,4 @@ Two providers are implemented: Stripe and Razorpay.
 
 - Operations runbook: [`docs/PRODUCTION_READINESS.md`](./PRODUCTION_READINESS.md).
 - Kubernetes overlay: [`deploy/k8s/production/README.md`](../deploy/k8s/production/README.md).
-- Phase 18 architecture: [`PHASE-18-ARCHITECTURE.md`](../PHASE-18-ARCHITECTURE.md).
+- Phase 18 architecture: [`PHASE-18-ARCHITECTURE.md`](phases/PHASE-18-ARCHITECTURE.md).
