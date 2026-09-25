@@ -18,7 +18,7 @@ interface AgentBuilderProps {
   isLoading?: boolean;
 }
 
-const MODEL_PROVIDERS = ['mock', 'openai', 'anthropic', 'gemini'];
+const MODEL_PROVIDERS = ['mock', 'openai', 'anthropic', 'gemini', 'openrouter'];
 const ORCHESTRATION_MODES: { value: AgentOrchestrationMode; label: string; desc: string }[] = [
   { value: 'autonomous', label: 'Autonomous', desc: 'Single agent multi-turn reasoning' },
   { value: 'sequential', label: 'Sequential', desc: 'Linear multi-step execution' },
