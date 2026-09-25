@@ -5,7 +5,7 @@
 
 services:
   - type: web
-    name: workflow-engine-api
+    name: workflow-execution-engine-api
     runtime: node
     plan: free
     region: singapore
@@ -33,12 +33,12 @@ services:
       - key: IDP_SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: "https://workflow-engine-web.onrender.com"
+        value: "https://workflow-execution-engine-web.onrender.com"
       - key: APP_BASE_URL
-        value: "https://workflow-engine-web.onrender.com"
+        value: "https://workflow-execution-engine-web.onrender.com"
 
   - type: web
-    name: workflow-engine-web
+    name: workflow-execution-engine-web
     runtime: node
     plan: free
     region: singapore
@@ -49,7 +49,7 @@ services:
       - key: NODE_VERSION
         value: "24"
       - key: NEXT_PUBLIC_API_URL
-        value: "https://workflow-engine-api.onrender.com"
+        value: "https://workflow-execution-engine-api.onrender.com"
 
   - type: keyvalue
     name: workflow-engine-kv

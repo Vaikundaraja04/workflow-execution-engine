@@ -4,8 +4,8 @@ This project deploys to Render's free tier as three resources:
 
 | Render resource | Type | Plan | Purpose |
 | --- | --- | --- | --- |
-| workflow-engine-api | Web service (Node) | Free | Express API + BullMQ worker (both processes) |
-| workflow-engine-web | Web service (Node) | Free | Next.js console |
+| workflow-execution-engine-api | Web service (Node) | Free | Express API + BullMQ worker (both processes) |
+| workflow-execution-engine-web | Web service (Node) | Free | Next.js console |
 | workflow-engine-kv | Key Value (Redis-compatible) | Free | Queue and Socket.IO backing store |
 
 MongoDB is not hosted on Render. Use a free MongoDB Atlas cluster - Atlas clusters are replica sets, so the transactional workflow versioning works.
@@ -29,8 +29,8 @@ Note: Render background workers are a paid instance type, so the worker process 
 
 ## 3. After the first deploy
 
-1. Open https://workflow-engine-api.onrender.com/health - it should return {"status":"ok", ...}.
-2. Open https://workflow-engine-web.onrender.com and register an account (a workspace is provisioned automatically).
+1. Open https://workflow-execution-engine-api.onrender.com/health - it should return {"status":"ok", ...}.
+2. Open https://workflow-execution-engine-web.onrender.com and register an account (a workspace is provisioned automatically).
 3. Run a workflow to confirm the worker executes jobs (status goes QUEUED -> RUNNING -> SUCCEEDED).
 
 ## If Render renames a service
