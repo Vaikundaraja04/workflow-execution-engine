@@ -1,8 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Workflow as WorkflowIcon } from 'lucide-react';
 import type { Workflow } from '@/types/workflow';
 
@@ -42,11 +41,6 @@ export const WorkflowSummary: React.FC<WorkflowSummaryProps> = ({
               <span>•</span>
               <span>{count - publishedCount} in draft</span>
             </p>
-            <div className="mt-3 flex items-center gap-1.5">
-              <Badge variant="outline" size="sm">
-                Active Engine
-              </Badge>
-            </div>
           </>
         )}
       </CardContent>

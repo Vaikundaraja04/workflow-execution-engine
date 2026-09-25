@@ -8,7 +8,6 @@ import { workspaceApi } from '@/services/workspaceApi';
 import { workflowApi } from '@/services/workflowApi';
 import { executionApi } from '@/services/executionApi';
 import { collaborationApi } from '@/services/collaborationApi';
-import { Button } from '@/components/ui/Button';
 import { WorkflowSummary } from '@/components/dashboard/WorkflowSummary';
 import { ExecutionSummary } from '@/components/dashboard/ExecutionSummary';
 import { SuccessRate } from '@/components/dashboard/SuccessRate';
@@ -16,7 +15,6 @@ import { RecentExecutions } from '@/components/dashboard/RecentExecutions';
 import { RecentAuditEvents } from '@/components/dashboard/RecentAuditEvents';
 import { Loading } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function DashboardPage() {
   const { user, isAuthenticated } = useAuthStore();
@@ -164,17 +162,10 @@ export default function DashboardPage() {
           {/* Grid layout */}
           <div className="grid gap-6">
             {/* First row: Summary cards */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <WorkflowSummary workflows={workflows} />
               <ExecutionSummary executions={executions} />
               <SuccessRate executions={executions} />
-              {/* Placeholder for additional metric */}
-              <div className="bg-white rounded-lg border p-6">
-                <h3 className="text-lg font-medium text-gray-900">Workspaces</h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  {currentWorkspace ? 1 : 0} active workspace
-                </p>
-              </div>
             </div>
 
             {/* Second row: Recent activity */}

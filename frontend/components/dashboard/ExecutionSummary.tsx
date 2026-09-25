@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { Activity } from 'lucide-react';
 import type { ExecutionMetrics } from '@/types/analytics';
 import type { WorkflowExecution } from '@/types/execution';
@@ -44,11 +43,6 @@ export const ExecutionSummary: React.FC<ExecutionSummaryProps> = ({
               <span>•</span>
               <span className="text-destructive font-medium">{failed} failed</span>
             </p>
-            <div className="mt-3 flex items-center gap-1.5">
-              <Badge variant="secondary" size="sm">
-                Queue Online
-              </Badge>
-            </div>
           </>
         )}
       </CardContent>
