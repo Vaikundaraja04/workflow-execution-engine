@@ -56,3 +56,4 @@ services:
     plan: free
     region: singapore
     maxmemoryPolicy: noeviction
+    ipAllowList: []
