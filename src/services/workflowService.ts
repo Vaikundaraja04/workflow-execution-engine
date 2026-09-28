@@ -1,10 +1,11 @@
-import mongoose, { Types } from 'mongoose';
+import { Types } from 'mongoose';
 import { WorkflowModel } from '../models/WorkflowModel.js';
 import { WorkflowVersionModel } from '../models/WorkflowVersionModel.js';
 import type { WorkflowDefinition } from '../types/workflow.js';
 import { validateGraph } from '../engine/validateGraph.js';
 import { WorkflowDefinitionSchema } from '../schemas/workflowSchema.js';
 import { tenantScope } from './tenantScope.js';
+import { withTransaction } from '../db/withTransaction.js';
 import { recordWorkflowCreated } from './analyticsService.js';
 import { hashDefinition } from './versionService.js';
 import { validateWorkspaceQuota } from './planService.js';
@@ -83,9 +84,7 @@ export async function publishWorkflow(
   changeSummary?: string,
 ) {
   assertValidWorkflowId(id);
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
+  return withTransaction(async (session) => {
     const wf = await WorkflowModel.findOne({ _id: id, ...tenantScope(ownerId, workspaceId) }).session(session);
     if (!wf) throw new Error('WORKFLOW_NOT_FOUND');
 
@@ -122,13 +121,7 @@ export async function publishWorkflow(
     wf.publishedVersionId = createdVersion._id;
     await wf.save({ session });
 
-    await session.commitTransaction();
     return { versionNumber: nextVersion, definition: createdVersion.definition };
-  } catch (err) {
-    await session.abortTransaction();
-    throw err;
-  } finally {
-    session.endSession();
-  }
+  });
 }
 

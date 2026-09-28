@@ -23,7 +23,7 @@ const AgentMemorySchema = new Schema<IAgentMemory>(
     scopeId: { type: String },
     key: { type: String, required: true, trim: true, maxlength: 200 },
     value: { type: Schema.Types.Mixed, required: true },
-    expiresAt: { type: Date, index: true },
+    expiresAt: { type: Date },
   },
   { timestamps: true },
 );

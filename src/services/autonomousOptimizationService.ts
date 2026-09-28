@@ -1,4 +1,5 @@
-import mongoose, { Types } from 'mongoose';
+import { Types } from 'mongoose';
+import { withTransaction } from '../db/withTransaction.js';
 import { WorkflowModel } from '../models/WorkflowModel.js';
 import { WorkflowVersionModel } from '../models/WorkflowVersionModel.js';
 import { WorkflowExecutionModel } from '../models/WorkflowExecutionModel.js';
@@ -953,10 +954,9 @@ export class AutonomousOptimizationService {
       return { applied: false, plan, version: null, beforeAfter: null, validationErrors };
     }
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
-      const nextVersionNumber = workflow.latestVersionNumber + 1;
+    const baseVersionNumber = workflow.latestVersionNumber;
+    const transactionResult = await withTransaction(async (session) => {
+      const nextVersionNumber = baseVersionNumber + 1;
       const [createdVersion] = await WorkflowVersionModel.create([{
         workflowId: workflow._id,
         ...(workflow.workspaceId ? { workspaceId: workflow.workspaceId } : {}),
@@ -999,7 +999,9 @@ export class AutonomousOptimizationService {
       plan.beforeAfter = beforeAfter;
       await plan.save({ session });
 
-      await session.commitTransaction();
+      return { nextVersionNumber, createdVersion, beforeAfter };
+    });
+
       await createAuditLog({
         action: 'AI_OPTIMIZATION_PLAN_APPLIED',
         userId,
@@ -1008,7 +1010,7 @@ export class AutonomousOptimizationService {
         resourceId: plan._id.toString(),
         metadata: {
           workflowId: plan.workflowId.toString(),
-          versionNumber: nextVersionNumber,
+          versionNumber: transactionResult.nextVersionNumber,
           versionStatus: 'DRAFT',
           changesApplied: applied.changesApplied,
           skippedChanges: applied.skipped,
@@ -1017,15 +1019,10 @@ export class AutonomousOptimizationService {
       return {
         applied: true,
         plan,
-        version: { id: createdVersion._id.toString(), versionNumber: nextVersionNumber, status: 'DRAFT' },
-        beforeAfter,
+        version: { id: transactionResult.createdVersion._id.toString(), versionNumber: transactionResult.nextVersionNumber, status: 'DRAFT' },
+        beforeAfter: transactionResult.beforeAfter,
         validationErrors: [],
       };
-    } catch (error) {
-      await session.abortTransaction();
-      throw error;
-    } finally {
-      session.endSession();
-    }
+
   }
 }

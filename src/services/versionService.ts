@@ -5,6 +5,7 @@ import { WorkflowVersionModel } from '../models/WorkflowVersionModel.js';
 import type { VersionStatus } from '../models/WorkflowVersionModel.js';
 import type { WorkflowDefinition, WorkflowNode } from '../types/workflow.js';
 import { tenantScope } from './tenantScope.js';
+import { withTransaction } from '../db/withTransaction.js';
 
 export interface WorkflowVersionView {
   id: string;
@@ -143,9 +144,7 @@ export async function restoreWorkflowVersion(
 ): Promise<WorkflowVersionView> {
   if (!Types.ObjectId.isValid(workflowId)) throw new Error('INVALID_WORKFLOW_ID');
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
+  return withTransaction(async (session) => {
     const workflow = await WorkflowModel.findOne({ _id: workflowId, ...tenantScope(userId, workspaceId) })
       .session(session);
     if (!workflow) throw new Error('WORKFLOW_NOT_FOUND');
@@ -174,14 +173,8 @@ export async function restoreWorkflowVersion(
     workflow.publishedVersionId = created._id;
     await workflow.save({ session });
 
-    await session.commitTransaction();
     return toVersionView(created);
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
-  } finally {
-    session.endSession();
-  }
+  });
 }
 
 function nodeFieldChanges(before: WorkflowNode, after: WorkflowNode) {
