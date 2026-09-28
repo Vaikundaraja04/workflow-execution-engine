@@ -22,7 +22,8 @@ function percentile(sorted, ratio) {
   return sorted[index];
 }
 export async function runLoadTest(options) {
-  const concurrency = envInt('CONCURRENCY', options.concurrency ?? 100);
+  const scenarioKey = `${options.name.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_CONCURRENCY`;
+  const concurrency = envInt(scenarioKey, envInt('CONCURRENCY', options.concurrency ?? 100));
   const durationMs = envInt('DURATION_SECONDS', options.durationSeconds ?? 30) * 1000;
 
   console.log(`Load test: ${options.name}`);

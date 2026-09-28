@@ -16,10 +16,6 @@ jobs:
     timeout-minutes: 45
 
     services:
-      mongodb:
-        image: mongo:7
-        ports:
-          - 27017:27017
       redis:
         image: redis:7
         ports:
@@ -31,7 +27,7 @@ jobs:
           --health-retries 5
 
     env:
-      MONGODB_URI: mongodb://127.0.0.1:27017/workflow_load_test
+      MONGODB_URI: mongodb://127.0.0.1:27017/workflow_load_test?replicaSet=rs0
       REDIS_URL: redis://127.0.0.1:6379
       BASE_URL: http://127.0.0.1:3000
       PORT: '3000'
@@ -42,6 +38,7 @@ jobs:
       AUTH_REFRESH_LIMIT: '100000'
       WORKER_CONCURRENCY: '10'
       CONCURRENCY: '40'
+      AUTH_LOGIN_CONCURRENCY: '25'
       DURATION_SECONDS: '30'
     steps:
       - name: Checkout
@@ -55,6 +52,19 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Start MongoDB single-node replica set
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval "db.adminCommand({ping:1})" > /dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          docker exec mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval 'rs.status().ok' 2>/dev/null | grep -q 1; then break; fi
+            sleep 2
+          done
 
       - name: Start API and worker
         run: |

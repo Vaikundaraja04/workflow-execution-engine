@@ -60,6 +60,7 @@ node tests/load/run-all.mjs
 | --- | --- | --- |
 | `BASE_URL` | all | `http://127.0.0.1:3000` |
 | `CONCURRENCY` | all | per-script (100 executions/marketplace, 50 governance, 25 auth) |
+| `AUTH_LOGIN_CONCURRENCY` | auth | `25` - scenario-specific override, checked before `CONCURRENCY` |
 | `DURATION_SECONDS` | all | per-script (60 executions, 30 others) |
 | `API_KEY` / `WORKFLOW_ID` | executions | from `seed-output.json` |
 | `LOAD_EMAIL` / `LOAD_PASSWORD` | auth | from `seed-output.json` |
@@ -69,8 +70,7 @@ node tests/load/run-all.mjs
 
 ## CI
 
-`.github/workflows/load-test.yml` runs on `workflow_dispatch` and nightly: MongoDB and
-Redis service containers, boots the API and the worker, seeds through
+`.github/workflows/load-test.yml` runs on `workflow_dispatch` and nightly: a single-node MongoDB replica set container (workflow publishing uses transactions, which require a replica set) and a Redis service container, boots the API and the worker, seeds through
 `tests/load/seed.ts`, runs `tests/load/run-all.mjs` and uploads `tests/load/results/`
 as artifacts. The job fails on any threshold breach.
 
