@@ -19,7 +19,9 @@ concurrency:
 jobs:
   smoke:
     name: Single-process start and Redis restart recovery
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest is moving to Ubuntu 26, whose Linux 6.19+ kernel MongoDB 8.0
+    # refuses to start on (SERVER-121912). 8.0 matches the Atlas free tier this mirrors.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     env:
