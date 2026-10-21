@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Types } from 'mongoose';
 import { Redis } from 'ioredis';
+import { redisReconnectDelay } from '../queues/bullMqExecutionQueue.js';
 import {
   IdentityProviderModel,
   type IIdentityProvider,
@@ -102,7 +103,8 @@ function getRedisClient(): Redis {
       maxRetriesPerRequest: 2,
       enableOfflineQueue: false,
       lazyConnect: false,
-      retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 1000)),
+      // Keep reconnecting: giving up would push SSO state to the in-memory fallback until a restart.
+      retryStrategy: redisReconnectDelay,
     });
     redisClient.on('error', () => {
       // Suppress connection errors during test runs

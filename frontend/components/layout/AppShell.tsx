@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
-import { NAV_GROUPS } from '@/components/layout/nav-config';
+import { visibleNavGroups } from '@/components/layout/nav-config';
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 import { Loading } from '@/components/ui/Loading';
 import { cn } from '@/lib/utils';
@@ -19,9 +19,11 @@ function isItemActive(pathname: string, href: string): boolean {
 }
 
 function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+  const isPlatformAdmin = useAuthStore((state) => state.user?.isPlatformAdmin === true);
+  const groups = visibleNavGroups(isPlatformAdmin);
   return (
     <nav aria-label="Main navigation" className="flex-1 space-y-5 overflow-y-auto px-3 pb-6 pt-4">
-      {NAV_GROUPS.map((group) => (
+      {groups.map((group) => (
         <div key={group.label}>
           <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
             {group.label}

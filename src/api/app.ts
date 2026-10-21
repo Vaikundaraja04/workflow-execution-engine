@@ -44,6 +44,7 @@ import { createMarketplaceRouter } from './routes/marketplaceRoutes.js';
 import { createGovernanceRouter } from './routes/governanceRoutes.js';
 import aiRoutes, { aiConfigRouter } from './routes/aiRoutes.js';
 import type { HealthOptions } from './routes/healthRoutes.js';
+import { resolveTrustProxy } from './trustProxy.js';
 import { createAdminRouter } from './routes/adminRoutes.js';
 import { createAuditRouter } from './routes/auditRoutes.js';
 import { createSsoRouter, createSSOAdminRouter } from './routes/ssoRoutes.js';
@@ -122,6 +123,9 @@ export interface AppOptions {
 export function createApp(options: AppOptions) {
   const app = express();
   app.disable('x-powered-by');
+  // Behind a hosting proxy every request arrives from the proxy's address. Say how
+  // many proxy hops to trust (TRUST_PROXY) so req.ip is the visitor's address.
+  app.set('trust proxy', resolveTrustProxy(process.env.TRUST_PROXY));
 
   app.use(helmet());
   app.use(tracingMiddleware('workflow-execution-engine'));
@@ -138,7 +142,10 @@ export function createApp(options: AppOptions) {
   const currentRegion = options.currentRegion ?? (process.env.REGION || 'us-east-1');
   app.use('/api', createRegionMiddleware(regionService, currentRegion));
 
-  app.use('/health', createHealthRouter(createHealthChecks(options.health ?? {})));
+  app.use('/health', createHealthRouter(
+    createHealthChecks(options.health ?? {}),
+    { requireWorker: options.health?.requireWorker ?? false },
+  ));
 
   if (options.docs !== false) {
     app.get('/api/openapi.json', (_req, res) => {

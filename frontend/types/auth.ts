@@ -7,6 +7,8 @@ export interface User {
   createdAt?: string;
   updatedAt?: string;
   defaultWorkspaceId?: string;
+  /** Set by the API at login; operator pages are shown only when true. */
+  isPlatformAdmin?: boolean;
 }
 
 export interface AuthTokens {

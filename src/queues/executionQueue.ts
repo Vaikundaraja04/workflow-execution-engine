@@ -5,6 +5,12 @@ export const DEFAULT_EXECUTION_BACKOFF_MS = 1_000;
 
 export interface ExecutionJobData {
   executionId: string;
+  /**
+   * Attempts already used before this job was queued. Set when a run whose job
+   * was lost (for example after Redis lost its data) is queued again, so the
+   * attempt count carries on instead of restarting at 1.
+   */
+  attemptOffset?: number;
 }
 
 export interface ExecutionEnqueueOptions {
@@ -40,6 +46,10 @@ export interface ExecutionQueue {
   getMetrics?(): Promise<QueueMetrics>;
   removeJob?(jobId: string): Promise<boolean>;
   retryJob?(jobId: string): Promise<boolean>;
+  /** BullMQ job state ('waiting', 'active', 'delayed', ...), or 'unknown' when the job does not exist. */
+  getJobState?(jobId: string): Promise<string>;
+  /** True when the queue's own Redis connection answers. */
+  ping?(): Promise<boolean>;
 }
 
 export function createExecutionJobId(executionId: string): string {

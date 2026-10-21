@@ -12,10 +12,13 @@ import {
 } from './jwt.service.js';
 import type { AuthConfig } from './jwt.service.js';
 import { createAuditLog } from '../services/auditService.js';
+import { isPlatformAdminEmail } from '../api/middleware/platformAdmin.js';
 
 export interface UserView {
   id: string;
   email: string;
+  /** True when the email is in PLATFORM_ADMIN_EMAILS; the console shows operator pages only then. */
+  isPlatformAdmin: boolean;
 }
 
 export interface IssuedTokens {
@@ -29,7 +32,7 @@ export interface SessionContext {
 }
 
 export function toUserView(user: IUser): UserView {
-  return { id: user._id.toString(), email: user.email };
+  return { id: user._id.toString(), email: user.email, isPlatformAdmin: isPlatformAdminEmail(user.email) };
 }
 
 function isDuplicateKeyError(error: unknown): boolean {
