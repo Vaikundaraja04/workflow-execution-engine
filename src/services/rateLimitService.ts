@@ -14,6 +14,8 @@ export const DEFAULT_API_KEY_LIMIT = 1000; // requests per minute
 export const DEFAULT_WORKSPACE_LIMIT = 5000; // requests per hour
 export const API_KEY_WINDOW_SECONDS = 60; // 1 minute
 export const WORKSPACE_WINDOW_SECONDS = 3600; // 1 hour
+/** Longest a request waits for Redis before the limit check fails open. */
+export const RATE_LIMIT_REDIS_TIMEOUT_MS = 1_000;
 
 export class RateLimitService {
   private client: Redis;
@@ -103,11 +105,22 @@ export class RateLimitService {
     const resetTime = this.calculateResetTime(windowStart, windowSeconds);
     const retryAfter = Math.max(1, Math.ceil((resetTime - Date.now()) / 1000));
 
+    let timer: NodeJS.Timeout | undefined;
     try {
+      // While Redis is down the client keeps reconnecting in the background. Requests
+      // must not wait for it: fail open at once, and never wait longer than the timeout.
+      if (this.client.status === 'reconnecting' || this.client.status === 'end') {
+        throw new Error('REDIS_UNAVAILABLE');
+      }
       const pipeline = this.client.pipeline();
       pipeline.incr(key);
       pipeline.expire(key, windowSeconds * 2);
-      const results = await pipeline.exec();
+      const results = await Promise.race([
+        pipeline.exec(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('REDIS_TIMEOUT')), RATE_LIMIT_REDIS_TIMEOUT_MS);
+        }),
+      ]);
 
       if (!results || !results[0]) {
         throw new Error('Redis pipeline execution failed');
@@ -136,6 +149,8 @@ export class RateLimitService {
         resetTime,
         retryAfter,
       };
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

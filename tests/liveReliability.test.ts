@@ -26,6 +26,7 @@ import { createHealthChecks, createHealthRouter } from '../src/api/routes/health
 import type { HealthCheckResult } from '../src/observability/health.js';
 import { createAuthRateLimiters, loginRateLimitKey, refreshRateLimitKey } from '../src/api/middleware/rateLimiter.js';
 import { resolveTrustProxy } from '../src/api/trustProxy.js';
+import { RateLimitService } from '../src/services/rateLimitService.js';
 
 const up: HealthCheckResult = { status: 'up', latencyMs: 0 };
 const down: HealthCheckResult = { status: 'down', latencyMs: 0 };
@@ -348,5 +349,23 @@ describe('TRUST_PROXY setting', () => {
     expect(resolveTrustProxy('true')).toBe(true);
     expect(resolveTrustProxy('false')).toBe(false);
     expect(resolveTrustProxy('loopback, 10.0.0.0/8')).toBe('loopback, 10.0.0.0/8');
+  });
+});
+
+describe('API key limits while Redis is down', () => {
+  it('fails open at once instead of making requests wait for a reconnect', async () => {
+    // Nothing listens on port 1, so the client keeps reconnecting in the background.
+    const service = new RateLimitService('redis://127.0.0.1:1');
+    try {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const startedAt = Date.now();
+      const first = await service.checkApiKeyLimit('key-1', 5);
+      const second = await service.checkWorkspaceLimit('workspace-1', 5);
+      expect(first.allowed).toBe(true);
+      expect(second.allowed).toBe(true);
+      expect(Date.now() - startedAt).toBeLessThan(2_500);
+    } finally {
+      await service.close();
+    }
   });
 });

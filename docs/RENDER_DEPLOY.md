@@ -59,7 +59,7 @@ Service names are global on onrender.com. If a name is taken, Render asks you to
 
 - Free web services spin down after 15 minutes without traffic, and the next request takes about a minute to wake them. The console now waits for the API (showing "Starting the server") instead of failing the first request.
 - Free Key Value instances do not keep data on disk, so a restart loses queued jobs. The workers check every minute for runs that MongoDB still shows as waiting or running but whose job is gone, and queue them again (or fail them if no attempts are left). A lost run resumes within about three minutes.
-- Redis connections keep reconnecting with a delay of up to 5 seconds, so a Key Value restart no longer leaves the API unable to queue runs.
+- Redis connections keep reconnecting with a delay of up to 5 seconds, so a Key Value restart no longer leaves the API unable to queue runs. While Redis is down, API-key rate limits are skipped (fail open) rather than slowing every request.
 - Login attempts are limited per account and token refreshes per session, so visitors behind Render's shared proxy no longer lock each other out.
 
 | Variable | Default | Meaning |
