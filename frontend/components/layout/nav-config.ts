@@ -28,6 +28,8 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Operator pages: their APIs answer only users listed in PLATFORM_ADMIN_EMAILS. */
+  platformAdminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -97,21 +99,31 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Business',
     items: [
-      { href: '/analytics/business', label: 'Business Analytics', icon: BarChart3 },
-      { href: '/analytics/marketplace', label: 'Marketplace Analytics', icon: Store },
-      { href: '/growth', label: 'Growth', icon: TrendingUp },
+      { href: '/analytics/business', label: 'Business Analytics', icon: BarChart3, platformAdminOnly: true },
+      { href: '/analytics/marketplace', label: 'Marketplace Analytics', icon: Store, platformAdminOnly: true },
+      { href: '/growth', label: 'Growth', icon: TrendingUp, platformAdminOnly: true },
       { href: '/publisher', label: 'Publisher Portal', icon: Rocket },
       { href: '/compliance', label: 'Enterprise Compliance', icon: FileText },
-      { href: '/enterprise/console', label: 'Enterprise Console', icon: Briefcase },
+      { href: '/enterprise/console', label: 'Enterprise Console', icon: Briefcase, platformAdminOnly: true },
     ],
   },
   {
     label: 'Account',
     items: [
       { href: '/customer', label: 'Customer Console', icon: CreditCard },
-      { href: '/admin/customers', label: 'Customer Management', icon: Users },
+      { href: '/admin/customers', label: 'Customer Management', icon: Users, platformAdminOnly: true },
     ],
   },
 ];
+
+/** The groups and items a user may open; operator pages are left out for everyone else. */
+export function visibleNavGroups(isPlatformAdmin: boolean): NavGroup[] {
+  return NAV_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => isPlatformAdmin || !item.platformAdminOnly),
+    }))
+    .filter((group) => group.items.length > 0);
+}
 
 export default NAV_GROUPS;

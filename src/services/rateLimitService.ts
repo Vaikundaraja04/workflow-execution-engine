@@ -1,4 +1,5 @@
 import { Redis } from 'ioredis';
+import { redisReconnectDelay } from '../queues/bullMqExecutionQueue.js';
 import { APIKeyModel } from '../models/APIKeyModel.js';
 
 export interface RateLimitCheckResult {
@@ -26,7 +27,8 @@ export class RateLimitService {
         maxRetriesPerRequest: 3,
         enableOfflineQueue: true,
         lazyConnect: false,
-        retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 1000)),
+        // Keep reconnecting: giving up would leave rate limiting failing open until a restart.
+        retryStrategy: redisReconnectDelay,
       });
 
       this.client.on('error', (err) => {

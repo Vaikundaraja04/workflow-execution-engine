@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
+import { ensureApiAwake, markApiAwake, markApiMaybeAsleep } from '@/lib/apiWakeUp';
 
 export interface ApiClientError {
   code: string;
@@ -26,7 +27,8 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,
+  // The API runs on a small free instance; give slow answers room before failing.
+  timeout: 60000,
 });
 
 let isRefreshing = false;
@@ -48,7 +50,10 @@ const processQueue = (error: unknown, token: string | null = null) => {
 
 // Request interceptor
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
+    // Wait for a sleeping API to start before sending; see lib/apiWakeUp.ts.
+    await ensureApiAwake();
+
     let token: string | null = null;
     let workspaceId: string | null = null;
 
@@ -72,9 +77,18 @@ apiClient.interceptors.request.use(
 
 // Response interceptor with auto-refresh token handling
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    markApiAwake();
+    return response;
+  },
   async (error: AxiosError<{ error?: { code?: string; message?: string; details?: unknown; requestId?: string } }>) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    if (error.response) {
+      markApiAwake();
+    } else {
+      // No answer at all (timeout or network): check the API is up before the next request.
+      markApiMaybeAsleep();
+    }
 
     // If 401 and not already retried
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {

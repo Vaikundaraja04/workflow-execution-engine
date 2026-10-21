@@ -36,8 +36,8 @@ export default function RegisterPage() {
     setSuccess(null);
     try {
       await authService.register(data);
-      const { accessToken, refreshToken, defaultWorkspaceId } = await authService.login(data);
-      useAuthStore.getState().setAuth({ accessToken, refreshToken, defaultWorkspaceId });
+      const { accessToken, refreshToken, user, defaultWorkspaceId } = await authService.login(data);
+      useAuthStore.getState().setAuth({ accessToken, refreshToken, defaultWorkspaceId }, user);
       // Redirect to dashboard
       router.push('/dashboard');
     } catch (err: any) {

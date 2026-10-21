@@ -25,14 +25,25 @@ export interface ExecutionWorkerOptions {
   ) => Promise<void>;
 }
 
-function getMaximumAttempts(job: Job<ExecutionJobData>): number {
+function getJobAttempts(job: Job<ExecutionJobData>): number {
   return typeof job.opts.attempts === 'number'
     ? job.opts.attempts
     : DEFAULT_EXECUTION_ATTEMPTS;
 }
 
-function getAttemptNumber(job: Job<ExecutionJobData>): number {
-  return Math.max(job.attemptsStarted, job.attemptsMade + 1, 1);
+function getAttemptOffset(job: Job<ExecutionJobData>): number {
+  const offset = job.data.attemptOffset;
+  return typeof offset === 'number' && Number.isInteger(offset) && offset > 0 ? offset : 0;
+}
+
+/** Attempts allowed for the run, including any used before this job was queued. */
+export function getMaximumAttempts(job: Job<ExecutionJobData>): number {
+  return getAttemptOffset(job) + getJobAttempts(job);
+}
+
+/** The run's attempt number, counting attempts used before this job was queued. */
+export function getAttemptNumber(job: Job<ExecutionJobData>): number {
+  return getAttemptOffset(job) + Math.max(job.attemptsStarted, job.attemptsMade + 1, 1);
 }
 
 export function createExecutionWorker(
@@ -74,7 +85,7 @@ export function createExecutionWorker(
 
   worker.on('failed', (job, error) => {
     if (!job) return;
-    const exhausted = job.attemptsMade >= getMaximumAttempts(job);
+    const exhausted = job.attemptsMade >= getJobAttempts(job);
     const stalled = error.message.toLowerCase().includes('stalled more than');
     if (!exhausted && !stalled) return;
 

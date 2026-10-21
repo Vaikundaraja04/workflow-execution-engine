@@ -11,6 +11,19 @@ import {
   EXECUTION_JOB_NAME,
 } from './executionQueue.js';
 
+const RECONNECT_STEP_MS = 200;
+const RECONNECT_MAX_DELAY_MS = 5_000;
+
+/**
+ * Delay before the next Redis reconnect attempt: 200 ms, 400 ms, ... capped at 5 s.
+ * It never gives up. Returning null would close the connection for good, so one
+ * short Redis restart (common on Render's free Key Value) would leave the API
+ * unable to queue runs until the whole process restarted.
+ */
+export function redisReconnectDelay(attempts: number): number {
+  return Math.min(Math.max(attempts, 1) * RECONNECT_STEP_MS, RECONNECT_MAX_DELAY_MS);
+}
+
 export function createQueueConnection(redisUrl: string): ConnectionOptions {
   // Support Redis Cluster via environment variable
   const clusterEnabled = process.env.REDIS_CLUSTER_ENABLED === 'true';
@@ -24,7 +37,7 @@ export function createQueueConnection(redisUrl: string): ConnectionOptions {
         port: parseInt(port || '6379', 10),
         maxRetriesPerRequest: 1,
         connectTimeout: 5_000,
-        retryStrategy: (attempts: number) => attempts > 2 ? null : attempts * 100,
+        retryStrategy: redisReconnectDelay,
       };
     }
   }
@@ -33,7 +46,7 @@ export function createQueueConnection(redisUrl: string): ConnectionOptions {
     url: redisUrl,
     maxRetriesPerRequest: 1,
     connectTimeout: 5_000,
-    retryStrategy: (attempts: number) => attempts > 2 ? null : attempts * 100,
+    retryStrategy: redisReconnectDelay,
   };
 }
 
@@ -133,6 +146,31 @@ export class BullMqExecutionQueue implements ExecutionQueue {
       return false;
     } catch {
       return false;
+    }
+  }
+
+  async getJobState(jobId: string): Promise<string> {
+    return this.queue.getJobState(jobId);
+  }
+
+  /**
+   * Makes one small read over this queue's own Redis connection, the one used to
+   * add jobs. False when that connection cannot answer within the timeout.
+   */
+  async ping(timeoutMs = 2_000): Promise<boolean> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        this.queue.getJobCounts('waiting'),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('PING_TIMEOUT')), timeoutMs);
+        }),
+      ]);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

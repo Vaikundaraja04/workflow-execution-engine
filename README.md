@@ -16,6 +16,7 @@ This is a workflow execution engine that allows users to create, manage, and exe
 
 ```
 src/                  Express API, execution engine, BullMQ workers, models, services
+src/main.ts           API and workers in one process (what Render runs)
 frontend/             Next.js 16 console (App Router, Tailwind, Zustand)
 tests/                Backend suites (vitest + supertest + in-memory Mongo)
 packages/             JavaScript and Python SDKs

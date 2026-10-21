@@ -57,6 +57,32 @@ describe('AppShell', () => {
     );
   });
 
+  it('hides operator pages from users who are not platform admins', () => {
+    render(
+      <AppShell>
+        <div>shell content</div>
+      </AppShell>
+    );
+
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    ['/analytics/business', '/analytics/marketplace', '/growth', '/enterprise/console', '/admin/customers'].forEach(
+      (href) => expect(hrefs).not.toContain(href)
+    );
+  });
+
+  it('shows operator pages to platform admins', () => {
+    useAuthStore.setState({ user: { id: 'user-1', email: 'ops@example.com', isPlatformAdmin: true } });
+
+    render(
+      <AppShell>
+        <div>shell content</div>
+      </AppShell>
+    );
+
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    ['/analytics/business', '/growth', '/admin/customers'].forEach((href) => expect(hrefs).toContain(href));
+  });
+
   it('renders children inside the shell with account controls', () => {
     render(
       <AppShell>

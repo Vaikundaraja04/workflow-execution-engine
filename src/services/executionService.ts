@@ -438,6 +438,126 @@ export async function recoverPendingExecutions(
   return { examined: candidates.length, recovered, failed };
 }
 
+export interface OrphanRecoveryOptions extends ExecutionCreationOptions {
+  /** Only runs untouched for longer than this are checked (default 2 minutes). */
+  graceMs?: number;
+  /** Most runs checked in one sweep (default 200). */
+  limit?: number;
+}
+
+export interface OrphanRecoverySummary {
+  examined: number;
+  requeued: number;
+  failed: number;
+}
+
+export const DEFAULT_ORPHAN_GRACE_MS = 120_000;
+export const EXECUTION_LOST_CODE = 'EXECUTION_LOST';
+const MISSING_JOB_STATE = 'unknown';
+const DEFAULT_TIMEOUT_FALLBACK_MS = 30_000;
+
+/**
+ * Finds runs that MongoDB still shows as waiting or running but whose queue job no
+ * longer exists, and queues them again (or fails them when no attempts are left).
+ *
+ * Redis without persistence (such as Render's free Key Value) loses every job when it
+ * restarts. Before this sweep, those runs stayed QUEUED or RUNNING forever.
+ */
+export async function recoverOrphanedExecutions(
+  queue: ExecutionQueue,
+  options: OrphanRecoveryOptions = {},
+): Promise<OrphanRecoverySummary> {
+  const summary: OrphanRecoverySummary = { examined: 0, requeued: 0, failed: 0 };
+  if (!queue.getJobState) return summary;
+
+  const graceMs = options.graceMs ?? DEFAULT_ORPHAN_GRACE_MS;
+  const now = Date.now();
+  const candidates = await WorkflowExecutionModel.find({
+    status: { $in: ['QUEUING', 'QUEUED', 'RUNNING'] },
+    updatedAt: { $lt: new Date(now - graceMs) },
+  }).sort({ updatedAt: 1 }).limit(options.limit ?? 200);
+
+  for (const execution of candidates) {
+    summary.examined += 1;
+    if (execution.status === 'RUNNING') {
+      // A run may legitimately take as long as its timeout; leave it alone until then.
+      const timeoutMs = execution.timeoutMs ?? options.timeoutMs ?? DEFAULT_TIMEOUT_FALLBACK_MS;
+      const startedAt = execution.startedAt?.getTime() ?? execution.updatedAt.getTime();
+      if (now - startedAt < timeoutMs + graceMs) continue;
+    }
+
+    let state: string;
+    try {
+      state = await queue.getJobState(execution.jobId);
+    } catch {
+      break; // Redis is unreachable right now; the next sweep tries again.
+    }
+    if (state !== MISSING_JOB_STATE) continue;
+
+    try {
+      const outcome = await requeueOrphanedExecution(queue, execution, options);
+      if (outcome === 'requeued') summary.requeued += 1;
+      if (outcome === 'failed') summary.failed += 1;
+    } catch {
+      // Leave the run as it is; the next sweep retries it.
+    }
+  }
+
+  return summary;
+}
+
+/**
+ * 'requeued' when the run was queued again, 'failed' when it was failed for good, and
+ * 'skipped' when the worker or another sweep changed the run first.
+ */
+async function requeueOrphanedExecution(
+  queue: ExecutionQueue,
+  execution: IWorkflowExecution,
+  options: ExecutionCreationOptions,
+): Promise<'requeued' | 'failed' | 'skipped'> {
+  if (execution.status === 'QUEUING') {
+    await enqueuePersistedExecution(queue, execution, options);
+    return 'requeued';
+  }
+
+  const enqueueOptions = getEnqueueOptions(execution, options);
+  const attemptsUsed = execution.attemptsMade;
+  const attemptsLeft = enqueueOptions.attempts - attemptsUsed;
+  if (attemptsLeft <= 0) {
+    const failed = await markExecutionFailed(
+      execution._id.toString(),
+      { code: EXECUTION_LOST_CODE, message: 'The queue lost this run and no attempts were left' },
+      attemptsUsed,
+    );
+    return failed ? 'failed' : 'skipped';
+  }
+
+  if (execution.status === 'RUNNING') {
+    // The attempt in flight was lost with the job; count it as used and wait again.
+    const queuedAt = new Date();
+    const reset = await WorkflowExecutionModel.findOneAndUpdate(
+      { _id: execution._id, status: 'RUNNING', attemptsMade: attemptsUsed },
+      {
+        $set: { status: 'QUEUED', queuedAt },
+        $unset: { nextRetryAt: 1 },
+        $push: { statusHistory: { status: 'QUEUED', timestamp: queuedAt, attempt: attemptsUsed } },
+      },
+      { returnDocument: 'after' },
+    );
+    if (!reset) return 'skipped';
+  }
+
+  await queue.enqueue(
+    { executionId: execution._id.toString(), attemptOffset: attemptsUsed },
+    {
+      ...enqueueOptions,
+      attempts: attemptsLeft,
+      ...(execution.status === 'RUNNING' ? { delayMs: 0 } : {}),
+    },
+  );
+  return 'requeued';
+}
+
 async function persistTerminalResult(
   executionId: Types.ObjectId,
   attemptNumber: number,

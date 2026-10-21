@@ -177,6 +177,15 @@ describe('PHASE 5A — Enterprise Operations Platform', () => {
   // 1. Audit Explorer API
   // =========================================================================
   describe('1. Audit Explorer API', () => {
+    // Fixture dates sit 10 days back, so they stay inside the summary's 30-day
+    // window on whatever day the suite runs (fixed September dates failed from October).
+    const auditBase = (() => {
+      const now = new Date();
+      return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 10);
+    })();
+    const auditDay = (dayOffset: number, hour: number) =>
+      new Date(auditBase + dayOffset * 86_400_000 + hour * 3_600_000);
+
     beforeEach(async () => {
       // Seed audit logs for Workspace A
       await AuditLogModel.create([
@@ -188,7 +197,7 @@ describe('PHASE 5A — Enterprise Operations Platform', () => {
           resourceId: 'wf-101',
           metadata: { name: 'Order Processing' },
           ipAddress: '192.168.1.10',
-          createdAt: new Date('2026-09-01T10:00:00.000Z'),
+          createdAt: auditDay(0, 10),
         },
         {
           userId: adminUser._id,
@@ -198,7 +207,7 @@ describe('PHASE 5A — Enterprise Operations Platform', () => {
           resourceId: 'user-202',
           metadata: { email: 'newmember@example.com', role: 'EDITOR' },
           ipAddress: '192.168.1.20',
-          createdAt: new Date('2026-09-02T11:00:00.000Z'),
+          createdAt: auditDay(1, 11),
         },
         {
           userId: ownerUser._id,
@@ -208,7 +217,7 @@ describe('PHASE 5A — Enterprise Operations Platform', () => {
           resourceId: 'key-303',
           metadata: { name: 'Production Trigger Key' },
           ipAddress: '192.168.1.10',
-          createdAt: new Date('2026-09-03T12:00:00.000Z'),
+          createdAt: auditDay(2, 12),
         },
         {
           userId: ownerUser._id,
@@ -216,7 +225,7 @@ describe('PHASE 5A — Enterprise Operations Platform', () => {
           action: 'AUTH_LOGIN_FAILED',
           resource: 'auth',
           ipAddress: '198.51.100.1',
-          createdAt: new Date('2026-09-04T13:00:00.000Z'),
+          createdAt: auditDay(3, 13),
         },
       ]);
 
@@ -228,7 +237,7 @@ describe('PHASE 5A — Enterprise Operations Platform', () => {
         resource: 'workflow',
         resourceId: 'wf-999-secret',
         metadata: { name: 'Workspace B Secret' },
-        createdAt: new Date('2026-09-01T10:00:00.000Z'),
+        createdAt: auditDay(0, 10),
       });
     });
 
@@ -310,7 +319,7 @@ describe('PHASE 5A — Enterprise Operations Platform', () => {
 
       // Filter by date range
       const dateRes = await request
-        .get('/api/v1/audit?startDate=2026-09-01T00:00:00.000Z&endDate=2026-09-02T23:59:59.999Z')
+        .get(`/api/v1/audit?startDate=${auditDay(0, 0).toISOString()}&endDate=${new Date(auditDay(2, 0).getTime() - 1).toISOString()}`)
         .set('Authorization', `Bearer ${ownerToken}`)
         .set('x-workspace-id', workspaceAId)
         .expect(200);

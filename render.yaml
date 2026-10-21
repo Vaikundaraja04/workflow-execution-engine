@@ -2,6 +2,9 @@
 # Creates: API + worker web service, web console, and a free Key Value (Redis) instance.
 # MongoDB is external (MongoDB Atlas) - you are prompted for MONGODB_URI when the Blueprint syncs.
 # Full step-by-step guide: docs/RENDER_DEPLOY.md
+#
+# The API service runs dist/main.js: the API and the queue workers in ONE process.
+# If the workers stop, /health answers 503 and Render restarts the instance.
 
 services:
   - type: web
@@ -10,12 +13,19 @@ services:
     plan: free
     region: singapore
     buildCommand: npm ci && npm run build
-    startCommand: "node dist/workers/startWorker.js & exec node dist/api/server.js"
+    startCommand: node dist/main.js
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: "24"
+      # Keep the JavaScript heap inside the free instance's 512 MB.
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=384"
       - key: MONGODB_URI
+        sync: false
+      # Comma-separated emails that may open the operator pages (Business Analytics,
+      # Growth, Enterprise Console, Customer Management). Put your own email here.
+      - key: PLATFORM_ADMIN_EMAILS
         sync: false
       - key: REDIS_URL
         fromService:
