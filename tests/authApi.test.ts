@@ -20,6 +20,9 @@ let request: ReturnType<typeof supertest>;
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(replSet.getUri());
+  // Wait for the unique email index: on a fresh database Mongoose builds it in the
+  // background, and "rejects duplicate registration" failed whenever it was not ready yet.
+  await UserModel.init();
   request = supertest(createApp({ auth: authConfig, authRateLimit: { loginLimit: 1000, refreshLimit: 1000 } }));
 }, 180000);
 

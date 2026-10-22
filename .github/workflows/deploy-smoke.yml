@@ -19,9 +19,10 @@ concurrency:
 jobs:
   smoke:
     name: Single-process start and Redis restart recovery
-    # Pinned: ubuntu-latest is moving to Ubuntu 26, whose Linux 6.19+ kernel MongoDB 8.0
-    # refuses to start on (SERVER-121912). 8.0 matches the Atlas free tier this mirrors.
-    runs-on: ubuntu-24.04
+    # MongoDB 8.0 refuses to start on Linux 6.19 and newer (SERVER-121912), which GitHub's
+    # runners now use, so this runs 8.2 (the version the test suite's in-memory MongoDB
+    # already uses). The engine's queries are the same on Atlas's 8.0.
+    runs-on: ubuntu-latest
     timeout-minutes: 20
 
     env:
@@ -49,7 +50,7 @@ jobs:
 
       - name: Pull the MongoDB and Redis images
         run: |
-          for image in mongo:8.0 redis:7; do
+          for image in mongo:8.2 redis:7; do
             for attempt in 1 2 3; do
               if docker pull --quiet "$image"; then break; fi
               if [ "$attempt" = 3 ]; then echo "::error title=Image pull failed::could not pull $image"; exit 1; fi
@@ -59,7 +60,7 @@ jobs:
 
       - name: Start MongoDB single-node replica set
         run: |
-          docker run -d --name mongo -p 27017:27017 mongo:8.0 --replSet rs0 --bind_ip_all
+          docker run -d --name mongo -p 27017:27017 mongo:8.2 --replSet rs0 --bind_ip_all
           started=""
           for attempt in $(seq 1 60); do
             if docker exec mongo mongosh --quiet --eval "db.adminCommand({ping:1}).ok" 2>/dev/null | grep -q 1; then started=yes; break; fi

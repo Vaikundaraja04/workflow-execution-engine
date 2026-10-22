@@ -15,6 +15,41 @@ function recordEvent(history: ExecutionHistoryEvent[], nodeId: string, from: Ste
   });
 }
 
+/**
+ * The run input value a condition checks. Accepts a plain key ("status"), the console's
+ * "input." form ("input.status") and nested paths ("customer.tier").
+ */
+export function readConditionField(context: Record<string, unknown>, field: string): unknown {
+  if (Object.hasOwn(context, field)) return context[field];
+  const parts = field.split('.');
+  if (parts[0] === 'input' && !Object.hasOwn(context, 'input')) parts.shift();
+  let current: unknown = context;
+  for (const part of parts) {
+    if (current === null || typeof current !== 'object' || !Object.hasOwn(current, part)) return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+/** A number, or text holding one: the console saves every expected value as text ("100"). */
+function asNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && /^\s*-?\d+(\.\d+)?\s*$/.test(value)) return Number(value);
+  return undefined;
+}
+
+function conditionValuesEqual(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (typeof left === 'number' || typeof right === 'number') {
+    const l = asNumber(left);
+    const r = asNumber(right);
+    return l !== undefined && l === r;
+  }
+  if (typeof left === 'boolean' && typeof right === 'string') return String(left) === right.trim();
+  if (typeof right === 'boolean' && typeof left === 'string') return String(right) === left.trim();
+  return false;
+}
+
 function evaluateCondition(config: Record<string, unknown>, context: Record<string, unknown>): { result: boolean; error?: string } {
   const field = config.field as string | undefined;
   const operator = config.operator as string | undefined;
@@ -29,19 +64,15 @@ function evaluateCondition(config: Record<string, unknown>, context: Record<stri
   if (!['equals', 'notEquals', 'greaterThan', 'lessThan'].includes(operator)) {
     return { result: false, error: 'UNKNOWN_OPERATOR' };
   }
-  const left = context[field];
-  if ((operator === 'greaterThan' || operator === 'lessThan') && (typeof left !== 'number' || typeof value !== 'number')) {
-    return { result: false, error: 'NON_NUMERIC_OPERAND' };
+  const left = readConditionField(context, field);
+  if (operator === 'greaterThan' || operator === 'lessThan') {
+    const l = asNumber(left);
+    const r = asNumber(value);
+    if (l === undefined || r === undefined) return { result: false, error: 'NON_NUMERIC_OPERAND' };
+    return { result: operator === 'greaterThan' ? l > r : l < r };
   }
-  let res: boolean;
-  switch (operator) {
-    case 'equals': res = left === value; break;
-    case 'notEquals': res = left !== value; break;
-    case 'greaterThan': res = (left as number) > (value as number); break;
-    case 'lessThan': res = (left as number) < (value as number); break;
-    default: return { result: false, error: 'UNKNOWN_OPERATOR' };
-  }
-  return { result: res };
+  const same = conditionValuesEqual(left, value);
+  return { result: operator === 'equals' ? same : !same };
 }
 
 export async function executeWorkflow(

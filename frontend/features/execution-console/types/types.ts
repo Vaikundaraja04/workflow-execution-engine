@@ -40,11 +40,14 @@ export interface ExecutionDetail {
   output: Record<string, unknown>;
 }
 
+/** A step's status: a run status, or SKIPPED for the path a condition did not take. */
+export type ExecutionNodeStatus = ExecutionStatus | 'SKIPPED';
+
 export interface ExecutionNode {
   id: string;
   name: string;
   type: string;
-  status: ExecutionStatus;
+  status: ExecutionNodeStatus;
   startedAt: string | null;
   finishedAt: string | null;
   duration: number | null;

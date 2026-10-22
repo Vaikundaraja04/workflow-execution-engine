@@ -9,6 +9,22 @@ export type ExecutionStatus =
   | 'CANCELLED'
   | 'RETRYING';
 
+export interface ExecutionHistoryEvent {
+  nodeId: string;
+  fromStatus: string;
+  toStatus: string;
+  timestamp: string;
+}
+
+/** What the engine recorded for each step, once the run has finished. */
+export interface ExecutionResult {
+  status: string;
+  stepStatuses?: Record<string, string>;
+  outputs?: Record<string, unknown>;
+  executionHistory?: ExecutionHistoryEvent[];
+  errors?: { code: string; message: string; nodeId?: string }[];
+}
+
 export interface WorkflowExecution {
   _id: string;
   id?: string;
@@ -19,9 +35,15 @@ export interface WorkflowExecution {
   version: number;
   versionNumber?: number;
   triggerType?: string;
+  /** The version of the workflow this run used. */
+  workflowVersionId?: string;
+  /** The run's input, as the API returns it. */
+  input?: Record<string, unknown>;
   initialInput?: Record<string, unknown>;
   output?: Record<string, unknown>;
-  error?: string;
+  result?: ExecutionResult;
+  /** The API returns { code, message }; older callers used plain text. */
+  error?: string | { code?: string; message?: string };
   startedAt?: string | null;
   finishedAt?: string | null;
   createdAt: string;
