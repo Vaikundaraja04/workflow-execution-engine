@@ -60,8 +60,10 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
         hasError && 'border-destructive ring-1 ring-destructive'
       )}
     >
-      {/* Input Handle */}
-      {hasInput && !customHandles && (
+      {/* Input Handle. Custom handles replace only the output side (the Condition box's
+          True and False dots), so the input dot stays: without it nothing could connect
+          into a Condition box. */}
+      {hasInput && (
         <Handle
           type="target"
           position={inputPosition}

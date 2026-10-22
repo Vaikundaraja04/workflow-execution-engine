@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useExecutionStore } from '@/features/execution-console/stores/executionStore';
-import type { ExecutionNode, ExecutionStatus } from '@/features/execution-console/types/types';
+import type { ExecutionNode, ExecutionNodeStatus } from '@/features/execution-console/types/types';
 import { Badge } from '@/components/ui/Badge';
 import {
   CheckCircle2,
@@ -23,6 +23,7 @@ import {
   Clock,
   RotateCw,
   Ban,
+  SkipForward,
   Activity,
   Calendar,
   Layers,
@@ -36,7 +37,7 @@ interface ExecutionTimelineProps {
 }
 
 const statusBadgeConfig: Record<
-  ExecutionStatus,
+  ExecutionNodeStatus,
   { variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info'; icon: React.ReactNode; bg: string; border: string }
 > = {
   PENDING: {
@@ -92,6 +93,12 @@ const statusBadgeConfig: Record<
     icon: <Ban className="w-3.5 h-3.5 text-gray-500" />,
     bg: 'bg-gray-50/70',
     border: 'border-gray-300',
+  },
+  SKIPPED: {
+    variant: 'outline',
+    icon: <SkipForward className="w-3.5 h-3.5 text-gray-400" />,
+    bg: 'bg-gray-50/40',
+    border: 'border-dashed border-gray-300',
   },
 };
 

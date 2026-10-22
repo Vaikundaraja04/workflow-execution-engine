@@ -9,6 +9,7 @@ import { useExecutionStore } from '@/features/execution-console/stores/execution
 import { executionConsoleApi } from '@/services/executionConsoleApi';
 import { workflowApi } from '@/services/workflowApi';
 import type { ExecutionNode, ExecutionLog, ExecutionDetail } from '@/features/execution-console/types/types';
+import { buildExecutionNodes, errorText } from '@/features/execution-console/utils/executionSteps';
 import { Loading } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -76,7 +77,7 @@ export default function ExecutionDetailPage() {
           const wf = await workflowApi.getWorkflow(execution.workflowId, workspaceId);
           if (wf && wf.name) {
             workflowName = wf.name;
-            workflowDefinition = wf.definition;
+            workflowDefinition = wf.definition ?? wf.draftDefinition ?? null;
           }
         } catch {
           // Fallback if workflow detail fails
@@ -91,61 +92,39 @@ export default function ExecutionDetailPage() {
         // Fallback logs if API returns empty
       }
 
-      // Generate or parse node execution graph
-      let nodes: ExecutionNode[] = (execution as any).nodes || [];
-
-      if (nodes.length === 0 && workflowDefinition?.nodes) {
-        // Synthesize nodes from workflow definition with execution statuses
-        const isExecutionSucceeded = execution.status === 'SUCCEEDED';
-        const isExecutionFailed = execution.status === 'FAILED';
-        const isExecutionRunning = execution.status === 'RUNNING' || execution.status === 'QUEUED';
-
-        nodes = workflowDefinition.nodes.map((node: any, index: number) => {
-          let nodeStatus = 'QUEUED';
-          if (isExecutionSucceeded) {
-            nodeStatus = 'SUCCEEDED';
-          } else if (isExecutionFailed) {
-            nodeStatus = index === workflowDefinition.nodes.length - 1 ? 'FAILED' : 'SUCCEEDED';
-          } else if (isExecutionRunning) {
-            nodeStatus = index === 0 ? 'RUNNING' : 'QUEUED';
-          }
-
-          return {
-            id: node.id,
-            name: node.name || `Node ${index + 1} (${node.type})`,
-            type: node.type,
-            status: nodeStatus as any,
-            startedAt: execution.startedAt || new Date().toISOString(),
-            finishedAt: execution.finishedAt || null,
-            duration: execution.finishedAt && execution.startedAt ? 450 + index * 120 : null,
-            attempt: 1,
-            input: node.config || execution.initialInput || {},
-            output: nodeStatus === 'FAILED' ? {} : { status: 'OK', processed: true },
-            error: nodeStatus === 'FAILED' ? execution.error || 'Step execution encountered an error' : null,
-          };
-        });
+      // The steps come from the version this run used (the draft may have changed since),
+      // and their status and output from the run's own result.
+      if (execution.workflowId && execution.workflowVersionId) {
+        try {
+          const version = await workflowApi.getVersion(execution.workflowId, execution.workflowVersionId, workspaceId);
+          if (version?.definition?.nodes) workflowDefinition = version.definition;
+        } catch {
+          // Keep the workflow's current definition
+        }
       }
 
-      // Build default node if still empty
-      if (nodes.length === 0) {
-        nodes = [
-          {
-            id: 'node-entry',
-            name: 'Workflow Trigger',
-            type: execution.triggerType || 'manual',
-            status: execution.status,
-            startedAt: execution.startedAt || null,
-            finishedAt: execution.finishedAt || null,
-            duration: execution.finishedAt && execution.startedAt
-              ? new Date(execution.finishedAt).getTime() - new Date(execution.startedAt).getTime()
-              : null,
-            attempt: execution.attemptsMade || 1,
-            input: execution.initialInput || {},
-            output: execution.output || {},
-            error: execution.error || null,
-          },
-        ];
-      }
+      const runInput = execution.input ?? execution.initialInput ?? {};
+      const runOutput = execution.result?.outputs ?? execution.output ?? {};
+      const runError = errorText(execution.error);
+      const nodes: ExecutionNode[] = workflowDefinition?.nodes?.length
+        ? buildExecutionNodes(execution, workflowDefinition.nodes)
+        : [
+            {
+              id: 'node-entry',
+              name: 'Workflow Trigger',
+              type: execution.triggerType || 'manual',
+              status: execution.status,
+              startedAt: execution.startedAt || null,
+              finishedAt: execution.finishedAt || null,
+              duration: execution.finishedAt && execution.startedAt
+                ? new Date(execution.finishedAt).getTime() - new Date(execution.startedAt).getTime()
+                : null,
+              attempt: execution.attemptsMade || 1,
+              input: runInput,
+              output: runOutput,
+              error: runError,
+            },
+          ];
 
       const detail: ExecutionDetail = {
         execution,
@@ -157,19 +136,19 @@ export default function ExecutionDetailPage() {
             level: 'INFO',
             message: `Execution ${execution._id} initialized for workflow ${workflowName}`,
           },
-          ...(execution.error
+          ...(runError
             ? [
                 {
                   timestamp: execution.finishedAt || new Date().toISOString(),
                   level: 'ERROR' as const,
-                  message: execution.error,
-                  nodeId: nodes[nodes.length - 1]?.id,
+                  message: runError,
+                  nodeId: nodes.find((node) => node.status === 'FAILED')?.id,
                 },
               ]
             : []),
         ],
-        input: execution.initialInput || {},
-        output: execution.output || {},
+        input: runInput,
+        output: runOutput,
       };
 
       setSelectedExecution(detail);
@@ -465,7 +444,7 @@ export default function ExecutionDetailPage() {
                 Initial Trigger Input
               </h3>
               <pre className="p-4 bg-gray-900 text-gray-100 rounded-lg text-xs font-mono overflow-x-auto max-h-[400px]">
-                {JSON.stringify(execution.initialInput || {}, null, 2)}
+                {JSON.stringify(selectedExecution.input, null, 2)}
               </pre>
             </div>
 
@@ -476,7 +455,7 @@ export default function ExecutionDetailPage() {
                 Final Output Result
               </h3>
               <pre className="p-4 bg-gray-900 text-gray-100 rounded-lg text-xs font-mono overflow-x-auto max-h-[400px]">
-                {JSON.stringify(execution.output || (execution.error ? { error: execution.error } : {}), null, 2)}
+                {JSON.stringify(execution.error ? { ...selectedExecution.output, error: execution.error } : selectedExecution.output, null, 2)}
               </pre>
             </div>
           </div>
